@@ -1,0 +1,77 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check commit message for release trigger
+        id: check
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if [[ "$COMMIT_MSG" =~ \[release\ ([0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "🚀 Release triggered for version ${BASH_REMATCH[1]}"
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "ℹ️ No release trigger found in commit message"
+          fi
+
+  build:
+    needs: check-release
+    if: needs.check-release.outputs.should_release == 'true'
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Update version in scripts
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          sed -i '' "s/VERSION=\"[0-9.]*\"/VERSION=\"$VERSION\"/" bundle.sh
+          sed -i '' "s/VERSION=\"[0-9.]*\"/VERSION=\"$VERSION\"/" create-dmg.sh
+
+      - name: Build Release
+        run: swift build -c release
+
+      - name: Create App Bundle
+        run: ./bundle.sh
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          ./create-dmg.sh
+          mv "Mira-$VERSION.dmg" "Mira-$VERSION-macOS.dmg"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-release.outputs.version }}
+          name: Mira v${{ needs.check-release.outputs.version }}
+          body: |
+            ## Mira v${{ needs.check-release.outputs.version }}
+            
+            ### Installation
+            1. Download `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
+            2. Open the DMG and drag Mira to Applications
+            3. Launch Mira from Applications
+            
+            **Requirements:** macOS 14.0 (Sonoma) or later
+          files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

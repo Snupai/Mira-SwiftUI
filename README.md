@@ -19,7 +19,7 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 ## Installation
 
 ### From DMG
-Download `Mira-x.x.x.dmg` and drag to Applications.
+Download the latest `Mira-x.x.x-macOS.dmg` from [Releases](../../releases) and drag to Applications.
 
 ### From Source
 ```bash
@@ -27,11 +27,34 @@ cd Mira
 ./run.sh
 ```
 
-### Create DMG Installer
+### Create DMG Installer (locally)
 ```bash
 ./create-dmg.sh
-# Creates Mira-0.2.4.dmg
+# Creates Mira-x.x.x.dmg
 ```
+
+## Releasing 🚀
+
+Releases are automated via GitHub Actions. To create a new release:
+
+1. Update version in `bundle.sh` and `create-dmg.sh`
+2. Commit with `[release x.x.x]` in the message:
+   ```bash
+   git add -A
+   git commit -m "feat: new feature [release 0.2.5]"
+   git push
+   ```
+3. GitHub Actions will automatically:
+   - Build the app for macOS
+   - Create a signed DMG
+   - Create a GitHub Release with the DMG attached
+
+**Example commit messages:**
+- `fix: bug fix [release 0.2.5]`
+- `feat: new feature [release 0.3.0]`
+- `chore: update deps [release 1.0.0]`
+
+The version in `[release x.x.x]` must follow semver format (e.g., `1.0.0`, `0.2.5`).
 
 ## Development Setup (VSCode) 🛠️
 
