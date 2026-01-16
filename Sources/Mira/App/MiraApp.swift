@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct MiraApp: App {
     @StateObject private var appState = AppState()
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -18,46 +18,46 @@ struct MiraApp: App {
                     NotificationCenter.default.post(name: .newInvoice, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: .command)
-                
+
                 Button("New Client") {
                     NotificationCenter.default.post(name: .newClient, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             }
-            
+
             CommandGroup(replacing: .sidebar) {
                 Button("Dashboard") {
                     NotificationCenter.default.post(name: .navigateTo, object: "dashboard")
                 }
                 .keyboardShortcut("1", modifiers: .command)
-                
+
                 Button("Invoices") {
                     NotificationCenter.default.post(name: .navigateTo, object: "invoices")
                 }
                 .keyboardShortcut("2", modifiers: .command)
-                
+
                 Button("Clients") {
                     NotificationCenter.default.post(name: .navigateTo, object: "clients")
                 }
                 .keyboardShortcut("3", modifiers: .command)
-                
+
                 Divider()
-                
+
                 Button("Settings") {
                     NotificationCenter.default.post(name: .navigateTo, object: "settings")
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
-            
+
             CommandGroup(replacing: .help) {
                 Button("Keyboard Shortcuts") {
                     NotificationCenter.default.post(name: .showShortcuts, object: nil)
                 }
-                .keyboardShortcut("/", modifiers: .command)
+                .keyboardShortcut("k", modifiers: .command)
             }
         }
         #endif
-        
+
         #if os(macOS)
         Settings {
             SettingsView()

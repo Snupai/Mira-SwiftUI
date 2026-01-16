@@ -126,7 +126,7 @@ Mira/
 
 | Shortcut | Action |
 |----------|--------|
-| `⌘/` | Show Shortcutlist |
+| `⌘K` | Show Shortcutlist |
 | `⌘N` | New Invoice |
 | `⌘⇧N` | New Client |
 | `⌘1` | Dashboard |
