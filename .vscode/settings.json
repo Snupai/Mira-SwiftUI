@@ -1,0 +1,10 @@
+{
+  "swift.path": "/usr/bin/swift",
+  "editor.formatOnSave": true,
+  "editor.tabSize": 4,
+  "files.trimTrailingWhitespace": true,
+  "[swift]": {
+    "editor.defaultFormatter": "sswg.swift-lang",
+    "editor.tabSize": 4
+  }
+}
