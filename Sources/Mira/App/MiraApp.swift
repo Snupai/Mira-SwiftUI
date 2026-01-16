@@ -48,6 +48,13 @@ struct MiraApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            
+            CommandGroup(replacing: .help) {
+                Button("Keyboard Shortcuts") {
+                    NotificationCenter.default.post(name: .showShortcuts, object: nil)
+                }
+                .keyboardShortcut("/", modifiers: .command)
+            }
         }
         #endif
         

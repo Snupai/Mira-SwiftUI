@@ -33,6 +33,7 @@ struct MainView: View {
     @State private var selectedTab: Tab = .invoices
     @State private var showingNewInvoice = false
     @State private var showingNewClient = false
+    @State private var showingShortcuts = false
     
     enum Tab: String, CaseIterable {
         case dashboard = "Dashboard"
@@ -109,6 +110,12 @@ struct MainView: View {
         .sheet(isPresented: $showingNewClient) {
             ClientEditorView(client: nil).environmentObject(appState)
         }
+        .sheet(isPresented: $showingShortcuts) {
+            ShortcutsHelpView(colors: colors)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showShortcuts)) { _ in
+            showingShortcuts = true
+        }
         #else
         TabView(selection: $selectedTab) {
             ForEach(Tab.allCases, id: \.self) { tab in
@@ -135,6 +142,85 @@ struct MainView: View {
 extension Notification.Name {
     static let newInvoice = Notification.Name("newInvoice")
     static let newClient = Notification.Name("newClient")
+    static let showShortcuts = Notification.Name("showShortcuts")
+}
+
+// MARK: - Shortcuts Help View
+
+struct ShortcutsHelpView: View {
+    @Environment(\.dismiss) var dismiss
+    let colors: ThemeColors
+    
+    let shortcuts: [(category: String, items: [(keys: String, action: String)])] = [
+        ("Navigation", [
+            ("⌘ 1", "Dashboard"),
+            ("⌘ 2", "Invoices"),
+            ("⌘ 3", "Clients"),
+            ("⌘ ,", "Settings")
+        ]),
+        ("Actions", [
+            ("⌘ N", "New Invoice"),
+            ("⌘ ⇧ N", "New Client"),
+            ("⌘ /", "Show Shortcuts")
+        ])
+    ]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Keyboard Shortcuts")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colors.text)
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(colors.subtext)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
+            .background(colors.mantle)
+            
+            // Shortcuts list
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    ForEach(shortcuts, id: \.category) { section in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(section.category)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(colors.subtext)
+                            
+                            VStack(spacing: 8) {
+                                ForEach(section.items, id: \.action) { item in
+                                    HStack {
+                                        Text(item.action)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(colors.text)
+                                        Spacer()
+                                        Text(item.keys)
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(colors.surface1)
+                                            .foregroundColor(colors.text)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .background(colors.surface0)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 360, height: 380)
+        .background(colors.base)
+    }
 }
 
 struct SidebarButton: View {
