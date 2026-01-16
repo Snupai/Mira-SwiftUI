@@ -1,4 +1,4 @@
-# Invoice App 🧾
+# Mira 🧾
 
 A beautiful, freelancer-first invoice application built with SwiftUI.
 
@@ -8,116 +8,155 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 - **Client Management**: Add and manage your clients with all their details
 - **Invoice Creation**: Fast, keyboard-friendly invoice editor with line items
 - **Status Tracking**: Draft → Sent → Paid workflow with overdue detection
-- **Dashboard**: At-a-glance overview of your invoicing status
-- **German Tax Compliance**: Built-in support for VAT IDs, Steuernummer, and proper invoice numbering
+- **Dashboard**: Revenue charts, stats, top clients, recent invoices
+- **PDF Export**: Native PDF generation in German or English
+- **Email Integration**: Open in mail client with customizable template
+- **Invoice Templates**: Save and reuse invoice configurations
+- **German Tax Compliance**: VAT IDs, Steuernummer, Kleinunternehmerregelung (§19 UStG)
+- **Theming**: System theme or Catppuccin (Mocha/Latte) with accent color picker
+- **Brand Customization**: Custom brand color and logo on invoices
+
+## Installation
+
+### From DMG
+Download `Mira-x.x.x.dmg` and drag to Applications.
+
+### From Source
+```bash
+cd Mira
+./run.sh
+```
+
+### Create DMG Installer
+```bash
+./create-dmg.sh
+# Creates Mira-0.2.4.dmg
+```
 
 ## Development Setup (VSCode) 🛠️
 
 ### Prerequisites
 
-1. **Install Swift**: Make sure you have Swift installed
+1. **Swift 5.9+** and **macOS 14+**
    ```bash
-   # Check Swift version
    swift --version
    ```
 
-2. **Install VSCode Extensions**:
-   - [Swift](https://marketplace.visualstudio.com/items?itemName=sswg.swift-lang) - Official Swift extension
-   - [CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb) - For debugging
+2. **VSCode Extensions** (optional):
+   - [Swift](https://marketplace.visualstudio.com/items?itemName=sswg.swift-lang)
+   - [CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb)
 
 ### Building
 
 ```bash
-# Navigate to the project
-cd InvoiceApp
-
-# Build the project
+# Build
 swift build
 
-# Run (for CLI testing - note: SwiftUI needs a proper app bundle for GUI)
-swift run
+# Build release
+swift build -c release
+
+# Create app bundle and run
+./run.sh
 ```
-
-### For Full GUI Development
-
-While you can edit code in VSCode, building a proper macOS/iOS app with GUI requires Xcode for:
-- Creating the app bundle
-- Code signing
-- Running on simulator/device
-
-**Hybrid Workflow (Recommended)**:
-1. Edit code in VSCode (better for text editing)
-2. Build and run with Xcode when needed
 
 ### Project Structure
 
 ```
-InvoiceApp/
-├── Package.swift              # Swift Package definition
-├── README.md                  # This file
-└── Sources/
-    └── InvoiceApp/
-        ├── App/               # App entry point & state
-        │   ├── InvoiceAppMain.swift
-        │   └── ContentView.swift
-        ├── Models/            # Data models
-        │   ├── CompanyProfile.swift
-        │   ├── Client.swift
-        │   └── Invoice.swift
-        ├── Views/
-        │   ├── Onboarding/    # Onboarding flow
-        │   ├── Dashboard/     # Main dashboard
-        │   ├── Invoices/      # Invoice list, editor, detail
-        │   ├── Clients/       # Client management
-        │   └── Settings/      # App settings
-        ├── ViewModels/        # (Future) View models
-        ├── Services/          # (Future) Business logic
-        ├── Utils/             # (Future) Utilities
-        ├── Components/        # (Future) Reusable components
-        └── Resources/         # Assets
+Mira/
+├── Package.swift
+├── README.md
+├── run.sh                    # Build & run app bundle
+├── bundle.sh                 # Create .app bundle
+├── create-dmg.sh             # Create DMG installer
+└── Sources/Mira/
+    ├── App/
+    │   ├── MiraApp.swift     # App entry point & state
+    │   └── ContentView.swift
+    ├── Models/
+    │   ├── CompanyProfile.swift
+    │   ├── Client.swift
+    │   ├── Invoice.swift
+    │   ├── InvoiceTemplate.swift
+    │   └── AppTheme.swift
+    ├── Views/
+    │   ├── Onboarding/       # Setup wizard
+    │   ├── Dashboard/        # Stats & overview
+    │   ├── Invoices/         # List, editor, detail
+    │   ├── Clients/          # Client management
+    │   └── Settings/         # App settings
+    ├── Services/
+    │   └── PDFGenerator.swift
+    ├── Components/
+    │   └── BrandColorPicker.swift
+    └── Utils/
+        ├── ColorExtensions.swift
+        └── AdaptiveColors.swift
 ```
 
-## Converting to Xcode Project
+## Keyboard Shortcuts ⌨️
 
-If you need a proper .xcodeproj:
-
-```bash
-# Generate Xcode project from Package.swift
-swift package generate-xcodeproj
-
-# Or open directly in Xcode (Xcode can read Package.swift)
-open Package.swift
-```
+| Shortcut | Action |
+|----------|--------|
+| `⌘N` | New Invoice |
+| `⌘⇧N` | New Client |
+| `⌘1` | Dashboard |
+| `⌘2` | Invoices |
+| `⌘3` | Clients |
+| `⌘,` | Settings |
 
 ## Roadmap 🗺️
 
-### MVP (Current)
+### Completed ✅
 - [x] Company profile setup
 - [x] Client management
 - [x] Invoice creation & editing
-- [x] Status tracking (draft/sent/paid/overdue)
-- [x] Dashboard overview
-- [ ] PDF generation
-- [ ] Email sending
+- [x] Status tracking (draft/sent/paid/overdue/cancelled)
+- [x] Dashboard with revenue chart & stats
+- [x] Native PDF generation (German/English)
+- [x] Email integration (opens mail client)
+- [x] Invoice templates
+- [x] VAT exemption (Kleinunternehmerregelung §19 UStG)
+- [x] Search & filter invoices
+- [x] Sort by date/amount/client
+- [x] Customizable email template with placeholders
+- [x] Theme support (System / Catppuccin)
+- [x] Brand color & logo customization
+- [x] JSON file storage
+- [x] Keyboard shortcuts
+- [x] DMG installer
 
-### Next
+### Next 🚧
 - [ ] Recurring invoices
 - [ ] Payment reminders (dunning)
-- [ ] Stripe payment links
+- [ ] Multi-currency per invoice
 - [ ] CSV/data export
 - [ ] VAT summary reports
+- [ ] Backup/restore
 
-### Future
-- [ ] Multi-currency support
+### Future 🔮
 - [ ] ZUGFeRD/XRechnung export
+- [ ] Stripe/PayPal payment links
 - [ ] Client portal
 - [ ] Bank reconciliation
+- [ ] iOS companion app
 
 ## Tech Stack
 
-- **SwiftUI** - Modern declarative UI
-- **Swift Package Manager** - Dependency management
-- **UserDefaults** - Local data persistence (MVP; consider SwiftData/CoreData for production)
+- **SwiftUI** - Declarative UI
+- **Swift Package Manager** - Build system
+- **CoreGraphics/PDFKit** - Native PDF generation
+- **JSON Files** - Data persistence (`~/Library/Application Support/Mira/`)
+
+## Data Location
+
+All data is stored locally:
+```
+~/Library/Application Support/Mira/
+├── profile.json      # Company profile
+├── clients.json      # Client list
+├── invoices.json     # Invoices
+└── templates.json    # Invoice templates
+```
 
 ## License
 
