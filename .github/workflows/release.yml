@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   check-release:
     runs-on: ubuntu-latest
@@ -29,6 +32,8 @@ jobs:
     needs: check-release
     if: needs.check-release.outputs.should_release == 'true'
     runs-on: macos-14
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,7 +62,7 @@ jobs:
           mv "Mira-$VERSION.dmg" "Mira-$VERSION-macOS.dmg"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-release.outputs.version }}
           name: Mira v${{ needs.check-release.outputs.version }}
@@ -73,5 +78,3 @@ jobs:
           files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
