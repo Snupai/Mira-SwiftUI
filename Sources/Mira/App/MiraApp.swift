@@ -13,7 +13,7 @@ struct MiraApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 800)
         .commands {
-            CommandGroup(after: .newItem) {
+            CommandGroup(replacing: .newItem) {
                 Button("New Invoice") {
                     NotificationCenter.default.post(name: .newInvoice, object: nil)
                 }
@@ -68,7 +68,10 @@ struct MiraApp: App {
 }
 
 extension Notification.Name {
+    static let newInvoice = Notification.Name("newInvoice")
+    static let newClient = Notification.Name("newClient")
     static let navigateTo = Notification.Name("navigateTo")
+    static let showShortcuts = Notification.Name("showShortcuts")
 }
 
 // MARK: - App State (JSON file storage)

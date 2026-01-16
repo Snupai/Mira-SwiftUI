@@ -138,12 +138,7 @@ struct MainView: View {
     }
 }
 
-// Notification names for keyboard shortcuts
-extension Notification.Name {
-    static let newInvoice = Notification.Name("newInvoice")
-    static let newClient = Notification.Name("newClient")
-    static let showShortcuts = Notification.Name("showShortcuts")
-}
+// Notification names are now in MiraApp.swift
 
 // MARK: - Shortcuts Help View
 
@@ -161,7 +156,7 @@ struct ShortcutsHelpView: View {
         ("Actions", [
             ("⌘ N", "New Invoice"),
             ("⌘ ⇧ N", "New Client"),
-            ("⌘ /", "Show Shortcuts")
+            ("⌘ K", "Show Shortcuts")
         ])
     ]
     
