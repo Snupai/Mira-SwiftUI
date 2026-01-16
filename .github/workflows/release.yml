@@ -55,6 +55,10 @@ jobs:
       - name: Create App Bundle
         run: ./bundle.sh
 
+      - name: Ad-hoc Sign App
+        run: |
+          codesign --force --deep --sign - Mira.app
+
       - name: Create DMG
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
@@ -75,6 +79,11 @@ jobs:
             3. Launch Mira from Applications
             
             **Requirements:** macOS 14.0 (Sonoma) or later
+            
+            > ⚠️ **First Launch:** If macOS says "Mira is damaged", run:
+            > ```bash
+            > xattr -cr /Applications/Mira.app
+            > ```
           files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
           draft: false
           prerelease: false

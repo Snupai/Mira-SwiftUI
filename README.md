@@ -21,6 +21,12 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 ### From DMG
 Download the latest `Mira-x.x.x-macOS.dmg` from [Releases](../../releases) and drag to Applications.
 
+> ⚠️ **First Launch:** Since the app isn't notarized with Apple, macOS may show "Mira is damaged". To fix:
+> ```bash
+> xattr -cr /Applications/Mira.app
+> ```
+> Or right-click the app → Open → Open anyway.
+
 ### From Source
 ```bash
 cd Mira
