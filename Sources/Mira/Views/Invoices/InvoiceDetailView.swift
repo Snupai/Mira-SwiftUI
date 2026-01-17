@@ -11,6 +11,8 @@ struct InvoiceDetailView: View {
     @State private var showingEdit = false
     @State private var showingExportLanguage = false
     @State private var exportLanguage: PDFLanguage = .german
+    @State private var showingExchangeRateDialog = false
+    @State private var exchangeRateInput: String = ""
     
     var client: Client? { appState.clients.first { $0.id == invoice.clientId } }
     var currentInvoice: Invoice { appState.invoices.first { $0.id == invoice.id } ?? invoice }
@@ -194,6 +196,23 @@ struct InvoiceDetailView: View {
             .sheet(isPresented: $showingEdit) {
                 InvoiceEditorView(invoice: currentInvoice).environmentObject(appState)
             }
+            .sheet(isPresented: $showingExchangeRateDialog) {
+                ExchangeRateDialog(
+                    invoice: currentInvoice,
+                    baseCurrency: appState.companyProfile?.defaultCurrency ?? .eur,
+                    exchangeRateInput: $exchangeRateInput,
+                    onConfirm: { rate, baseAmount in
+                        if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                            appState.invoices[i].markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount)
+                            appState.saveInvoices()
+                        }
+                        showingExchangeRateDialog = false
+                    },
+                    onCancel: {
+                        showingExchangeRateDialog = false
+                    }
+                )
+            }
         }
     }
     
@@ -205,9 +224,18 @@ struct InvoiceDetailView: View {
     }
     
     func markAsPaid() {
-        if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-            appState.invoices[i].markAsPaid()
-            appState.saveInvoices()
+        let baseCurrency = appState.companyProfile?.defaultCurrency ?? .eur
+        
+        // If currencies differ, show exchange rate dialog
+        if currentInvoice.currency != baseCurrency {
+            exchangeRateInput = ""
+            showingExchangeRateDialog = true
+        } else {
+            // Same currency, no conversion needed
+            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                appState.invoices[i].markAsPaid()
+                appState.saveInvoices()
+            }
         }
     }
     
@@ -344,5 +372,146 @@ struct StatusBadge: View {
 struct InvoiceDetailView_Previews: PreviewProvider {
     static var previews: some View {
         InvoiceDetailView(invoice: Invoice(clientId: UUID())).environmentObject(AppState())
+    }
+}
+
+// MARK: - Exchange Rate Dialog
+
+struct ExchangeRateDialog: View {
+    let invoice: Invoice
+    let baseCurrency: Currency
+    @Binding var exchangeRateInput: String
+    let onConfirm: (Double, Double) -> Void
+    let onCancel: () -> Void
+    
+    var isVatExempt: Bool = false
+    
+    var invoiceTotal: Double {
+        isVatExempt ? invoice.subtotal : invoice.total
+    }
+    
+    var exchangeRate: Double? {
+        Double(exchangeRateInput.replacingOccurrences(of: ",", with: "."))
+    }
+    
+    var convertedAmount: Double? {
+        guard let rate = exchangeRate, rate > 0 else { return nil }
+        return invoiceTotal * rate
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "arrow.left.arrow.right.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.blue)
+                
+                Text("Currency Conversion")
+                    .font(.system(size: 18, weight: .semibold))
+                
+                Text("Enter the exchange rate at the time of payment")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            // Invoice info
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Invoice Total:")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(formatCurrency(invoiceTotal, currency: invoice.currency))
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                
+                HStack {
+                    Text("Base Currency:")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(baseCurrency.symbol) \(baseCurrency.rawValue)")
+                        .font(.system(size: 15, weight: .medium))
+                }
+            }
+            .font(.system(size: 14))
+            .padding()
+            .background(Color.secondary.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            // Exchange rate input
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Exchange Rate")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                
+                HStack {
+                    Text("1 \(invoice.currency.rawValue) =")
+                        .foregroundColor(.secondary)
+                    TextField("0.00", text: $exchangeRateInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: 100)
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Text(baseCurrency.rawValue)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // Converted amount preview
+            if let converted = convertedAmount {
+                HStack {
+                    Text("You received:")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(formatCurrency(converted, currency: baseCurrency))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.green)
+                }
+                .padding()
+                .background(Color.green.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            
+            Spacer()
+            
+            // Buttons
+            HStack(spacing: 12) {
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+                .background(Color.secondary.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                Button(action: {
+                    if let rate = exchangeRate, let converted = convertedAmount {
+                        onConfirm(rate, converted)
+                    }
+                }) {
+                    Text("Mark as Paid")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                }
+                .buttonStyle(.plain)
+                .background(exchangeRate != nil ? Color.green : Color.gray)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .disabled(exchangeRate == nil)
+            }
+        }
+        .padding(24)
+        .frame(width: 380, height: 450)
+    }
+    
+    func formatCurrency(_ value: Double, currency: Currency) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currency.rawValue
+        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
     }
 }

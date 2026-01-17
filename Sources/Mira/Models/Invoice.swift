@@ -30,6 +30,10 @@ struct Invoice: Codable, Identifiable {
     var paymentReference: String = ""
     var paymentNotes: String = ""
     
+    // Currency conversion (for invoices in non-base currency)
+    var paidExchangeRate: Double?      // Exchange rate at time of payment (e.g., 1 USD = 0.92 EUR)
+    var paidAmountInBaseCurrency: Double?  // Total converted to base currency
+    
     // Notes
     var notes: String = ""
     var internalNotes: String = ""
@@ -99,10 +103,12 @@ struct Invoice: Codable, Identifiable {
         updatedAt = Date()
     }
     
-    mutating func markAsPaid() {
+    mutating func markAsPaid(exchangeRate: Double? = nil, amountInBaseCurrency: Double? = nil) {
         guard status == .sent || status == .overdue else { return }
         status = .paid
         paidAt = Date()
+        paidExchangeRate = exchangeRate
+        paidAmountInBaseCurrency = amountInBaseCurrency
         updatedAt = Date()
     }
     
