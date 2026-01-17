@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.themeColors) var colors
     @ObservedObject var appearance = AppAppearance.shared
     @State private var currentStep: OnboardingStep = .welcome
     @State private var companyProfile: CompanyProfile
@@ -28,7 +29,7 @@ struct OnboardingContainerView: View {
             // Progress
             if currentStep.rawValue > 0 && currentStep.rawValue < 8 {
                 ProgressView(value: Double(currentStep.rawValue), total: 7)
-                    .tint(appearance.accentColor)
+                    .tint(colors.accent)
                     .padding(.horizontal, 60)
                     .padding(.top, 20)
             }
