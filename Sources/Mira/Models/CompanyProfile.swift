@@ -45,7 +45,11 @@ struct CompanyProfile: Codable, Identifiable {
     var dateFormat: String = "dd.MM.yyyy"
     
     // Email template
-    var emailTemplate: String = """
+    var emailTemplateLanguage: EmailTemplateLanguage = .german
+    var emailTemplate: String = EmailTemplateLanguage.german.defaultTemplate
+    
+    // Default templates for each language
+    static let germanEmailTemplate = """
 Guten Tag,
 
 anbei erhalten Sie die Rechnung {invoiceNumber} über {totalAmount}.
@@ -60,6 +64,24 @@ Verwendungszweck: {invoiceNumber}
 Bei Fragen stehe ich Ihnen gerne zur Verfügung.
 
 Mit freundlichen Grüßen
+{companyName}
+"""
+    
+    static let englishEmailTemplate = """
+Dear {clientName},
+
+Please find attached invoice {invoiceNumber} for {totalAmount}.
+
+Payment is due by {dueDate}. Please transfer the amount to the following account:
+
+Account Holder: {accountHolder}
+IBAN: {iban}
+BIC: {bic}
+Reference: {invoiceNumber}
+
+If you have any questions, please don't hesitate to contact me.
+
+Best regards,
 {companyName}
 """
     
@@ -103,6 +125,25 @@ enum Currency: String, Codable, CaseIterable {
         case .usd: return "$"
         case .gbp: return "£"
         case .chf: return "CHF"
+        }
+    }
+}
+
+enum EmailTemplateLanguage: String, Codable, CaseIterable {
+    case german = "German"
+    case english = "English"
+    
+    var icon: String {
+        switch self {
+        case .german: return "🇩🇪"
+        case .english: return "🇬🇧"
+        }
+    }
+    
+    var defaultTemplate: String {
+        switch self {
+        case .german: return CompanyProfile.germanEmailTemplate
+        case .english: return CompanyProfile.englishEmailTemplate
         }
     }
 }

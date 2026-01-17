@@ -149,16 +149,54 @@ struct SettingsView: View {
                     
                     // Email Template
                     SettingsSection(title: "Email Template", colors: colors) {
-                        EmailTemplateEditor(
-                            template: Binding(
-                                get: { appState.companyProfile?.emailTemplate ?? "" },
-                                set: {
-                                    appState.companyProfile?.emailTemplate = $0
-                                    appState.saveCompanyProfile()
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Language toggle
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Template Language")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(colors.subtext)
+                                
+                                HStack(spacing: 12) {
+                                    ForEach(EmailTemplateLanguage.allCases, id: \.self) { lang in
+                                        Button(action: {
+                                            appState.companyProfile?.emailTemplateLanguage = lang
+                                            appState.companyProfile?.emailTemplate = lang.defaultTemplate
+                                            appState.saveCompanyProfile()
+                                        }) {
+                                            HStack(spacing: 8) {
+                                                Text(lang.icon)
+                                                    .font(.system(size: 16))
+                                                Text(lang.rawValue)
+                                                    .font(.system(size: 13, weight: .medium))
+                                            }
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(appState.companyProfile?.emailTemplateLanguage == lang ? colors.accent : colors.surface1)
+                                            .foregroundColor(appState.companyProfile?.emailTemplateLanguage == lang ? .white : colors.text)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Text("Switching resets to default template")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(colors.subtext)
                                 }
-                            ),
-                            colors: colors
-                        )
+                            }
+                            
+                            EmailTemplateEditor(
+                                template: Binding(
+                                    get: { appState.companyProfile?.emailTemplate ?? "" },
+                                    set: {
+                                        appState.companyProfile?.emailTemplate = $0
+                                        appState.saveCompanyProfile()
+                                    }
+                                ),
+                                colors: colors
+                            )
+                        }
                     }
                     
                     // Danger Zone

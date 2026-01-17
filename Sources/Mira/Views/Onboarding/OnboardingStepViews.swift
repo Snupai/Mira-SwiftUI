@@ -818,7 +818,38 @@ struct OnboardingEmailTemplateView: View {
             onContinue: onContinue,
             continueEnabled: true
         ) {
-            EmailTemplateEditor(template: $profile.emailTemplate, colors: colors)
+            VStack(alignment: .leading, spacing: 20) {
+                // Language picker
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Template Language")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.subtext)
+                    
+                    HStack(spacing: 12) {
+                        ForEach(EmailTemplateLanguage.allCases, id: \.self) { lang in
+                            Button(action: {
+                                profile.emailTemplateLanguage = lang
+                                profile.emailTemplate = lang.defaultTemplate
+                            }) {
+                                HStack(spacing: 8) {
+                                    Text(lang.icon)
+                                        .font(.system(size: 18))
+                                    Text(lang.rawValue)
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(profile.emailTemplateLanguage == lang ? colors.accent : colors.surface1)
+                                .foregroundColor(profile.emailTemplateLanguage == lang ? .white : colors.text)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                
+                EmailTemplateEditor(template: $profile.emailTemplate, colors: colors)
+            }
         }
     }
 }
