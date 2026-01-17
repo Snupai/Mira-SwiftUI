@@ -4,8 +4,13 @@ struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var appearance = AppAppearance.shared
     @State private var currentStep: OnboardingStep = .welcome
-    @State private var companyProfile = CompanyProfile()
-    
+    @State private var companyProfile: CompanyProfile
+
+    init() {
+        // Initialize with empty profile, will be updated in onAppear if existing data exists
+        _companyProfile = State(initialValue: CompanyProfile())
+    }
+
     enum OnboardingStep: Int, CaseIterable {
         case welcome = 0
         case appearance = 1
@@ -54,6 +59,12 @@ struct OnboardingContainerView: View {
             .animation(.easeInOut(duration: 0.2), value: currentStep)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Pre-populate with existing data if restarting onboarding
+            if let existingProfile = appState.companyProfile {
+                companyProfile = existingProfile
+            }
+        }
     }
     
     func nextStep() {
