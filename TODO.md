@@ -47,8 +47,27 @@
 - [x] Accent color picker
 - [x] Brand color picker
 - [x] Logo upload
-- [x] Keyboard shortcuts
+- [x] Keyboard shortcuts (layout-independent)
 - [x] Clean onboarding flow
+- [x] Onboarding pre-populates when restarting
+
+### Multi-Currency
+- [x] Per-invoice currency selection (EUR, USD, GBP, CHF)
+- [x] Base currency selection in onboarding
+- [x] Currency picker in invoice editor
+- [x] Exchange rate tracking when marking paid
+- [x] Auto-fetch exchange rates (Frankfurter API)
+- [x] Manual exchange rate fallback
+- [x] Dashboard shows amounts in base currency
+- [x] Invoice list shows original + converted amounts
+
+### Email
+- [x] Open in mail client
+- [x] Auto-export PDF to Downloads
+- [x] Customizable email template
+- [x] Placeholder insertion at cursor
+- [x] Placeholders delete as atomic blocks
+- [x] Email template language selection (German/English)
 
 ### Technical
 - [x] JSON file storage
@@ -60,8 +79,6 @@
 ### Priority
 - [ ] Recurring invoices (monthly/weekly)
 - [ ] Payment reminders (dunning levels)
-- [ ] Multi-currency per invoice
-- [ ] Currency picker in invoice editor
 
 ### Export
 - [ ] CSV export
@@ -90,4 +107,4 @@
 
 ---
 
-Version: 0.2.4
+Version: 0.2.19

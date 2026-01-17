@@ -4,13 +4,15 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 
 ## Features ✨
 
-- **Clean Onboarding**: Step-by-step setup wizard for your business profile
+- **Clean Onboarding**: Step-by-step setup wizard for your business profile (pre-populates when restarting)
 - **Client Management**: Add and manage your clients with all their details
 - **Invoice Creation**: Fast, keyboard-friendly invoice editor with line items
+- **Multi-Currency Support**: Create invoices in EUR, USD, GBP, or CHF with per-invoice currency selection
+- **Exchange Rate Tracking**: Auto-fetches live rates when marking foreign invoices as paid (manual fallback)
 - **Status Tracking**: Draft → Sent → Paid workflow with overdue detection
-- **Dashboard**: Revenue charts, stats, top clients, recent invoices
+- **Dashboard**: Revenue charts, stats, top clients, recent invoices (all in base currency)
 - **PDF Export**: Native PDF generation in German or English
-- **Email Integration**: Open in mail client with customizable template
+- **Email Integration**: Open in mail client with customizable template (German/English templates)
 - **Invoice Templates**: Save and reuse invoice configurations
 - **German Tax Compliance**: VAT IDs, Steuernummer, Kleinunternehmerregelung (§19 UStG)
 - **Theming**: System theme or Catppuccin (Mocha/Latte) with accent color picker
@@ -148,17 +150,19 @@ Mira/
 - [x] VAT exemption (Kleinunternehmerregelung §19 UStG)
 - [x] Search & filter invoices
 - [x] Sort by date/amount/client
-- [x] Customizable email template with placeholders
+- [x] Customizable email template with placeholders (German/English)
 - [x] Theme support (System / Catppuccin)
 - [x] Brand color & logo customization
 - [x] JSON file storage
-- [x] Keyboard shortcuts
+- [x] Keyboard shortcuts (layout-independent)
 - [x] DMG installer
+- [x] Multi-currency per invoice (EUR, USD, GBP, CHF)
+- [x] Base currency selection
+- [x] Exchange rate tracking with auto-fetch
 
 ### Next 🚧
 - [ ] Recurring invoices
 - [ ] Payment reminders (dunning)
-- [ ] Multi-currency per invoice
 - [ ] CSV/data export
 - [ ] VAT summary reports
 - [ ] Backup/restore
