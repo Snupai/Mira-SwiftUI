@@ -224,7 +224,8 @@ struct DashboardView: View {
                                     invoice: invoice,
                                     client: appState.clients.first { $0.id == invoice.clientId },
                                     colors: colors,
-                                    isVatExempt: isVatExempt
+                                    isVatExempt: isVatExempt,
+                                    baseCurrency: baseCurrency
                                 )
                                 if index < 4 {
                                     Divider().background(colors.surface1)
@@ -341,8 +342,19 @@ struct InvoiceRowDashboard: View {
     let client: Client?
     let colors: ThemeColors
     let isVatExempt: Bool
+    let baseCurrency: Currency
     
     var displayTotal: Double { isVatExempt ? invoice.subtotal : invoice.total }
+    
+    // Amount to display in base currency
+    var baseCurrencyAmount: Double? {
+        if invoice.status == .paid, let baseAmount = invoice.paidAmountInBaseCurrency {
+            return baseAmount
+        } else if invoice.currency == baseCurrency {
+            return displayTotal
+        }
+        return nil // Can't convert unpaid foreign currency invoices
+    }
     
     var body: some View {
         HStack {
@@ -362,10 +374,22 @@ struct InvoiceRowDashboard: View {
                 .foregroundColor(colors.subtext)
                 .frame(width: 80)
             
-            Text(formatCurrency(displayTotal))
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(colors.text)
-                .frame(width: 100, alignment: .trailing)
+            // Show base currency amount (or original with indicator if can't convert)
+            VStack(alignment: .trailing, spacing: 2) {
+                if let baseAmount = baseCurrencyAmount {
+                    Text(formatCurrency(baseAmount, currency: baseCurrency))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colors.text)
+                } else {
+                    Text(formatCurrency(displayTotal, currency: invoice.currency))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colors.text)
+                    Text("(\(invoice.currency.rawValue))")
+                        .font(.system(size: 10))
+                        .foregroundColor(colors.subtext)
+                }
+            }
+            .frame(width: 100, alignment: .trailing)
             
             Text(invoice.status.rawValue)
                 .font(.system(size: 11, weight: .medium))
@@ -395,11 +419,11 @@ struct InvoiceRowDashboard: View {
         return f.string(from: d)
     }
     
-    func formatCurrency(_ value: Double) -> String {
+    func formatCurrency(_ value: Double, currency: Currency) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = invoice.currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "€0"
+        f.currencyCode = currency.rawValue
+        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
     }
 }
 

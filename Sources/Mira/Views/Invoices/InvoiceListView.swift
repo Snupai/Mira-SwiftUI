@@ -18,6 +18,7 @@ struct InvoiceListView: View {
     }
     
     var isVatExempt: Bool { appState.companyProfile?.isVatExempt ?? false }
+    var baseCurrency: Currency { appState.companyProfile?.defaultCurrency ?? .eur }
     
     var filteredInvoices: [Invoice] {
         var invoices = appState.invoices
@@ -195,7 +196,8 @@ struct InvoiceListView: View {
                                 invoice: invoice,
                                 client: appState.clients.first { $0.id == invoice.clientId },
                                 colors: colors,
-                                isVatExempt: isVatExempt
+                                isVatExempt: isVatExempt,
+                                baseCurrency: baseCurrency
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { selectedInvoice = invoice }
@@ -241,8 +243,14 @@ struct InvoiceRow: View {
     let client: Client?
     let colors: ThemeColors
     let isVatExempt: Bool
+    var baseCurrency: Currency = .eur
     
     var displayTotal: Double { isVatExempt ? invoice.subtotal : invoice.total }
+    
+    // Check if this is a foreign currency invoice with conversion data
+    var hasConversionData: Bool {
+        invoice.currency != baseCurrency && invoice.paidAmountInBaseCurrency != nil
+    }
     
     var body: some View {
         HStack {
@@ -262,10 +270,20 @@ struct InvoiceRow: View {
                 .foregroundColor(colors.subtext)
                 .frame(width: 90)
             
-            Text(formatCurrency(displayTotal))
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(colors.text)
-                .frame(width: 110, alignment: .trailing)
+            // Amount column - show original + converted if applicable
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(formatCurrency(displayTotal, currency: invoice.currency))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(colors.text)
+                
+                // Show converted amount for paid foreign currency invoices
+                if hasConversionData, let baseAmount = invoice.paidAmountInBaseCurrency {
+                    Text("≈ \(formatCurrency(baseAmount, currency: baseCurrency)) received")
+                        .font(.system(size: 11))
+                        .foregroundColor(.green)
+                }
+            }
+            .frame(width: 140, alignment: .trailing)
             
             Text(invoice.status.rawValue)
                 .font(.system(size: 12, weight: .medium))
@@ -295,11 +313,11 @@ struct InvoiceRow: View {
         return f.string(from: date)
     }
     
-    func formatCurrency(_ value: Double) -> String {
+    func formatCurrency(_ value: Double, currency: Currency) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = invoice.currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "€0"
+        f.currencyCode = currency.rawValue
+        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
     }
 }
 
