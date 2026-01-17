@@ -386,6 +386,10 @@ struct ExchangeRateDialog: View {
     
     var isVatExempt: Bool = false
     
+    @State private var isLoading = true
+    @State private var fetchError: String? = nil
+    @State private var rateSource: String = ""
+    
     var invoiceTotal: Double {
         isVatExempt ? invoice.subtotal : invoice.total
     }
@@ -410,7 +414,7 @@ struct ExchangeRateDialog: View {
                 Text("Currency Conversion")
                     .font(.system(size: 18, weight: .semibold))
                 
-                Text("Enter the exchange rate at the time of payment")
+                Text(fetchError != nil ? "Enter the exchange rate manually" : "Fetching current exchange rate...")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -441,9 +445,24 @@ struct ExchangeRateDialog: View {
             
             // Exchange rate input
             VStack(alignment: .leading, spacing: 8) {
-                Text("Exchange Rate")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Exchange Rate")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                    } else if !rateSource.isEmpty {
+                        Text("(\(rateSource))")
+                            .font(.system(size: 11))
+                            .foregroundColor(.green)
+                    } else if fetchError != nil {
+                        Text("(manual)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                    }
+                }
                 
                 HStack {
                     Text("1 \(invoice.currency.rawValue) =")
@@ -457,6 +476,21 @@ struct ExchangeRateDialog: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     Text(baseCurrency.rawValue)
                         .foregroundColor(.secondary)
+                    
+                    // Refresh button
+                    Button(action: { fetchExchangeRate() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14))
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoading)
+                }
+                
+                if let error = fetchError {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
                 }
             }
             
@@ -505,7 +539,55 @@ struct ExchangeRateDialog: View {
             }
         }
         .padding(24)
-        .frame(width: 380, height: 450)
+        .frame(width: 380, height: 480)
+        .onAppear {
+            fetchExchangeRate()
+        }
+    }
+    
+    func fetchExchangeRate() {
+        isLoading = true
+        fetchError = nil
+        rateSource = ""
+        
+        // Using Frankfurter API (free, no API key needed)
+        let from = invoice.currency.rawValue
+        let to = baseCurrency.rawValue
+        guard let url = URL(string: "https://api.frankfurter.app/latest?from=\(from)&to=\(to)") else {
+            fetchError = "Invalid currency"
+            isLoading = false
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                isLoading = false
+                
+                if let error = error {
+                    fetchError = "No internet connection"
+                    print("Exchange rate fetch error: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let data = data else {
+                    fetchError = "No data received"
+                    return
+                }
+                
+                do {
+                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let rates = json["rates"] as? [String: Double],
+                       let rate = rates[to] {
+                        exchangeRateInput = String(format: "%.4f", rate)
+                        rateSource = "live rate"
+                    } else {
+                        fetchError = "Could not parse rate"
+                    }
+                } catch {
+                    fetchError = "Failed to decode response"
+                }
+            }
+        }.resume()
     }
     
     func formatCurrency(_ value: Double, currency: Currency) -> String {
