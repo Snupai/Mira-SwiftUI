@@ -13,6 +13,27 @@ struct InvoiceDetailView: View {
     @State private var exportLanguage: PDFLanguage = .german
     @State private var showingExchangeRateDialog = false
     @State private var exchangeRateInput: String = ""
+    @State private var showingEmailLanguagePicker = false
+    @State private var selectedEmailLanguage: EmailLanguage = .german
+    
+    enum EmailLanguage: String, CaseIterable {
+        case german = "German"
+        case english = "English"
+        
+        var icon: String {
+            switch self {
+            case .german: return "🇩🇪"
+            case .english: return "🇬🇧"
+            }
+        }
+        
+        var subjectPrefix: String {
+            switch self {
+            case .german: return "Rechnung"
+            case .english: return "Invoice"
+            }
+        }
+    }
     
     var client: Client? { appState.clients.first { $0.id == invoice.clientId } }
     var currentInvoice: Invoice { appState.invoices.first { $0.id == invoice.id } ?? invoice }
@@ -165,7 +186,7 @@ struct InvoiceDetailView: View {
                         }
                         
                         if let client = client, !client.email.isEmpty {
-                            Button(action: openInMail) {
+                            Button(action: { showingEmailLanguagePicker = true }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "envelope")
                                     Text("Email")
@@ -177,6 +198,16 @@ struct InvoiceDetailView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                             .buttonStyle(.plain)
+                            .sheet(isPresented: $showingEmailLanguagePicker) {
+                                EmailLanguagePickerSheet(
+                                    selectedLanguage: $selectedEmailLanguage,
+                                    onSend: {
+                                        showingEmailLanguagePicker = false
+                                        openInMail(language: selectedEmailLanguage)
+                                    },
+                                    onCancel: { showingEmailLanguagePicker = false }
+                                )
+                            }
                         }
                     }
                 }
@@ -254,33 +285,42 @@ struct InvoiceDetailView: View {
         #endif
     }
     
-    func openInMail() {
+    func openInMail(language: EmailLanguage) {
         guard let client = client, let profile = appState.companyProfile else { return }
         
         // First export PDF to Downloads
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let pdfURL = downloadsURL.appendingPathComponent("\(currentInvoice.invoiceNumber).pdf")
-        let saved = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: pdfURL)
+        
+        // Use matching PDF language
+        let pdfLanguage: PDFLanguage = language == .german ? .german : .english
+        let saved = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: pdfURL, language: pdfLanguage)
         
         // Show alert
         #if os(macOS)
         let alert = NSAlert()
-        alert.messageText = "PDF Exported"
+        alert.messageText = language == .german ? "PDF exportiert" : "PDF Exported"
         alert.informativeText = saved 
-            ? "The invoice PDF has been saved to your Downloads folder.\n\nPlease attach it manually to the email that will open."
-            : "Could not export PDF. The email will open without attachment."
+            ? (language == .german 
+                ? "Die Rechnung wurde in Ihrem Downloads-Ordner gespeichert.\n\nBitte hängen Sie die PDF manuell an die E-Mail an."
+                : "The invoice PDF has been saved to your Downloads folder.\n\nPlease attach it manually to the email that will open.")
+            : (language == .german
+                ? "PDF konnte nicht exportiert werden. Die E-Mail wird ohne Anhang geöffnet."
+                : "Could not export PDF. The email will open without attachment.")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open Email")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: language == .german ? "E-Mail öffnen" : "Open Email")
+        alert.addButton(withTitle: language == .german ? "Abbrechen" : "Cancel")
         
         if alert.runModal() == .alertFirstButtonReturn {
-            let subject = "Rechnung \(currentInvoice.invoiceNumber)"
+            let subject = "\(language.subjectPrefix) \(currentInvoice.invoiceNumber)"
             
-            // Get template and replace placeholders
-            var body = profile.emailTemplate
+            // Get template based on language
+            var body = language == .german ? profile.emailTemplateGerman : profile.emailTemplateEnglish
+            
+            // Replace placeholders
             body = body.replacingOccurrences(of: "{invoiceNumber}", with: currentInvoice.invoiceNumber)
             body = body.replacingOccurrences(of: "{totalAmount}", with: formatCurrency(displayTotal))
-            body = body.replacingOccurrences(of: "{dueDate}", with: formatDate(currentInvoice.dueDate))
+            body = body.replacingOccurrences(of: "{dueDate}", with: formatDate(currentInvoice.dueDate, language: language))
             body = body.replacingOccurrences(of: "{companyName}", with: profile.companyName)
             body = body.replacingOccurrences(of: "{ownerName}", with: profile.ownerName.isEmpty ? profile.companyName : profile.ownerName)
             body = body.replacingOccurrences(of: "{clientName}", with: client.name)
@@ -303,10 +343,10 @@ struct InvoiceDetailView: View {
         #endif
     }
     
-    func formatDate(_ d: Date) -> String {
+    func formatDate(_ d: Date, language: EmailLanguage = .german) -> String {
         let f = DateFormatter()
         f.dateStyle = .long
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale(identifier: language == .german ? "de_DE" : "en_US")
         return f.string(from: d)
     }
     
@@ -595,5 +635,80 @@ struct ExchangeRateDialog: View {
         f.numberStyle = .currency
         f.currencyCode = currency.rawValue
         return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
+    }
+}
+
+// MARK: - Email Language Picker Sheet
+
+struct EmailLanguagePickerSheet: View {
+    @Binding var selectedLanguage: InvoiceDetailView.EmailLanguage
+    let onSend: () -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "envelope.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.accentColor)
+                
+                Text("Email Language")
+                    .font(.system(size: 18, weight: .semibold))
+                
+                Text("Choose the language for this email")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            // Language options
+            HStack(spacing: 16) {
+                ForEach(InvoiceDetailView.EmailLanguage.allCases, id: \.self) { lang in
+                    Button(action: { selectedLanguage = lang }) {
+                        VStack(spacing: 12) {
+                            Text(lang.icon)
+                                .font(.system(size: 40))
+                            Text(lang.rawValue)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .frame(width: 100, height: 100)
+                        .background(selectedLanguage == lang ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(selectedLanguage == lang ? Color.accentColor : Color.clear, lineWidth: 2)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            
+            // Buttons
+            HStack(spacing: 12) {
+                Button("Cancel") {
+                    onCancel()
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                Button(action: onSend) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "paperplane.fill")
+                        Text("Continue")
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.accentColor)
+                .foregroundColor(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(32)
+        .frame(width: 320)
     }
 }

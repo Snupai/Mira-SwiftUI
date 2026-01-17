@@ -147,55 +147,75 @@ struct SettingsView: View {
                         }
                     }
                     
-                    // Email Template
-                    SettingsSection(title: "Email Template", colors: colors) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Language toggle
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Template Language")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(colors.subtext)
-                                
-                                HStack(spacing: 12) {
-                                    ForEach(EmailTemplateLanguage.allCases, id: \.self) { lang in
-                                        Button(action: {
-                                            appState.companyProfile?.emailTemplateLanguage = lang
-                                            appState.companyProfile?.emailTemplate = lang.defaultTemplate
-                                            appState.saveCompanyProfile()
-                                        }) {
-                                            HStack(spacing: 8) {
-                                                Text(lang.icon)
-                                                    .font(.system(size: 16))
-                                                Text(lang.rawValue)
-                                                    .font(.system(size: 13, weight: .medium))
-                                            }
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background(appState.companyProfile?.emailTemplateLanguage == lang ? colors.accent : colors.surface1)
-                                            .foregroundColor(appState.companyProfile?.emailTemplateLanguage == lang ? .white : colors.text)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Text("Switching resets to default template")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(colors.subtext)
-                                }
-                            }
+                    // Email Templates (both languages)
+                    SettingsSection(title: "Email Templates", colors: colors) {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Customize templates for each language. When sending an invoice, you'll be asked which language to use.")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.subtext)
                             
-                            EmailTemplateEditor(
-                                template: Binding(
-                                    get: { appState.companyProfile?.emailTemplate ?? "" },
-                                    set: {
-                                        appState.companyProfile?.emailTemplate = $0
+                            // German Template
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("🇩🇪")
+                                        .font(.system(size: 16))
+                                    Text("German Template")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(colors.text)
+                                    Spacer()
+                                    Button("Reset to Default") {
+                                        appState.companyProfile?.emailTemplateGerman = CompanyProfile.germanEmailTemplate
                                         appState.saveCompanyProfile()
                                     }
-                                ),
-                                colors: colors
-                            )
+                                    .font(.system(size: 11))
+                                    .foregroundColor(colors.accent)
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                EmailTemplateEditor(
+                                    template: Binding(
+                                        get: { appState.companyProfile?.emailTemplateGerman ?? CompanyProfile.germanEmailTemplate },
+                                        set: {
+                                            appState.companyProfile?.emailTemplateGerman = $0
+                                            appState.saveCompanyProfile()
+                                        }
+                                    ),
+                                    colors: colors
+                                )
+                            }
+                            
+                            Divider()
+                                .background(colors.surface1)
+                            
+                            // English Template
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("🇬🇧")
+                                        .font(.system(size: 16))
+                                    Text("English Template")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(colors.text)
+                                    Spacer()
+                                    Button("Reset to Default") {
+                                        appState.companyProfile?.emailTemplateEnglish = CompanyProfile.englishEmailTemplate
+                                        appState.saveCompanyProfile()
+                                    }
+                                    .font(.system(size: 11))
+                                    .foregroundColor(colors.accent)
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                EmailTemplateEditor(
+                                    template: Binding(
+                                        get: { appState.companyProfile?.emailTemplateEnglish ?? CompanyProfile.englishEmailTemplate },
+                                        set: {
+                                            appState.companyProfile?.emailTemplateEnglish = $0
+                                            appState.saveCompanyProfile()
+                                        }
+                                    ),
+                                    colors: colors
+                                )
+                            }
                         }
                     }
                     
@@ -407,10 +427,6 @@ struct SettingsView: View {
         )
     }
     
-    func resetEmailTemplate() {
-        appState.companyProfile?.emailTemplate = CompanyProfile().emailTemplate
-        appState.saveCompanyProfile()
-    }
 }
 
 struct SettingsSection<Content: View>: View {

@@ -819,36 +819,42 @@ struct OnboardingEmailTemplateView: View {
             continueEnabled: true
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                // Language picker
+                // Info text
+                Text("You can customize email templates for both German and English. When sending an invoice, you'll choose which language to use.")
+                    .font(.system(size: 13))
+                    .foregroundColor(colors.subtext)
+                
+                Divider()
+                    .background(colors.surface1)
+                
+                // German Template
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Template Language")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(colors.subtext)
-                    
-                    HStack(spacing: 12) {
-                        ForEach(EmailTemplateLanguage.allCases, id: \.self) { lang in
-                            Button(action: {
-                                profile.emailTemplateLanguage = lang
-                                profile.emailTemplate = lang.defaultTemplate
-                            }) {
-                                HStack(spacing: 8) {
-                                    Text(lang.icon)
-                                        .font(.system(size: 18))
-                                    Text(lang.rawValue)
-                                        .font(.system(size: 14, weight: .medium))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(profile.emailTemplateLanguage == lang ? colors.accent : colors.surface1)
-                                .foregroundColor(profile.emailTemplateLanguage == lang ? .white : colors.text)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    HStack {
+                        Text("🇩🇪")
+                            .font(.system(size: 16))
+                        Text("German Template")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(colors.text)
                     }
+                    
+                    EmailTemplateEditor(template: $profile.emailTemplateGerman, colors: colors, defaultTemplate: CompanyProfile.germanEmailTemplate)
                 }
                 
-                EmailTemplateEditor(template: $profile.emailTemplate, colors: colors)
+                Divider()
+                    .background(colors.surface1)
+                
+                // English Template
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("🇬🇧")
+                            .font(.system(size: 16))
+                        Text("English Template")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(colors.text)
+                    }
+                    
+                    EmailTemplateEditor(template: $profile.emailTemplateEnglish, colors: colors, defaultTemplate: CompanyProfile.englishEmailTemplate)
+                }
             }
         }
     }
@@ -857,6 +863,7 @@ struct OnboardingEmailTemplateView: View {
 struct EmailTemplateEditor: View {
     @Binding var template: String
     let colors: ThemeColors
+    var defaultTemplate: String = CompanyProfile.germanEmailTemplate
     @State private var textView: NSTextView?
     
     let placeholders: [(label: String, value: String)] = [
@@ -875,7 +882,7 @@ struct EmailTemplateEditor: View {
         VStack(alignment: .leading, spacing: 16) {
             // Custom text editor that exposes NSTextView
             CursorAwareTextEditor(text: $template, textView: $textView, colors: colors)
-                .frame(height: 200)
+                .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             
             // Placeholder buttons
@@ -902,7 +909,7 @@ struct EmailTemplateEditor: View {
             
             // Reset button
             Button(action: { 
-                template = CompanyProfile().emailTemplate
+                template = defaultTemplate
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.counterclockwise")

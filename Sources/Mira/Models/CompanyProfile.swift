@@ -44,9 +44,9 @@ struct CompanyProfile: Codable, Identifiable {
     var locale: String = "de_DE"
     var dateFormat: String = "dd.MM.yyyy"
     
-    // Email template
-    var emailTemplateLanguage: EmailTemplateLanguage = .german
-    var emailTemplate: String = EmailTemplateLanguage.german.defaultTemplate
+    // Email templates - one for each language
+    var emailTemplateGerman: String = CompanyProfile.germanEmailTemplate
+    var emailTemplateEnglish: String = CompanyProfile.englishEmailTemplate
     
     // PDF templates
     var pdfTemplateLanguage: PDFTemplateLanguage = .german
