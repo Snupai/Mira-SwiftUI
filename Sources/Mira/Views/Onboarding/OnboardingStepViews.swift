@@ -1004,11 +1004,14 @@ struct CursorAwareTextEditor: NSViewRepresentable {
                     
                     let placeholderEnd = foundRange.location + foundRange.length
                     
-                    // Check if deletion is happening inside or at the end of this placeholder
+                    // Check if deletion is happening inside this placeholder
                     if affectedCharRange.location >= foundRange.location && affectedCharRange.location < placeholderEnd {
-                        // Delete the entire placeholder instead
-                        textView.setSelectedRange(foundRange)
-                        textView.delete(nil)
+                        // Delete the entire placeholder by directly modifying the text storage
+                        if let textStorage = textView.textStorage {
+                            textStorage.replaceCharacters(in: foundRange, with: "")
+                            textView.setSelectedRange(NSRange(location: foundRange.location, length: 0))
+                            parent.text = textStorage.string
+                        }
                         return false
                     }
                     
