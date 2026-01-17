@@ -32,8 +32,26 @@ struct DashboardView: View {
         appState.invoices.filter { $0.status == .overdue || ($0.status == .sent && $0.isOverdue) }
     }
     
+    var baseCurrency: Currency { appState.companyProfile?.defaultCurrency ?? .eur }
+    
     func totalFor(_ invoices: [Invoice]) -> Double {
-        invoices.reduce(0) { $0 + (isVatExempt ? $1.subtotal : $1.total) }
+        invoices.reduce(0) { total, invoice in
+            let invoiceAmount = isVatExempt ? invoice.subtotal : invoice.total
+            
+            // For paid invoices with saved conversion, use the base currency amount
+            if invoice.status == .paid, let baseAmount = invoice.paidAmountInBaseCurrency {
+                return total + baseAmount
+            }
+            
+            // For invoices in the same currency as base, use the amount directly
+            if invoice.currency == baseCurrency {
+                return total + invoiceAmount
+            }
+            
+            // For unpaid invoices in different currencies, we can't accurately convert
+            // Just skip them in the total (they'll be counted when paid with actual rate)
+            return total
+        }
     }
     
     // Monthly data for chart (last 6 months)
@@ -236,7 +254,15 @@ struct DashboardView: View {
     var topClients: [(client: Client, total: Double)] {
         var clientTotals: [UUID: Double] = [:]
         for invoice in thisYearInvoices.filter({ $0.status == .paid }) {
-            clientTotals[invoice.clientId, default: 0] += isVatExempt ? invoice.subtotal : invoice.total
+            let invoiceAmount = isVatExempt ? invoice.subtotal : invoice.total
+            
+            // Use base currency amount if available, otherwise use direct amount if same currency
+            if let baseAmount = invoice.paidAmountInBaseCurrency {
+                clientTotals[invoice.clientId, default: 0] += baseAmount
+            } else if invoice.currency == baseCurrency {
+                clientTotals[invoice.clientId, default: 0] += invoiceAmount
+            }
+            // Skip invoices in different currencies without conversion data
         }
         return clientTotals.compactMap { id, total in
             guard let client = appState.clients.first(where: { $0.id == id }) else { return nil }
