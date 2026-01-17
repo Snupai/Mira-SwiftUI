@@ -23,6 +23,11 @@ if [ -d ".build/release/Mira_Mira.bundle" ]; then
     cp -R ".build/release/Mira_Mira.bundle" "${APP_NAME}.app/Contents/Resources/"
 fi
 
+# Copy app icon if exists
+if [ -f "Resources/AppIcon.icns" ]; then
+    cp "Resources/AppIcon.icns" "${APP_NAME}.app/Contents/Resources/"
+fi
+
 # Create Info.plist
 cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -49,6 +54,8 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </plist>
 EOF

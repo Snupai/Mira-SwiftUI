@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6C5CE7"/>
+      <stop offset="100%" style="stop-color:#A29BFE"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded square -->
+  <rect x="64" y="64" width="896" height="896" rx="180" fill="url(#bg)"/>
+  
+  <!-- Geometric shapes - overlapping circles -->
+  <circle cx="400" cy="420" r="180" fill="rgba(255,255,255,0.25)"/>
+  <circle cx="624" cy="420" r="180" fill="rgba(255,255,255,0.35)"/>
+  <circle cx="512" cy="604" r="180" fill="rgba(255,255,255,0.45)"/>
+  
+  <!-- Center accent -->
+  <circle cx="512" cy="480" r="80" fill="rgba(255,255,255,0.9)"/>
+</svg>
