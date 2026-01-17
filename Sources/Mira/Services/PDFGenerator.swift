@@ -363,6 +363,36 @@ class PDFGenerator {
             strings.vatExemptNotice.draw(at: CGPoint(x: margin, y: exemptY), withAttributes: exemptAttrs)
         }
         
+        // === CLOSING MESSAGE (after totals) ===
+        if !companyProfile.pdfClosingTemplate.isEmpty {
+            yPosition += 24
+            let closingText = replaceTemplateVariables(
+                in: companyProfile.pdfClosingTemplate,
+                invoice: invoice,
+                client: client,
+                profile: companyProfile,
+                currencyFormatter: currencyFormatter,
+                dateFormatter: dateFormatter
+            )
+            let closingAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: brandColor]
+            closingText.draw(at: CGPoint(x: margin, y: yPosition), withAttributes: closingAttrs)
+        }
+        
+        // === NOTES SECTION (if provided) ===
+        if !companyProfile.pdfNotesTemplate.isEmpty {
+            let notesY = bankBoxY - (companyProfile.isVatExempt ? 40 : 20)
+            let notesText = replaceTemplateVariables(
+                in: companyProfile.pdfNotesTemplate,
+                invoice: invoice,
+                client: client,
+                profile: companyProfile,
+                currencyFormatter: currencyFormatter,
+                dateFormatter: dateFormatter
+            )
+            let notesAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.darkGray]
+            notesText.draw(at: CGPoint(x: margin, y: notesY), withAttributes: notesAttrs)
+        }
+        
         // === FOOTER LINE ===
         NSColor.lightGray.setStroke()
         let footerLine = NSBezierPath()
@@ -371,11 +401,15 @@ class PDFGenerator {
         footerLine.lineWidth = 0.5
         footerLine.stroke()
         
-        var footerParts = [companyProfile.companyName]
-        if !companyProfile.isVatExempt && !companyProfile.vatId.isEmpty { footerParts.append("\(strings.vatId) \(companyProfile.vatId)") }
-        if !companyProfile.taxNumber.isEmpty { footerParts.append("\(strings.taxNumber) \(companyProfile.taxNumber)") }
-        
-        let footerText = footerParts.joined(separator: " · ")
+        // Use template for footer
+        let footerText = replaceTemplateVariables(
+            in: companyProfile.pdfFooterTemplate,
+            invoice: invoice,
+            client: client,
+            profile: companyProfile,
+            currencyFormatter: currencyFormatter,
+            dateFormatter: dateFormatter
+        )
         let footerAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: NSColor.gray]
         let footerSize = footerText.size(withAttributes: footerAttrs)
         footerText.draw(at: CGPoint(x: (pdfWidth - footerSize.width) / 2, y: footerY), withAttributes: footerAttrs)
@@ -403,6 +437,63 @@ class PDFGenerator {
             print("Error saving PDF: \(error)")
             return false
         }
+    }
+    
+    /// Replace template variables in a string
+    private static func replaceTemplateVariables(
+        in template: String,
+        invoice: Invoice,
+        client: Client,
+        profile: CompanyProfile,
+        currencyFormatter: NumberFormatter,
+        dateFormatter: DateFormatter
+    ) -> String {
+        var result = template
+        
+        // Invoice variables
+        result = result.replacingOccurrences(of: "{invoiceNumber}", with: invoice.invoiceNumber)
+        result = result.replacingOccurrences(of: "{totalAmount}", with: currencyFormatter.string(from: NSNumber(value: invoice.total)) ?? "")
+        result = result.replacingOccurrences(of: "{subtotal}", with: currencyFormatter.string(from: NSNumber(value: invoice.subtotal)) ?? "")
+        result = result.replacingOccurrences(of: "{issueDate}", with: dateFormatter.string(from: invoice.issueDate))
+        result = result.replacingOccurrences(of: "{dueDate}", with: dateFormatter.string(from: invoice.dueDate))
+        
+        // Client variables
+        result = result.replacingOccurrences(of: "{clientName}", with: client.name)
+        
+        // Profile variables
+        result = result.replacingOccurrences(of: "{companyName}", with: profile.companyName)
+        result = result.replacingOccurrences(of: "{ownerName}", with: profile.ownerName)
+        result = result.replacingOccurrences(of: "{email}", with: profile.email)
+        result = result.replacingOccurrences(of: "{phone}", with: profile.phone)
+        result = result.replacingOccurrences(of: "{website}", with: profile.website)
+        result = result.replacingOccurrences(of: "{vatId}", with: profile.vatId)
+        result = result.replacingOccurrences(of: "{taxNumber}", with: profile.taxNumber)
+        result = result.replacingOccurrences(of: "{iban}", with: profile.iban)
+        result = result.replacingOccurrences(of: "{bic}", with: profile.bic)
+        result = result.replacingOccurrences(of: "{bankName}", with: profile.bankName)
+        result = result.replacingOccurrences(of: "{accountHolder}", with: profile.accountHolder.isEmpty ? profile.companyName : profile.accountHolder)
+        result = result.replacingOccurrences(of: "{paymentTerms}", with: "\(profile.defaultPaymentTermsDays)")
+        
+        // Clean up empty placeholders
+        // Remove segments with empty values
+        if profile.vatId.isEmpty {
+            result = result.replacingOccurrences(of: "USt-IdNr.: ", with: "")
+            result = result.replacingOccurrences(of: "VAT ID: ", with: "")
+        }
+        if profile.taxNumber.isEmpty {
+            result = result.replacingOccurrences(of: "Steuernr.: ", with: "")
+            result = result.replacingOccurrences(of: "Tax No.: ", with: "")
+        }
+        
+        // Clean up double separators from removed segments
+        result = result.replacingOccurrences(of: " ·  · ", with: " · ")
+        result = result.replacingOccurrences(of: " · · ", with: " · ")
+        result = result.replacingOccurrences(of: "· ·", with: "·")
+        
+        // Trim leading/trailing separators
+        result = result.trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        
+        return result
     }
 }
 #endif

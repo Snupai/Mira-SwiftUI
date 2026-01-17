@@ -48,6 +48,12 @@ struct CompanyProfile: Codable, Identifiable {
     var emailTemplateLanguage: EmailTemplateLanguage = .german
     var emailTemplate: String = EmailTemplateLanguage.german.defaultTemplate
     
+    // PDF templates
+    var pdfTemplateLanguage: PDFTemplateLanguage = .german
+    var pdfFooterTemplate: String = PDFTemplateLanguage.german.defaultFooter
+    var pdfNotesTemplate: String = ""  // Optional notes section
+    var pdfClosingTemplate: String = PDFTemplateLanguage.german.defaultClosing
+    
     // Default templates for each language
     static let germanEmailTemplate = """
 Guten Tag,
@@ -145,5 +151,112 @@ enum EmailTemplateLanguage: String, Codable, CaseIterable {
         case .german: return CompanyProfile.germanEmailTemplate
         case .english: return CompanyProfile.englishEmailTemplate
         }
+    }
+}
+
+enum PDFTemplateLanguage: String, Codable, CaseIterable {
+    case german = "German"
+    case english = "English"
+    
+    var icon: String {
+        switch self {
+        case .german: return "🇩🇪"
+        case .english: return "🇬🇧"
+        }
+    }
+    
+    var defaultFooter: String {
+        switch self {
+        case .german:
+            return "{companyName} · USt-IdNr.: {vatId} · Steuernr.: {taxNumber}"
+        case .english:
+            return "{companyName} · VAT ID: {vatId} · Tax No.: {taxNumber}"
+        }
+    }
+    
+    var defaultClosing: String {
+        switch self {
+        case .german:
+            return "Vielen Dank für Ihr Vertrauen!"
+        case .english:
+            return "Thank you for your business!"
+        }
+    }
+    
+    var defaultNotes: String {
+        switch self {
+        case .german:
+            return "Zahlungsbedingungen: Zahlbar innerhalb von {paymentTerms} Tagen ohne Abzug."
+        case .english:
+            return "Payment Terms: Due within {paymentTerms} days without deduction."
+        }
+    }
+}
+
+/// Template variable replacement for PDF and email templates
+struct TemplateVariables {
+    static let availableVariables: [(key: String, description: String, descriptionDE: String)] = [
+        ("{invoiceNumber}", "Invoice number", "Rechnungsnummer"),
+        ("{companyName}", "Your company name", "Firmenname"),
+        ("{clientName}", "Client name", "Kundenname"),
+        ("{totalAmount}", "Total invoice amount", "Gesamtbetrag"),
+        ("{subtotal}", "Subtotal (before VAT)", "Zwischensumme"),
+        ("{dueDate}", "Payment due date", "Fälligkeitsdatum"),
+        ("{issueDate}", "Invoice date", "Rechnungsdatum"),
+        ("{vatId}", "VAT ID number", "USt-IdNr."),
+        ("{taxNumber}", "Tax number", "Steuernummer"),
+        ("{iban}", "Bank IBAN", "IBAN"),
+        ("{bic}", "Bank BIC/SWIFT", "BIC"),
+        ("{accountHolder}", "Bank account holder", "Kontoinhaber"),
+        ("{bankName}", "Bank name", "Bankname"),
+        ("{paymentTerms}", "Payment terms in days", "Zahlungsfrist in Tagen"),
+        ("{ownerName}", "Owner/contact name", "Inhaber"),
+        ("{email}", "Email address", "E-Mail"),
+        ("{phone}", "Phone number", "Telefon"),
+        ("{website}", "Website URL", "Webseite"),
+    ]
+    
+    static func replace(
+        in template: String,
+        invoice: Any? = nil,  // Invoice type
+        client: Any? = nil,   // Client type  
+        profile: CompanyProfile,
+        currencyFormatter: NumberFormatter? = nil,
+        dateFormatter: DateFormatter? = nil
+    ) -> String {
+        var result = template
+        
+        // Profile variables (always available)
+        result = result.replacingOccurrences(of: "{companyName}", with: profile.companyName)
+        result = result.replacingOccurrences(of: "{ownerName}", with: profile.ownerName)
+        result = result.replacingOccurrences(of: "{email}", with: profile.email)
+        result = result.replacingOccurrences(of: "{phone}", with: profile.phone)
+        result = result.replacingOccurrences(of: "{website}", with: profile.website)
+        result = result.replacingOccurrences(of: "{vatId}", with: profile.vatId)
+        result = result.replacingOccurrences(of: "{taxNumber}", with: profile.taxNumber)
+        result = result.replacingOccurrences(of: "{iban}", with: profile.iban)
+        result = result.replacingOccurrences(of: "{bic}", with: profile.bic)
+        result = result.replacingOccurrences(of: "{bankName}", with: profile.bankName)
+        result = result.replacingOccurrences(of: "{accountHolder}", with: profile.accountHolder.isEmpty ? profile.companyName : profile.accountHolder)
+        result = result.replacingOccurrences(of: "{paymentTerms}", with: "\(profile.defaultPaymentTermsDays)")
+        
+        // Remove empty variable placeholders for cleaner output
+        if profile.vatId.isEmpty {
+            result = result.replacingOccurrences(of: "USt-IdNr.: {vatId}", with: "")
+            result = result.replacingOccurrences(of: "VAT ID: {vatId}", with: "")
+            result = result.replacingOccurrences(of: " · {vatId}", with: "")
+        }
+        if profile.taxNumber.isEmpty {
+            result = result.replacingOccurrences(of: "Steuernr.: {taxNumber}", with: "")
+            result = result.replacingOccurrences(of: "Tax No.: {taxNumber}", with: "")
+            result = result.replacingOccurrences(of: " · {taxNumber}", with: "")
+        }
+        
+        // Clean up double separators
+        result = result.replacingOccurrences(of: " ·  · ", with: " · ")
+        result = result.replacingOccurrences(of: " · · ", with: " · ")
+        result = result.trimmingCharacters(in: CharacterSet(charactersIn: " ·"))
+        
+        return result
     }
 }

@@ -199,6 +199,119 @@ struct SettingsView: View {
                         }
                     }
                     
+                // PDF Templates
+                SettingsSection(title: "PDF Templates", colors: colors) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Language toggle
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Default Language")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(colors.subtext)
+                            
+                            HStack(spacing: 12) {
+                                ForEach(PDFTemplateLanguage.allCases, id: \.self) { lang in
+                                    Button(action: {
+                                        appState.companyProfile?.pdfTemplateLanguage = lang
+                                        appState.companyProfile?.pdfFooterTemplate = lang.defaultFooter
+                                        appState.companyProfile?.pdfClosingTemplate = lang.defaultClosing
+                                        appState.saveCompanyProfile()
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Text(lang.icon)
+                                                .font(.system(size: 16))
+                                            Text(lang.rawValue)
+                                                .font(.system(size: 13, weight: .medium))
+                                        }
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(appState.companyProfile?.pdfTemplateLanguage == lang ? colors.accent : colors.surface1)
+                                        .foregroundColor(appState.companyProfile?.pdfTemplateLanguage == lang ? .white : colors.text)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                Spacer()
+                                
+                                Text("Switching resets templates to defaults")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(colors.subtext)
+                            }
+                        }
+                        
+                        Divider()
+                            .background(colors.surface1)
+                        
+                        // Footer Template
+                        PDFTemplateEditor(
+                            title: "Footer",
+                            description: "Shown at the bottom of every page",
+                            template: Binding(
+                                get: { appState.companyProfile?.pdfFooterTemplate ?? "" },
+                                set: {
+                                    appState.companyProfile?.pdfFooterTemplate = $0
+                                    appState.saveCompanyProfile()
+                                }
+                            ),
+                            colors: colors
+                        )
+                        
+                        // Closing Message
+                        PDFTemplateEditor(
+                            title: "Closing Message",
+                            description: "Shown after the totals section",
+                            template: Binding(
+                                get: { appState.companyProfile?.pdfClosingTemplate ?? "" },
+                                set: {
+                                    appState.companyProfile?.pdfClosingTemplate = $0
+                                    appState.saveCompanyProfile()
+                                }
+                            ),
+                            colors: colors
+                        )
+                        
+                        // Notes Section
+                        PDFTemplateEditor(
+                            title: "Notes / Terms",
+                            description: "Optional notes shown above bank details (leave empty to hide)",
+                            template: Binding(
+                                get: { appState.companyProfile?.pdfNotesTemplate ?? "" },
+                                set: {
+                                    appState.companyProfile?.pdfNotesTemplate = $0
+                                    appState.saveCompanyProfile()
+                                }
+                            ),
+                            colors: colors
+                        )
+                        
+                        // Available variables help
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(TemplateVariables.availableVariables, id: \.key) { variable in
+                                    HStack {
+                                        Text(variable.key)
+                                            .font(.system(size: 12, design: .monospaced))
+                                            .foregroundColor(colors.accent)
+                                        Text("→")
+                                            .foregroundColor(colors.subtext)
+                                        Text(variable.description)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(colors.subtext)
+                                    }
+                                }
+                            }
+                            .padding(.top, 8)
+                        } label: {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                Text("Available Template Variables")
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.accent)
+                        }
+                    }
+                }
+                    
                     // Danger Zone
                     SettingsSection(title: "Other", colors: colors) {
                         Button(action: { appState.hasCompletedOnboarding = false }) {
@@ -335,6 +448,35 @@ struct SettingsTextField: View {
                 .foregroundColor(colors.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .background(colors.surface1)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+struct PDFTemplateEditor: View {
+    let title: String
+    let description: String
+    @Binding var template: String
+    let colors: ThemeColors
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.text)
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundColor(colors.subtext)
+            }
+            
+            TextField("", text: $template)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundColor(colors.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
                 .background(colors.surface1)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
