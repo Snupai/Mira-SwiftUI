@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="Mira"
-VERSION="0.2.11"
+VERSION="0.2.12"
 DMG_NAME="${APP_NAME}-${VERSION}"
 
 cd "$(dirname "$0")"

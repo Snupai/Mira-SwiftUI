@@ -374,7 +374,7 @@ struct ClientDetailView: View {
                                         .font(.system(size: 14))
                                         .foregroundColor(colors.text)
                                     Spacer()
-                                    Text(formatCurrency(invoice.total))
+                                    Text(formatCurrency(invoice.total, currency: invoice.currency))
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(colors.text)
                                 }
@@ -401,11 +401,11 @@ struct ClientDetailView: View {
         }
     }
     
-    func formatCurrency(_ value: Double) -> String {
+    func formatCurrency(_ value: Double, currency: Currency) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = "EUR"
-        return f.string(from: NSNumber(value: value)) ?? "€0"
+        f.currencyCode = currency.rawValue
+        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
     }
 }
 

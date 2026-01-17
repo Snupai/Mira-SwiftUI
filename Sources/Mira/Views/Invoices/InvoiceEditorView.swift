@@ -119,6 +119,22 @@ struct InvoiceEditorView: View {
                             }
                             
                             VStack(alignment: .leading, spacing: 6) {
+                                Text("Currency")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Picker("", selection: $invoice.currency) {
+                                    ForEach(Currency.allCases, id: \.self) { currency in
+                                        Text("\(currency.symbol) \(currency.rawValue)").tag(currency)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .padding(6)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text("Issue Date")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
@@ -152,7 +168,7 @@ struct InvoiceEditorView: View {
                         
                         VStack(spacing: 8) {
                             ForEach($invoice.lineItems) { $item in
-                                LineItemEditor(item: $item, onDelete: {
+                                LineItemEditor(item: $item, currency: invoice.currency, onDelete: {
                                     invoice.lineItems.removeAll { $0.id == item.id }
                                 })
                             }
@@ -254,7 +270,13 @@ struct InvoiceEditorView: View {
                     .environment(\.themeColors, colors)
             }
             .onAppear {
-                if !isEditing { generateInvoiceNumber() }
+                if !isEditing {
+                    generateInvoiceNumber()
+                    // Set default currency from company profile
+                    if let defaultCurrency = appState.companyProfile?.defaultCurrency {
+                        invoice.currency = defaultCurrency
+                    }
+                }
             }
         }
     }
@@ -321,6 +343,7 @@ struct InvoiceEditorView: View {
 
 struct LineItemEditor: View {
     @Binding var item: LineItem
+    let currency: Currency
     let onDelete: () -> Void
     
     var body: some View {
@@ -340,7 +363,7 @@ struct LineItemEditor: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .frame(width: 60)
             
-            TextField("Price", value: $item.unitPrice, format: .currency(code: "EUR"))
+            TextField("Price", value: $item.unitPrice, format: .currency(code: currency.rawValue))
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .padding(10)
@@ -364,8 +387,8 @@ struct LineItemEditor: View {
     func formatCurrency(_ value: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = "EUR"
-        return f.string(from: NSNumber(value: value)) ?? "€0"
+        f.currencyCode = currency.rawValue
+        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
     }
 }
 

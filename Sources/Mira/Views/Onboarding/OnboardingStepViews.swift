@@ -698,6 +698,22 @@ struct OnboardingBankView: View {
             continueEnabled: canContinue
         ) {
             VStack(spacing: 20) {
+                // Base Currency
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text("Base Currency")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    Picker("", selection: $profile.defaultCurrency) {
+                        ForEach(Currency.allCases, id: \.self) { currency in
+                            Text("\(currency.symbol) \(currency.rawValue)").tag(currency)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                }
+                
                 MinimalFormField(label: "Account Holder", placeholder: "Acme GmbH", text: $profile.accountHolder)
                 MinimalFormField(label: "IBAN", placeholder: "DE89 3704 0044 0532 0130 00", text: $profile.iban, required: true)
                 MinimalFormField(label: "BIC", placeholder: "COBADEFFXXX", text: $profile.bic)
