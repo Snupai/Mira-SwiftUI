@@ -960,6 +960,19 @@ struct CursorAwareTextEditor: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CursorAwareTextEditor
         
+        // Known placeholders to treat as atomic blocks
+        let placeholders = [
+            "{invoiceNumber}",
+            "{totalAmount}",
+            "{dueDate}",
+            "{companyName}",
+            "{ownerName}",
+            "{clientName}",
+            "{accountHolder}",
+            "{iban}",
+            "{bic}"
+        ]
+        
         init(_ parent: CursorAwareTextEditor) {
             self.parent = parent
         }
@@ -967,6 +980,45 @@ struct CursorAwareTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
+        }
+        
+        // Intercept text changes to handle placeholder deletion
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            // Only handle deletion (backspace/delete)
+            guard let replacement = replacementString, replacement.isEmpty else {
+                return true
+            }
+            
+            let text = textView.string
+            let nsText = text as NSString
+            
+            // Look for a placeholder that contains the deletion point
+            for placeholder in placeholders {
+                // Find all occurrences of this placeholder
+                var searchRange = NSRange(location: 0, length: nsText.length)
+                while searchRange.location < nsText.length {
+                    let foundRange = nsText.range(of: placeholder, options: [], range: searchRange)
+                    if foundRange.location == NSNotFound {
+                        break
+                    }
+                    
+                    let placeholderEnd = foundRange.location + foundRange.length
+                    
+                    // Check if deletion is happening inside or at the end of this placeholder
+                    if affectedCharRange.location >= foundRange.location && affectedCharRange.location < placeholderEnd {
+                        // Delete the entire placeholder instead
+                        textView.setSelectedRange(foundRange)
+                        textView.delete(nil)
+                        return false
+                    }
+                    
+                    // Move search range forward
+                    searchRange.location = placeholderEnd
+                    searchRange.length = nsText.length - searchRange.location
+                }
+            }
+            
+            return true
         }
     }
 }
