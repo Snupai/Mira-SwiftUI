@@ -93,6 +93,13 @@
 - [ ] Recurring invoices (monthly/weekly)
 - [ ] Payment reminders (dunning levels)
 
+### Themes
+- [ ] Custom themes via JSON files
+  - Load from `~/Library/Application Support/Mira/themes/*.json`
+  - JSON schema: `{ name, dark: { base, mantle, crust, surface0-2, overlay0, text, subtext, accent }, light: { ... } }`
+  - UI to import/export themes
+  - Theme preview in settings
+
 ### Export
 - [ ] CSV export
 - [ ] Backup/restore data

@@ -15,8 +15,12 @@ struct MiraApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 800)
         .commands {
-            // Check for Updates menu item
-            CommandGroup(after: .appInfo) {
+            // Custom About window
+            CommandGroup(replacing: .appInfo) {
+                Button("About Mira") {
+                    AboutWindowController.shared.showWindow()
+                }
+                
                 CheckForUpdatesView()
             }
             
