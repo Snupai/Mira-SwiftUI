@@ -39,6 +39,19 @@ final class UpdaterManager: ObservableObject {
         
         updater.publisher(for: \.lastUpdateCheckDate)
             .assign(to: &$lastUpdateCheckDate)
+        
+        // Check for updates on startup (after a short delay)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.checkForUpdatesOnStartup()
+        }
+    }
+    
+    /// Check for updates on app startup - shows prompt if update available
+    private func checkForUpdatesOnStartup() {
+        guard let updater = updaterController?.updater, updater.canCheckForUpdates else { return }
+        
+        // Use checkForUpdates which will show UI if update is available
+        updaterController?.checkForUpdates(nil)
     }
     
     /// Manually check for updates
