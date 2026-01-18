@@ -40,6 +40,8 @@ struct OnboardingWelcomeView: View {
             }
             .buttonStyle(.plain)
             .padding(.bottom, 60)
+            .focusSection()
+            .keyboardShortcut(.return, modifiers: [])
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(colors.base)

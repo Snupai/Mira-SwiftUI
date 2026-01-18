@@ -7,7 +7,12 @@ struct OnboardingAppearanceView: View {
     @Environment(\.colorScheme) var colorScheme
     let onBack: () -> Void
     let onContinue: () -> Void
-    
+
+    enum Field: Hashable {
+        case systemTheme, catppuccinTheme, accentColor, customColor, done
+    }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         OnboardingStepLayout(
             title: "Appearance",
@@ -120,6 +125,7 @@ struct OnboardingAppearanceView: View {
                 }
             }
         }
+        .onAppear { focusedField = .systemTheme }
     }
 }
 
@@ -467,6 +473,50 @@ struct MinimalFormField: View {
     let placeholder: String
     @Binding var text: String
     var required: Bool = false
+    var isFocused: FocusState<Bool>.Binding? = nil
+    var onSubmit: (() -> Void)? = nil
+    @Environment(\.themeColors) var colors
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(colors.subtext)
+                if required {
+                    Text("*")
+                        .foregroundColor(.red.opacity(0.7))
+                }
+            }
+            
+            let textField = TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15))
+                .foregroundColor(colors.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(colors.surface0)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onSubmit { onSubmit?() }
+            
+            if let isFocused = isFocused {
+                textField.focused(isFocused)
+            } else {
+                textField
+            }
+        }
+    }
+}
+
+/// Form field with explicit focus binding for keyboard navigation
+struct FocusableFormField<F: Hashable>: View {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    var required: Bool = false
+    var focusedField: FocusState<F?>.Binding
+    let field: F
+    var onSubmit: () -> Void
     @Environment(\.themeColors) var colors
     
     var body: some View {
@@ -489,6 +539,8 @@ struct MinimalFormField: View {
                 .padding(.vertical, 10)
                 .background(colors.surface0)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .focused(focusedField, equals: field)
+                .onSubmit(onSubmit)
         }
     }
 }
@@ -513,9 +565,32 @@ struct OnboardingStepLayout<Content: View>: View {
                         Text(title)
                             .font(.system(size: 28, weight: .semibold))
                             .foregroundColor(colors.text)
-                        Text(subtitle)
-                            .font(.system(size: 15))
-                            .foregroundColor(colors.subtext)
+                        HStack(spacing: 8) {
+                            Text(subtitle)
+                                .font(.system(size: 15))
+                                .foregroundColor(colors.subtext)
+                            Spacer()
+                            // Keyboard hints
+                            HStack(spacing: 4) {
+                                Text("Tab")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(colors.surface1)
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                Text("to navigate")
+                                    .font(.system(size: 10))
+                                Text("Enter")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(colors.surface1)
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                Text("to continue")
+                                    .font(.system(size: 10))
+                            }
+                            .foregroundColor(colors.subtext.opacity(0.7))
+                        }
                     }
                     .padding(.top, 40)
                     
@@ -540,7 +615,7 @@ struct OnboardingStepLayout<Content: View>: View {
                     }
                     .buttonStyle(.plain)
                 }
-                
+
                 Button(action: onContinue) {
                     Text("Continue")
                         .font(.system(size: 15, weight: .medium))
@@ -552,12 +627,25 @@ struct OnboardingStepLayout<Content: View>: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!continueEnabled)
+                .keyboardShortcut(.return, modifiers: [])
             }
             .padding(.vertical, 20)
             .frame(maxWidth: .infinity)
             .background(colors.mantle)
+            .focusSection()
         }
         .background(colors.base)
+        // Keyboard shortcuts
+        .background(
+            Group {
+                // Escape to go back
+                if let onBack = onBack {
+                    Button("") { onBack() }
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .opacity(0)
+                }
+            }
+        )
     }
 }
 
@@ -567,6 +655,9 @@ struct OnboardingCompanyBasicsView: View {
     @Binding var profile: CompanyProfile
     let onBack: () -> Void
     let onContinue: () -> Void
+    
+    enum Field: Hashable { case companyName, ownerName, email, phone, website }
+    @FocusState private var focusedField: Field?
     
     var canContinue: Bool {
         !profile.companyName.isEmpty && !profile.email.isEmpty
@@ -581,13 +672,14 @@ struct OnboardingCompanyBasicsView: View {
             continueEnabled: canContinue
         ) {
             VStack(spacing: 20) {
-                MinimalFormField(label: "Company Name", placeholder: "Acme GmbH", text: $profile.companyName, required: true)
-                MinimalFormField(label: "Your Name", placeholder: "Max Mustermann", text: $profile.ownerName)
-                MinimalFormField(label: "Email", placeholder: "hello@example.com", text: $profile.email, required: true)
-                MinimalFormField(label: "Phone", placeholder: "+49 123 456789", text: $profile.phone)
-                MinimalFormField(label: "Website", placeholder: "https://example.com", text: $profile.website)
+                FocusableFormField(label: "Company Name", placeholder: "Acme GmbH", text: $profile.companyName, required: true, focusedField: $focusedField, field: .companyName) { focusedField = .ownerName }
+                FocusableFormField(label: "Your Name", placeholder: "Max Mustermann", text: $profile.ownerName, focusedField: $focusedField, field: .ownerName) { focusedField = .email }
+                FocusableFormField(label: "Email", placeholder: "hello@example.com", text: $profile.email, required: true, focusedField: $focusedField, field: .email) { focusedField = .phone }
+                FocusableFormField(label: "Phone", placeholder: "+49 123 456789", text: $profile.phone, focusedField: $focusedField, field: .phone) { focusedField = .website }
+                FocusableFormField(label: "Website", placeholder: "https://example.com", text: $profile.website, focusedField: $focusedField, field: .website) { if canContinue { onContinue() } }
             }
         }
+        .onAppear { focusedField = .companyName }
     }
 }
 
@@ -597,11 +689,14 @@ struct OnboardingAddressView: View {
     @Binding var profile: CompanyProfile
     let onBack: () -> Void
     let onContinue: () -> Void
-    
+
+    enum Field: Hashable { case street, postalCode, city, country }
+    @FocusState private var focusedField: Field?
+
     var canContinue: Bool {
         !profile.street.isEmpty && !profile.city.isEmpty && !profile.postalCode.isEmpty
     }
-    
+
     var body: some View {
         OnboardingStepLayout(
             title: "Address",
@@ -611,15 +706,16 @@ struct OnboardingAddressView: View {
             continueEnabled: canContinue
         ) {
             VStack(spacing: 20) {
-                MinimalFormField(label: "Street", placeholder: "Musterstraße 123", text: $profile.street, required: true)
+                FocusableFormField(label: "Street", placeholder: "Musterstraße 123", text: $profile.street, required: true, focusedField: $focusedField, field: .street) { focusedField = .postalCode }
                 HStack(spacing: 16) {
-                    MinimalFormField(label: "Postal Code", placeholder: "12345", text: $profile.postalCode, required: true)
+                    FocusableFormField(label: "Postal Code", placeholder: "12345", text: $profile.postalCode, required: true, focusedField: $focusedField, field: .postalCode) { focusedField = .city }
                         .frame(width: 120)
-                    MinimalFormField(label: "City", placeholder: "Berlin", text: $profile.city, required: true)
+                    FocusableFormField(label: "City", placeholder: "Berlin", text: $profile.city, required: true, focusedField: $focusedField, field: .city) { focusedField = .country }
                 }
-                MinimalFormField(label: "Country", placeholder: "Germany", text: $profile.country)
+                FocusableFormField(label: "Country", placeholder: "Germany", text: $profile.country, focusedField: $focusedField, field: .country) { if canContinue { onContinue() } }
             }
         }
+        .onAppear { focusedField = .street }
     }
 }
 
@@ -629,7 +725,10 @@ struct OnboardingTaxView: View {
     @Binding var profile: CompanyProfile
     let onBack: () -> Void
     let onContinue: () -> Void
-    
+
+    enum Field: Hashable { case vatExempt, vatId, taxNumber, companyRegistry }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         OnboardingStepLayout(
             title: "Tax Information",
@@ -653,17 +752,18 @@ struct OnboardingTaxView: View {
                     Toggle("", isOn: $profile.isVatExempt)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                        .focused($focusedField, equals: .vatExempt)
                 }
                 .padding(16)
                 .background(Color.secondary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                
+
                 if !profile.isVatExempt {
-                    MinimalFormField(label: "VAT ID (USt-IdNr.)", placeholder: "DE123456789", text: $profile.vatId)
+                    FocusableFormField(label: "VAT ID (USt-IdNr.)", placeholder: "DE123456789", text: $profile.vatId, focusedField: $focusedField, field: .vatId) { focusedField = .taxNumber }
                 }
-                MinimalFormField(label: "Tax Number", placeholder: "12/345/67890", text: $profile.taxNumber)
-                MinimalFormField(label: "Company Registry", placeholder: "HRB 12345, AG Berlin", text: $profile.companyRegistry)
-                
+                FocusableFormField(label: "Tax Number", placeholder: "12/345/67890", text: $profile.taxNumber, focusedField: $focusedField, field: .taxNumber) { focusedField = .companyRegistry }
+                FocusableFormField(label: "Company Registry", placeholder: "HRB 12345, AG Berlin", text: $profile.companyRegistry, focusedField: $focusedField, field: .companyRegistry) { onContinue() }
+
                 if profile.isVatExempt {
                     Text("No VAT will be charged. Invoice will include §19 UStG exemption notice.")
                         .font(.system(size: 13))
@@ -677,6 +777,7 @@ struct OnboardingTaxView: View {
                 }
             }
         }
+        .onAppear { focusedField = profile.isVatExempt ? .taxNumber : .vatId }
     }
 }
 
@@ -686,9 +787,12 @@ struct OnboardingBankView: View {
     @Binding var profile: CompanyProfile
     let onBack: () -> Void
     let onContinue: () -> Void
-    
+
+    enum Field: Hashable { case currency, accountHolder, iban, bic, bankName }
+    @FocusState private var focusedField: Field?
+
     var canContinue: Bool { !profile.iban.isEmpty }
-    
+
     var body: some View {
         OnboardingStepLayout(
             title: "Bank Details",
@@ -712,14 +816,16 @@ struct OnboardingBankView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
+                    .focused($focusedField, equals: .currency)
                 }
-                
-                MinimalFormField(label: "Account Holder", placeholder: "Acme GmbH", text: $profile.accountHolder)
-                MinimalFormField(label: "IBAN", placeholder: "DE89 3704 0044 0532 0130 00", text: $profile.iban, required: true)
-                MinimalFormField(label: "BIC", placeholder: "COBADEFFXXX", text: $profile.bic)
-                MinimalFormField(label: "Bank Name", placeholder: "Commerzbank", text: $profile.bankName)
+
+                FocusableFormField(label: "Account Holder", placeholder: "Acme GmbH", text: $profile.accountHolder, focusedField: $focusedField, field: .accountHolder) { focusedField = .iban }
+                FocusableFormField(label: "IBAN", placeholder: "DE89 3704 0044 0532 0130 00", text: $profile.iban, required: true, focusedField: $focusedField, field: .iban) { focusedField = .bic }
+                FocusableFormField(label: "BIC", placeholder: "COBADEFFXXX", text: $profile.bic, focusedField: $focusedField, field: .bic) { focusedField = .bankName }
+                FocusableFormField(label: "Bank Name", placeholder: "Commerzbank", text: $profile.bankName, focusedField: $focusedField, field: .bankName) { if canContinue { onContinue() } }
             }
         }
+        .onAppear { focusedField = .currency }
     }
 }
 
@@ -730,9 +836,12 @@ struct OnboardingBrandingView: View {
     let onBack: () -> Void
     let onContinue: () -> Void
     @Environment(\.themeColors) var colors
-    
+
+    enum Field: Hashable { case brandColor, invoicePrefix, paymentTerms }
+    @FocusState private var focusedField: Field?
+
     let paymentTerms = [7, 14, 30, 60]
-    
+
     var body: some View {
         OnboardingStepLayout(
             title: "Customize",
@@ -747,7 +856,7 @@ struct OnboardingBrandingView: View {
                     Text("Brand Color")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(colors.subtext)
-                    
+
                     HStack(spacing: 10) {
                         ForEach(BrandColors.presets.prefix(6), id: \.hex) { preset in
                             Circle()
@@ -759,31 +868,33 @@ struct OnboardingBrandingView: View {
                                         .padding(-3)
                                 )
                                 .onTapGesture { profile.brandColorHex = preset.hex }
+                                .accessibilityAddTraits(profile.brandColorHex == preset.hex ? .isSelected : [])
                         }
-                        
+
                         ColorPicker("", selection: Binding(
                             get: { Color(hex: profile.brandColorHex) ?? .blue },
                             set: { profile.brandColorHex = $0.toHex() }
                         ))
                         .labelsHidden()
                         .frame(width: 32, height: 32)
+                        .focused($focusedField, equals: .brandColor)
                     }
                 }
-                
+
                 // Logo
                 LogoPicker(logoData: $profile.logoData)
-                
+
                 Divider().background(colors.surface1).padding(.vertical, 8)
-                
+
                 // Invoice Prefix
-                MinimalFormField(label: "Invoice Prefix", placeholder: "INV-", text: $profile.invoiceNumberPrefix)
-                
+                FocusableFormField(label: "Invoice Prefix", placeholder: "INV-", text: $profile.invoiceNumberPrefix, focusedField: $focusedField, field: .invoicePrefix) { focusedField = .paymentTerms }
+
                 // Payment Terms
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Payment Terms")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(colors.subtext)
-                    
+
                     HStack(spacing: 8) {
                         ForEach(paymentTerms, id: \.self) { days in
                             Text("\(days)d")
@@ -794,11 +905,13 @@ struct OnboardingBrandingView: View {
                                 .foregroundColor(profile.defaultPaymentTermsDays == days ? .white : colors.text)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                                 .onTapGesture { profile.defaultPaymentTermsDays = days }
+                                .accessibilityAddTraits(profile.defaultPaymentTermsDays == days ? .isSelected : [])
                         }
                     }
                 }
             }
         }
+        .onAppear { focusedField = .invoicePrefix }
     }
 }
 
@@ -809,7 +922,10 @@ struct OnboardingEmailTemplateView: View {
     let onBack: () -> Void
     let onContinue: () -> Void
     @Environment(\.themeColors) var colors
-    
+
+    enum Field: Hashable { case germanTemplate, englishTemplate }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         OnboardingStepLayout(
             title: "Email Template",
@@ -823,10 +939,10 @@ struct OnboardingEmailTemplateView: View {
                 Text("You can customize email templates for both German and English. When sending an invoice, you'll choose which language to use.")
                     .font(.system(size: 13))
                     .foregroundColor(colors.subtext)
-                
+
                 Divider()
                     .background(colors.surface1)
-                
+
                 // German Template
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -836,13 +952,19 @@ struct OnboardingEmailTemplateView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(colors.text)
                     }
-                    
-                    EmailTemplateEditor(template: $profile.emailTemplateGerman, colors: colors, defaultTemplate: CompanyProfile.germanEmailTemplate)
+
+                    EmailTemplateEditor(
+                        template: $profile.emailTemplateGerman,
+                        colors: colors,
+                        defaultTemplate: CompanyProfile.germanEmailTemplate,
+                        focusedField: $focusedField,
+                        field: .germanTemplate
+                    )
                 }
-                
+
                 Divider()
                     .background(colors.surface1)
-                
+
                 // English Template
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -852,20 +974,29 @@ struct OnboardingEmailTemplateView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(colors.text)
                     }
-                    
-                    EmailTemplateEditor(template: $profile.emailTemplateEnglish, colors: colors, defaultTemplate: CompanyProfile.englishEmailTemplate)
+
+                    EmailTemplateEditor(
+                        template: $profile.emailTemplateEnglish,
+                        colors: colors,
+                        defaultTemplate: CompanyProfile.englishEmailTemplate,
+                        focusedField: $focusedField,
+                        field: .englishTemplate
+                    )
                 }
             }
         }
+        .onAppear { focusedField = .germanTemplate }
     }
 }
 
-struct EmailTemplateEditor: View {
+struct EmailTemplateEditor<F: Hashable>: View {
     @Binding var template: String
     let colors: ThemeColors
     var defaultTemplate: String = CompanyProfile.germanEmailTemplate
     @State private var textView: NSTextView?
-    
+    var focusedField: FocusState<F?>.Binding? = nil
+    var field: F? = nil
+
     let placeholders: [(label: String, value: String)] = [
         ("Invoice #", "{invoiceNumber}"),
         ("Amount", "{totalAmount}"),
@@ -877,20 +1008,29 @@ struct EmailTemplateEditor: View {
         ("IBAN", "{iban}"),
         ("BIC", "{bic}")
     ]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Custom text editor that exposes NSTextView
-            CursorAwareTextEditor(text: $template, textView: $textView, colors: colors)
-                .frame(height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            
+            Group {
+                if let focusedField = focusedField, let field = field {
+                    CursorAwareTextEditor(text: $template, textView: $textView, colors: colors)
+                        .frame(height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .focused(focusedField, equals: field)
+                } else {
+                    CursorAwareTextEditor(text: $template, textView: $textView, colors: colors)
+                        .frame(height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+
             // Placeholder buttons
             VStack(alignment: .leading, spacing: 8) {
                 Text("Click to insert at cursor:")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(colors.subtext)
-                
+
                 FlowLayout(spacing: 6) {
                     ForEach(placeholders, id: \.value) { placeholder in
                         Text(placeholder.label)
@@ -906,9 +1046,9 @@ struct EmailTemplateEditor: View {
                     }
                 }
             }
-            
+
             // Reset button
-            Button(action: { 
+            Button(action: {
                 template = defaultTemplate
             }) {
                 HStack(spacing: 4) {
@@ -1143,6 +1283,8 @@ struct OnboardingCompleteView: View {
             }
             .buttonStyle(.plain)
             .padding(.bottom, 60)
+            .focusSection()
+            .keyboardShortcut(.return, modifiers: [])
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(colors.base)
