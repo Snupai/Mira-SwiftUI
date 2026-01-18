@@ -2,10 +2,14 @@ import SwiftUI
 
 struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.themeColors) var colors
-    @ObservedObject var appearance = AppAppearance.shared
+    @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
     @State private var currentStep: OnboardingStep = .welcome
     @State private var companyProfile: CompanyProfile
+    
+    var colors: ThemeColors {
+        themeManager.colors(for: colorScheme)
+    }
 
     init() {
         // Initialize with empty profile, will be updated in onAppear if existing data exists
