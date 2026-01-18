@@ -25,15 +25,29 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 ### From DMG
 Download the latest `Mira-x.x.x-macOS.dmg` from [Releases](../../releases) and drag to Applications.
 
-> ⚠️ **First Launch:** macOS will show an "unidentified developer" warning. See [Why the Warning?](#why-the-unidentified-developer-warning) below.
->
-> **To open the app:**
-> - **Right-click** (or Control-click) the app → **Open** → **Open**
-> - Or run in Terminal: `xattr -cr /Applications/Mira.app`
+### ⚠️ First Launch (Important!)
+
+When you first open Mira, macOS will show this warning:
+
+> **"Mira" Not Opened**
+> 
+> Apple could not verify "Mira" is free of malware that may harm your Mac or compromise your privacy.
+
+**Don't worry - this is expected!** Click **Done** (not "Move to Bin"), then follow these steps:
+
+1. Open **System Settings** (or System Preferences)
+2. Go to **Privacy & Security**
+3. Scroll down to the **Security** section
+4. You'll see: *"Mira" was blocked to protect your Mac*
+5. Click **Open Anyway**
+6. Enter your password if prompted
+7. Mira will now open! 🎉
+
+macOS remembers your choice, so you only need to do this once.
 
 ---
 
-## Why the "Unidentified Developer" Warning?
+## Why the Security Warning?
 
 Mira is **self-signed** rather than notarized with Apple. Here's why:
 
@@ -49,11 +63,11 @@ Mira is developed as a side project for personal use and shared freely. The annu
 - The app is code-signed (just not with an Apple-issued certificate)
 - No data is sent anywhere - everything stays on your Mac
 
-### 🔓 How to open it anyway
-1. **Right-click** the app → **Open** → Click **Open** in the dialog
-2. Or run: `xattr -cr /Applications/Mira.app`
-
-macOS remembers your choice, so you only need to do this once.
+### 🔧 Alternative: Terminal method
+If you prefer, you can also run this in Terminal:
+```bash
+xattr -cr /Applications/Mira.app
+```
 
 ---
 
