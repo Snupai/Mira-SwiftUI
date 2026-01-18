@@ -65,14 +65,30 @@ jobs:
           ./create-dmg.sh
           mv "Mira-$VERSION.dmg" "Mira-$VERSION-macOS.dmg"
 
+      - name: Extract commit message
+        id: commit
+        run: |
+          # Get the commit message (first line only, without the [release x.x.x] tag)
+          MSG=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          echo "message=$MSG" >> $GITHUB_OUTPUT
+          # Get full commit body for changelog
+          BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +2)
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-release.outputs.version }}
           name: Mira v${{ needs.check-release.outputs.version }}
           body: |
-            ## Mira v${{ needs.check-release.outputs.version }}
-            
+            ## What's New
+            ${{ steps.commit.outputs.message }}
+            ${{ steps.commit.outputs.body }}
+
+            ---
+
             ### Installation
             1. Download `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
             2. Open the DMG and drag Mira to Applications
@@ -85,5 +101,6 @@ jobs:
             > xattr -cr /Applications/Mira.app
             > ```
           files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
+          generate_release_notes: true
           draft: false
           prerelease: false

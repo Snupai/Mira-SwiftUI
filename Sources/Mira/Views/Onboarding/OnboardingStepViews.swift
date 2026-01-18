@@ -553,6 +553,7 @@ struct OnboardingStepLayout<Content: View>: View {
     let onBack: (() -> Void)?
     let onContinue: () -> Void
     let continueEnabled: Bool
+    var showKeyboardHints: Bool = true
     @ViewBuilder let content: () -> Content
     @Environment(\.themeColors) var colors
     
@@ -570,26 +571,28 @@ struct OnboardingStepLayout<Content: View>: View {
                                 .font(.system(size: 15))
                                 .foregroundColor(colors.subtext)
                             Spacer()
-                            // Keyboard hints
-                            HStack(spacing: 4) {
-                                Text("Tab")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(colors.surface1)
-                                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                                Text("to navigate")
-                                    .font(.system(size: 10))
-                                Text("Enter")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(colors.surface1)
-                                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                                Text("to continue")
-                                    .font(.system(size: 10))
+                            // Keyboard hints (hidden for text editor steps)
+                            if showKeyboardHints {
+                                HStack(spacing: 4) {
+                                    Text("Tab")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(colors.surface1)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                    Text("to navigate")
+                                        .font(.system(size: 10))
+                                    Text("Enter")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(colors.surface1)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                    Text("to continue")
+                                        .font(.system(size: 10))
+                                }
+                                .foregroundColor(colors.subtext.opacity(0.7))
                             }
-                            .foregroundColor(colors.subtext.opacity(0.7))
                         }
                     }
                     .padding(.top, 40)
@@ -932,7 +935,8 @@ struct OnboardingEmailTemplateView: View {
             subtitle: "Customize your invoice emails",
             onBack: onBack,
             onContinue: onContinue,
-            continueEnabled: true
+            continueEnabled: true,
+            showKeyboardHints: false
         ) {
             VStack(alignment: .leading, spacing: 20) {
                 // Info text
