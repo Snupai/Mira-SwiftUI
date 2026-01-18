@@ -6,16 +6,23 @@ import Sparkle
 final class UpdaterManager: ObservableObject {
     static let shared = UpdaterManager()
     
-    private let updaterController: SPUStandardUpdaterController
+    private var updaterController: SPUStandardUpdaterController?
     
     @Published var canCheckForUpdates = false
     @Published var lastUpdateCheckDate: Date?
     
-    var updater: SPUUpdater {
-        updaterController.updater
+    var updater: SPUUpdater? {
+        updaterController?.updater
     }
     
     private init() {
+        // Delay Sparkle initialization to avoid blocking app startup
+        DispatchQueue.main.async { [weak self] in
+            self?.setupSparkle()
+        }
+    }
+    
+    private func setupSparkle() {
         // Create the updater controller
         // The updater will use the SUFeedURL from Info.plist
         updaterController = SPUStandardUpdaterController(
@@ -24,17 +31,19 @@ final class UpdaterManager: ObservableObject {
             userDriverDelegate: nil
         )
         
+        guard let updater = updaterController?.updater else { return }
+        
         // Observe canCheckForUpdates
-        updaterController.updater.publisher(for: \.canCheckForUpdates)
+        updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
         
-        updaterController.updater.publisher(for: \.lastUpdateCheckDate)
+        updater.publisher(for: \.lastUpdateCheckDate)
             .assign(to: &$lastUpdateCheckDate)
     }
     
     /// Manually check for updates
     func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
+        updaterController?.checkForUpdates(nil)
     }
     
     /// Get the current app version

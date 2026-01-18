@@ -49,6 +49,10 @@ else
     echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
 fi
 
+# Ad-hoc sign the entire app bundle (ensures consistent signatures)
+echo "🔐 Signing app bundle..."
+codesign --force --deep --sign - "${APP_NAME}.app" 2>/dev/null || true
+
 # Sparkle feed URL (hosted on GitHub)
 SPARKLE_FEED_URL="https://raw.githubusercontent.com/Snupai/Mira-SwiftUI/main/appcast.xml"
 

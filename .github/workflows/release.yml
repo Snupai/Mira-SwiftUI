@@ -112,13 +112,28 @@ jobs:
             IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
           fi
           
-          if [ -z "$IDENTITY" ]; then
-            echo "❌ No signing identity found. Falling back to ad-hoc signing."
-            codesign --force --deep --sign - --options runtime Mira.app
-          else
-            echo "✅ Signing with identity: $IDENTITY"
-            codesign --force --deep --sign "$IDENTITY" --options runtime Mira.app
+          SIGN_IDENTITY="${IDENTITY:--}"
+          echo "🔐 Using identity: $SIGN_IDENTITY"
+          
+          # Sign Sparkle framework components first (inside out)
+          echo "🔐 Signing Sparkle.framework components..."
+          if [ -d "Mira.app/Contents/Frameworks/Sparkle.framework" ]; then
+            # Sign XPC services
+            find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.xpc" -type d | while read xpc; do
+              codesign --force --sign "$SIGN_IDENTITY" --options runtime "$xpc" || true
+            done
+            # Sign helper apps
+            find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.app" -type d | while read app; do
+              codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime "$app" || true
+            done
+            # Sign the framework itself
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime "Mira.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" || true
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime "Mira.app/Contents/Frameworks/Sparkle.framework" || true
           fi
+          
+          # Sign the main app
+          echo "🔐 Signing main app..."
+          codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime Mira.app
           
           # Verify signature
           codesign --verify --verbose Mira.app || echo "⚠️ Verification had issues"

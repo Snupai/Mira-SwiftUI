@@ -4,7 +4,6 @@ import Sparkle
 @main
 struct MiraApp: App {
     @StateObject private var appState = AppState()
-    private let updaterManager = UpdaterManager.shared
 
     var body: some Scene {
         WindowGroup {
