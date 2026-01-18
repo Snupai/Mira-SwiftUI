@@ -14,6 +14,7 @@ swift build -c release
 rm -rf "${APP_NAME}.app"
 mkdir -p "${APP_NAME}.app/Contents/MacOS"
 mkdir -p "${APP_NAME}.app/Contents/Resources"
+mkdir -p "${APP_NAME}.app/Contents/Frameworks"
 
 # Copy binary
 cp ".build/release/Mira" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
@@ -28,7 +29,33 @@ if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "${APP_NAME}.app/Contents/Resources/"
 fi
 
-# Create Info.plist
+# Copy Sparkle.framework (check multiple possible locations)
+SPARKLE_FRAMEWORK=""
+if [ -d ".build/release/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/release/Sparkle.framework"
+elif [ -d ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+elif [ -d ".build/arm64-apple-macosx/release/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/arm64-apple-macosx/release/Sparkle.framework"
+fi
+
+if [ -n "$SPARKLE_FRAMEWORK" ]; then
+    echo "📦 Bundling Sparkle.framework from $SPARKLE_FRAMEWORK"
+    cp -R "$SPARKLE_FRAMEWORK" "${APP_NAME}.app/Contents/Frameworks/"
+    
+    # Update the framework's rpath in the binary
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
+else
+    echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
+fi
+
+# Sparkle feed URL (hosted on GitHub)
+SPARKLE_FEED_URL="https://raw.githubusercontent.com/Snupai/Mira-SwiftUI/main/appcast.xml"
+
+# EdDSA public key for Sparkle update verification
+SPARKLE_PUBLIC_KEY="lAu3sHrnhreoAC+WIbYbY39XUqmfjvytjJbBWpaTb/k="
+
+# Create Info.plist with Sparkle configuration
 cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,8 +83,18 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <true/>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    
+    <!-- Sparkle Auto-Update Configuration -->
+    <key>SUFeedURL</key>
+    <string>${SPARKLE_FEED_URL}</string>
+    <key>SUPublicEDKey</key>
+    <string>${SPARKLE_PUBLIC_KEY}</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <true/>
 </dict>
 </plist>
 EOF
 
-echo "✅ Created ${APP_NAME}.app (v${VERSION})"
+echo "✅ Created ${APP_NAME}.app (v${VERSION}) with Sparkle support"

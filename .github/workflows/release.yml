@@ -183,6 +183,106 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Sign DMG for Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          DMG_FILE="Mira-${VERSION}-macOS.dmg"
+          
+          # Find the sign_update tool
+          SIGN_TOOL=""
+          if [ -f ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
+            SIGN_TOOL=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+          elif [ -f ".build/checkouts/Sparkle/sign_update" ]; then
+            SIGN_TOOL=".build/checkouts/Sparkle/sign_update"
+          fi
+          
+          if [ -z "$SIGN_TOOL" ]; then
+            echo "❌ sign_update tool not found"
+            exit 1
+          fi
+          
+          # Sign the DMG using the EdDSA private key
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "🔐 Signing DMG with EdDSA key..."
+            SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" | grep "sparkle:edSignature" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
+            
+            if [ -z "$SIGNATURE" ]; then
+              # Alternative: sign_update might just output the signature
+              SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" 2>&1 | tr -d '\n')
+            fi
+            
+            echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+            echo "✅ DMG signed: ${SIGNATURE:0:20}..."
+          else
+            echo "⚠️ SPARKLE_PRIVATE_KEY not set - appcast will not have signature"
+            echo "SPARKLE_SIGNATURE=" >> $GITHUB_ENV
+          fi
+
+      - name: Update Appcast
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
+          DMG_SIZE=$(stat -f%z "Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
+          PUB_DATE=$(date -R)
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          SIGNATURE="${SPARKLE_SIGNATURE:-}"
+          
+          # Build signature attribute if we have one
+          SIGNATURE_ATTR=""
+          if [ -n "$SIGNATURE" ]; then
+            SIGNATURE_ATTR="sparkle:edSignature=\"${SIGNATURE}\""
+          fi
+          
+          # Create updated appcast.xml with EdDSA signature
+          cat > appcast.xml << APPCAST_EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Mira Updates</title>
+        <link>https://github.com/Snupai/Mira-SwiftUI</link>
+        <description>Updates for Mira Invoice App</description>
+        <language>en</language>
+        
+        <item>
+            <title>Version ${VERSION}</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>
+            <sparkle:version>${VERSION}</sparkle:version>
+            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>What's New</h2>
+                <p>${COMMIT_MSG}</p>
+            ]]></description>
+            <pubDate>${PUB_DATE}</pubDate>
+            <enclosure 
+                url="${DMG_URL}"
+                sparkle:version="${VERSION}"
+                sparkle:shortVersionString="${VERSION}"
+                ${SIGNATURE_ATTR}
+                length="${DMG_SIZE}"
+                type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+        </item>
+    </channel>
+</rss>
+APPCAST_EOF
+          
+          echo "✅ Generated appcast.xml for version ${VERSION}"
+          if [ -n "$SIGNATURE" ]; then
+            echo "✅ Appcast includes EdDSA signature"
+          else
+            echo "⚠️ Appcast does NOT include signature - auto-updates may not work"
+          fi
+
+      - name: Commit Appcast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "chore: update appcast for v${{ needs.check-release.outputs.version }}" || echo "No changes to commit"
+          git push || echo "Nothing to push"
+
       - name: Cleanup Keychain
         if: always()
         run: |

@@ -1,8 +1,10 @@
 import SwiftUI
+import Sparkle
 
 @main
 struct MiraApp: App {
     @StateObject private var appState = AppState()
+    private let updaterManager = UpdaterManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +15,11 @@ struct MiraApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 800)
         .commands {
+            // Check for Updates menu item
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView()
+            }
+            
             CommandGroup(replacing: .newItem) {
                 Button("New Invoice") {
                     NotificationCenter.default.post(name: .newInvoice, object: nil)

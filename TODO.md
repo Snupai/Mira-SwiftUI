@@ -118,6 +118,11 @@
 - [ ] iCloud sync
 - [ ] Receipt/expense tracking
 
+### Monetization (Way Later)
+- [ ] License key system
+- [ ] Gumroad/LemonSqueezy integration
+- [ ] Pro features gating
+
 ---
 
 Version: 0.2.25

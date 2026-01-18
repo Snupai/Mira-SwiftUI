@@ -1,0 +1,61 @@
+import Foundation
+import SwiftUI
+import Sparkle
+
+/// Manages app updates via Sparkle
+final class UpdaterManager: ObservableObject {
+    static let shared = UpdaterManager()
+    
+    private let updaterController: SPUStandardUpdaterController
+    
+    @Published var canCheckForUpdates = false
+    @Published var lastUpdateCheckDate: Date?
+    
+    var updater: SPUUpdater {
+        updaterController.updater
+    }
+    
+    private init() {
+        // Create the updater controller
+        // The updater will use the SUFeedURL from Info.plist
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        
+        // Observe canCheckForUpdates
+        updaterController.updater.publisher(for: \.canCheckForUpdates)
+            .assign(to: &$canCheckForUpdates)
+        
+        updaterController.updater.publisher(for: \.lastUpdateCheckDate)
+            .assign(to: &$lastUpdateCheckDate)
+    }
+    
+    /// Manually check for updates
+    func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
+    }
+    
+    /// Get the current app version
+    var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+    
+    /// Get the current build number
+    var buildNumber: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+    }
+}
+
+/// SwiftUI view for the "Check for Updates" menu item
+struct CheckForUpdatesView: View {
+    @ObservedObject private var updaterManager = UpdaterManager.shared
+    
+    var body: some View {
+        Button("Check for Updates…") {
+            updaterManager.checkForUpdates()
+        }
+        .disabled(!updaterManager.canCheckForUpdates)
+    }
+}
