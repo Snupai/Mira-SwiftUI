@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="Mira"
-VERSION="0.2.21"
+VERSION="0.2.34"
 DMG_NAME="${APP_NAME}-${VERSION}"
 DMG_TEMP="dmg-temp"
 DMG_FINAL="${DMG_NAME}.dmg"
@@ -82,7 +82,7 @@ tell application "Finder"
     end tell
 end tell
 APPLESCRIPT
-    
+
     # Sync and unmount
     sync
     hdiutil detach "$MOUNT_DIR" -quiet || hdiutil detach "$MOUNT_DIR" -force

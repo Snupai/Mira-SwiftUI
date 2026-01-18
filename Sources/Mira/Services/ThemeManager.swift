@@ -66,7 +66,30 @@ class ThemeManager: ObservableObject {
         self.selectedThemeName = UserDefaults.standard.string(forKey: "selectedTheme") ?? "Default"
         self.selectedAccentName = UserDefaults.standard.string(forKey: "selectedAccent") ?? "Blue"
         self.customAccentHex = UserDefaults.standard.string(forKey: "customAccentHex") ?? "#007aff"
+        copyBundledThemesToCustomFolder()
         loadThemes()
+    }
+    
+    /// Copy bundled themes to custom folder so users have examples
+    private func copyBundledThemesToCustomFolder() {
+        // Ensure folder exists
+        try? fileManager.createDirectory(at: customThemesDirectory, withIntermediateDirectories: true)
+        
+        // Find bundled themes in SPM resource bundle
+        guard let resourceBundle = Bundle.main.url(forResource: "Mira_Mira", withExtension: "bundle"),
+              let bundle = Bundle(url: resourceBundle),
+              let bundlePath = bundle.resourcePath else { return }
+        
+        let bundleURL = URL(fileURLWithPath: bundlePath)
+        guard let files = try? fileManager.contentsOfDirectory(at: bundleURL, includingPropertiesForKeys: nil) else { return }
+        
+        for file in files where file.pathExtension == "json" {
+            let destURL = customThemesDirectory.appendingPathComponent(file.lastPathComponent)
+            // Only copy if doesn't exist (don't overwrite user edits)
+            if !fileManager.fileExists(atPath: destURL.path) {
+                try? fileManager.copyItem(at: file, to: destURL)
+            }
+        }
     }
     
     /// Opens the custom themes folder in Finder
