@@ -241,3 +241,11 @@ Private project. All rights reserved.
 ---
 
 Made with 💕 by Nyanjou 🐱
+
+
+### ~~Email~~ (Removed in v0.2.36)
+- Email field retained for contact info (Company & Client profiles)
+- ~~Send email button removed~~
+- ~~Template system removed~~
+
+
