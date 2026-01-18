@@ -45,13 +45,19 @@ if [ -n "$SPARKLE_FRAMEWORK" ]; then
     
     # Update the framework's rpath in the binary
     install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
+    
+    # Strip ALL existing signatures from Sparkle framework (including nested)
+    echo "🔓 Stripping Sparkle signatures..."
+    find "${APP_NAME}.app/Contents/Frameworks/Sparkle.framework" -type f \( -perm +111 -o -name "*.dylib" \) 2>/dev/null | while read binary; do
+        codesign --remove-signature "$binary" 2>/dev/null || true
+    done
 else
     echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
 fi
 
 # Ad-hoc sign the entire app bundle (ensures consistent signatures)
 echo "🔐 Signing app bundle..."
-codesign --force --deep --sign - "${APP_NAME}.app" 2>/dev/null || true
+codesign --force --deep --sign - "${APP_NAME}.app"
 
 # Sparkle feed URL (hosted on GitHub)
 SPARKLE_FEED_URL="https://raw.githubusercontent.com/Snupai/Mira-SwiftUI/main/appcast.xml"
