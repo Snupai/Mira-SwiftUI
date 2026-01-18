@@ -25,15 +25,22 @@ struct ThemeColors {
     let subtext: Color
     let accent: Color
     
+    static let fallback = ThemeColors(
+        base: Color(nsColor: .windowBackgroundColor),
+        mantle: Color(nsColor: .controlBackgroundColor),
+        crust: Color(nsColor: .separatorColor),
+        surface0: Color.secondary.opacity(0.08),
+        surface1: Color.secondary.opacity(0.12),
+        surface2: Color.secondary.opacity(0.16),
+        overlay0: Color.secondary.opacity(0.3),
+        text: Color.primary,
+        subtext: Color.secondary,
+        accent: .purple
+    )
+    
     static func forTheme(_ theme: AppTheme, colorScheme: ColorScheme, accentName: String, customAccentHex: String) -> ThemeColors {
-        switch theme {
-        case .system:
-            return systemColors(customAccentHex: customAccentHex)
-        case .catppuccin:
-            return colorScheme == .dark 
-                ? catppuccinMocha(accentName: accentName)
-                : catppuccinLatte(accentName: accentName)
-        }
+        // Delegate to ThemeManager for JSON-based themes
+        return ThemeManager.shared.colors(for: colorScheme)
     }
     
     private static func systemColors(customAccentHex: String) -> ThemeColors {

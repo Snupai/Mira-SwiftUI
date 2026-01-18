@@ -1,0 +1,36 @@
+{
+  "name": "System",
+  "author": "Apple",
+  "version": "1.0",
+  "isSystemTheme": true,
+  "dark": {
+    "base": "system:windowBackground",
+    "mantle": "system:controlBackground",
+    "crust": "system:separator",
+    "surface0": "rgba:128,128,128,0.08",
+    "surface1": "rgba:128,128,128,0.12",
+    "surface2": "rgba:128,128,128,0.16",
+    "overlay0": "rgba:128,128,128,0.3",
+    "text": "system:label",
+    "subtext": "system:secondaryLabel",
+    "accents": {
+      "Blue": "system:accent"
+    },
+    "defaultAccent": "Blue"
+  },
+  "light": {
+    "base": "system:windowBackground",
+    "mantle": "system:controlBackground",
+    "crust": "system:separator",
+    "surface0": "rgba:128,128,128,0.08",
+    "surface1": "rgba:128,128,128,0.12",
+    "surface2": "rgba:128,128,128,0.16",
+    "overlay0": "rgba:128,128,128,0.3",
+    "text": "system:label",
+    "subtext": "system:secondaryLabel",
+    "accents": {
+      "Blue": "system:accent"
+    },
+    "defaultAccent": "Blue"
+  }
+}

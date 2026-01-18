@@ -3,466 +3,91 @@ import SwiftUI
 // MARK: - Appearance View
 
 struct OnboardingAppearanceView: View {
-    @ObservedObject var appearance = AppAppearance.shared
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     let onBack: () -> Void
     let onContinue: () -> Void
 
-    enum Field: Hashable {
-        case systemTheme, catppuccinTheme, accentColor, customColor, done
-    }
-    @FocusState private var focusedField: Field?
-
     var body: some View {
         OnboardingStepLayout(
             title: "Appearance",
-            subtitle: "Choose how the app looks",
+            subtitle: "Choose your theme",
             onBack: onBack,
             onContinue: onContinue,
             continueEnabled: true
         ) {
-            VStack(alignment: .leading, spacing: 32) {
-                // Theme Selection
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Theme")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                    
-                    HStack(spacing: 12) {
-                        ForEach(AppTheme.allCases, id: \.self) { theme in
-                            ThemeCard(
-                                theme: theme,
-                                isSelected: appearance.theme == theme,
-                                colorScheme: colorScheme,
-                                accentName: appearance.catppuccinAccentName,
-                                action: { appearance.theme = theme }
-                            )
-                        }
-                    }
-                }
+            VStack(alignment: .leading, spacing: 24) {
+                ThemePicker(compact: false)
                 
-                // Accent Color
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Accent Color")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                    
-                    if appearance.theme == .catppuccin {
-                        // Catppuccin accent options - show both light/dark preview
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
-                            ForEach(CatppuccinAccent.options, id: \.name) { option in
-                                VStack(spacing: 4) {
-                                    ZStack {
-                                        // Show both mocha and latte colors
-                                        HStack(spacing: 0) {
-                                            Rectangle().fill(option.latte)
-                                            Rectangle().fill(option.mocha)
-                                        }
-                                        .frame(width: 36, height: 36)
-                                        .clipShape(Circle())
-                                    }
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary, lineWidth: appearance.catppuccinAccentName == option.name ? 2 : 0)
-                                            .padding(-3)
-                                    )
-                                    
-                                    Text(option.name)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-                                }
-                                .onTapGesture {
-                                    appearance.catppuccinAccentName = option.name
-                                }
-                            }
-                        }
-                    } else {
-                        // Standard accent colors
-                        HStack(spacing: 10) {
-                            ForEach(BrandColors.presets.prefix(8), id: \.hex) { preset in
-                                Circle()
-                                    .fill(Color(hex: preset.hex) ?? .blue)
-                                    .frame(width: 36, height: 36)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary, lineWidth: appearance.accentColorHex == preset.hex ? 2 : 0)
-                                            .padding(-3)
-                                    )
-                                    .onTapGesture {
-                                        appearance.accentColorHex = preset.hex
-                                    }
-                            }
-                        }
-                        
-                        // Custom color picker
-                        HStack(spacing: 12) {
-                            ColorPicker("", selection: Binding(
-                                get: { appearance.accentColor },
-                                set: { appearance.accentColorHex = $0.toHex() }
-                            ))
-                            .labelsHidden()
-                            .frame(width: 36, height: 36)
-                            
-                            Text("Custom")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-                
-                // Preview
+                // Live Preview
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Preview")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    if appearance.theme == .catppuccin {
-                        AppearancePreviewCatppuccin(isDark: colorScheme == .dark, accentName: appearance.catppuccinAccentName)
-                    } else {
-                        AppearancePreviewSystem(accentColor: appearance.accentColor)
-                    }
+                    OnboardingThemePreview()
                 }
             }
         }
-        .onAppear { focusedField = .systemTheme }
     }
 }
 
-struct ThemeCard: View {
-    let theme: AppTheme
-    let isSelected: Bool
-    let colorScheme: ColorScheme
-    let accentName: String
-    let action: () -> Void
+// Live preview of the selected theme
+struct OnboardingThemePreview: View {
+    @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
     
-    var accent: Color {
-        if theme == .catppuccin {
-            let opt = CatppuccinAccent.options.first { $0.name == accentName }
-            return colorScheme == .dark ? (opt?.mocha ?? CatppuccinMocha.mauve) : (opt?.latte ?? CatppuccinLatte.mauve)
-        }
-        return .blue
+    var colors: ThemeColors {
+        themeManager.colors(for: colorScheme)
     }
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 10) {
-                // Mini UI preview
-                if theme == .catppuccin {
-                    HStack(spacing: 0) {
-                        ThemeMiniPreview(
-                            bg: CatppuccinLatte.base,
-                            sidebar: CatppuccinLatte.mantle,
-                            surface: CatppuccinLatte.surface0,
-                            text: CatppuccinLatte.text,
-                            accent: CatppuccinLatte.mauve
-                        )
-                        ThemeMiniPreview(
-                            bg: CatppuccinMocha.base,
-                            sidebar: CatppuccinMocha.mantle,
-                            surface: CatppuccinMocha.surface0,
-                            text: CatppuccinMocha.text,
-                            accent: CatppuccinMocha.mauve
-                        )
-                    }
-                    .frame(height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? accent : Color.gray.opacity(0.3), lineWidth: isSelected ? 2.5 : 1)
-                    )
-                } else {
-                    HStack(spacing: 0) {
-                        ThemeMiniPreview(
-                            bg: Color(white: 0.98),
-                            sidebar: Color(white: 0.94),
-                            surface: Color(white: 0.96),
-                            text: Color.black,
-                            accent: .blue
-                        )
-                        ThemeMiniPreview(
-                            bg: Color(white: 0.12),
-                            sidebar: Color(white: 0.08),
-                            surface: Color(white: 0.16),
-                            text: Color.white,
-                            accent: .blue
-                        )
-                    }
-                    .frame(height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color.blue : Color.gray.opacity(0.3), lineWidth: isSelected ? 2.5 : 1)
-                    )
-                }
-                
-                // Label
-                HStack(spacing: 6) {
-                    Image(systemName: theme.icon)
-                        .font(.system(size: 12))
-                    Text(theme.rawValue)
-                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                }
-                .foregroundColor(isSelected ? .primary : .secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(isSelected ? Color.secondary.opacity(0.1) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct ThemeMiniPreview: View {
-    let bg: Color
-    let sidebar: Color
-    let surface: Color
-    let text: Color
-    let accent: Color
     
     var body: some View {
         HStack(spacing: 0) {
-            // Mini sidebar
-            VStack(alignment: .leading, spacing: 3) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(text.opacity(0.15))
-                    .frame(width: 20, height: 6)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(accent)
-                    .frame(width: 24, height: 6)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(text.opacity(0.15))
-                    .frame(width: 18, height: 6)
+            // Sidebar preview
+            VStack(alignment: .leading, spacing: 8) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(colors.surface1)
+                    .frame(width: 60, height: 8)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(colors.accent)
+                    .frame(width: 50, height: 8)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(colors.surface1)
+                    .frame(width: 55, height: 8)
             }
-            .padding(6)
-            .frame(maxHeight: .infinity)
-            .background(sidebar)
+            .padding(12)
+            .frame(width: 90)
+            .background(colors.mantle)
             
-            // Content area
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(text.opacity(0.3))
-                    .frame(width: 30, height: 6)
+            // Content preview
+            VStack(alignment: .leading, spacing: 8) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(colors.text)
+                    .frame(width: 80, height: 10)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(colors.subtext)
+                    .frame(width: 120, height: 6)
                 
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(surface)
-                    .frame(height: 18)
-                
-                HStack {
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(accent)
-                        .frame(width: 20, height: 10)
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(colors.accent)
+                        .frame(width: 50, height: 20)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(colors.surface1)
+                        .frame(width: 50, height: 20)
                 }
+                .padding(.top, 4)
             }
-            .padding(6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(bg)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(colors.base)
         }
-    }
-}
-
-struct AppearancePreviewCatppuccin: View {
-    let isDark: Bool
-    let accentName: String
-    
-    var bg: Color { isDark ? CatppuccinMocha.base : CatppuccinLatte.base }
-    var mantle: Color { isDark ? CatppuccinMocha.mantle : CatppuccinLatte.mantle }
-    var surface: Color { isDark ? CatppuccinMocha.surface0 : CatppuccinLatte.surface0 }
-    var surface1: Color { isDark ? CatppuccinMocha.surface1 : CatppuccinLatte.surface1 }
-    var text: Color { isDark ? CatppuccinMocha.text : CatppuccinLatte.text }
-    var subtext: Color { isDark ? CatppuccinMocha.subtext0 : CatppuccinLatte.subtext0 }
-    var green: Color { isDark ? CatppuccinMocha.green : CatppuccinLatte.green }
-    var yellow: Color { isDark ? CatppuccinMocha.yellow : CatppuccinLatte.yellow }
-    var accent: Color {
-        let opt = CatppuccinAccent.options.first { $0.name == accentName }
-        return isDark ? (opt?.mocha ?? CatppuccinMocha.mauve) : (opt?.latte ?? CatppuccinLatte.mauve)
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(isDark ? "Dark Mode (Mocha)" : "Light Mode (Latte)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-            
-            HStack(spacing: 0) {
-                // Sidebar
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(["Dashboard", "Invoices", "Clients", "Settings"], id: \.self) { item in
-                        HStack(spacing: 10) {
-                            Image(systemName: item == "Dashboard" ? "square.grid.2x2" : item == "Invoices" ? "doc.text" : item == "Clients" ? "person.2" : "gearshape")
-                                .font(.system(size: 12))
-                                .foregroundColor(item == "Invoices" ? accent : subtext)
-                            Text(item)
-                                .font(.system(size: 13, weight: item == "Invoices" ? .medium : .regular))
-                                .foregroundColor(item == "Invoices" ? text : subtext)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(item == "Invoices" ? accent.opacity(0.15) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    Spacer()
-                }
-                .padding(12)
-                .frame(width: 140)
-                .background(mantle)
-                
-                // Content
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Invoices")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(text)
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("New Invoice")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(accent)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                    // Invoice rows
-                    VStack(spacing: 8) {
-                        InvoiceRowPreview(number: "INV-001", client: "Acme Corp", amount: "€1,200.00", status: "Paid", statusColor: green, colors: (surface, text, subtext))
-                        InvoiceRowPreview(number: "INV-002", client: "Tech Ltd", amount: "€850.00", status: "Pending", statusColor: yellow, colors: (surface, text, subtext))
-                        InvoiceRowPreview(number: "INV-003", client: "Design Co", amount: "€2,400.00", status: "Draft", statusColor: subtext, colors: (surface, text, subtext))
-                    }
-                    
-                    Spacer()
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(bg)
-            }
-            .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(subtext.opacity(0.2), lineWidth: 1))
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-struct InvoiceRowPreview: View {
-    let number: String
-    let client: String
-    let amount: String
-    let status: String
-    let statusColor: Color
-    let colors: (surface: Color, text: Color, subtext: Color)
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(number)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(colors.text)
-                Text(client)
-                    .font(.system(size: 11))
-                    .foregroundColor(colors.subtext)
-            }
-            Spacer()
-            Text(amount)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(colors.text)
-            Text(status)
-                .font(.system(size: 10, weight: .medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(statusColor.opacity(0.15))
-                .foregroundColor(statusColor)
-                .clipShape(Capsule())
-        }
-        .padding(12)
-        .background(colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-struct AppearancePreviewSystem: View {
-    let accentColor: Color
-    @Environment(\.colorScheme) var colorScheme
-    
-    var bg: Color { colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.98) }
-    var mantle: Color { colorScheme == .dark ? Color(white: 0.08) : Color(white: 0.94) }
-    var surface: Color { colorScheme == .dark ? Color(white: 0.16) : Color(white: 0.96) }
-    var text: Color { colorScheme == .dark ? .white : .black }
-    var subtext: Color { colorScheme == .dark ? Color(white: 0.6) : Color(white: 0.4) }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Follows System (\(colorScheme == .dark ? "Dark" : "Light"))")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-            
-            HStack(spacing: 0) {
-                // Sidebar
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(["Dashboard", "Invoices", "Clients", "Settings"], id: \.self) { item in
-                        HStack(spacing: 10) {
-                            Image(systemName: item == "Dashboard" ? "square.grid.2x2" : item == "Invoices" ? "doc.text" : item == "Clients" ? "person.2" : "gearshape")
-                                .font(.system(size: 12))
-                                .foregroundColor(item == "Invoices" ? accentColor : subtext)
-                            Text(item)
-                                .font(.system(size: 13, weight: item == "Invoices" ? .medium : .regular))
-                                .foregroundColor(item == "Invoices" ? text : subtext)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(item == "Invoices" ? accentColor.opacity(0.15) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    Spacer()
-                }
-                .padding(12)
-                .frame(width: 140)
-                .background(mantle)
-                
-                // Content
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Invoices")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(text)
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("New Invoice")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(accentColor)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                    VStack(spacing: 8) {
-                        InvoiceRowPreview(number: "INV-001", client: "Acme Corp", amount: "€1,200.00", status: "Paid", statusColor: .green, colors: (surface, text, subtext))
-                        InvoiceRowPreview(number: "INV-002", client: "Tech Ltd", amount: "€850.00", status: "Pending", statusColor: .orange, colors: (surface, text, subtext))
-                        InvoiceRowPreview(number: "INV-003", client: "Design Co", amount: "€2,400.00", status: "Draft", statusColor: subtext, colors: (surface, text, subtext))
-                    }
-                    
-                    Spacer()
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(bg)
-            }
-            .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(subtext.opacity(0.3), lineWidth: 1))
-        }
+        .frame(height: 100)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(colors.crust, lineWidth: 1)
+        )
     }
 }
 
