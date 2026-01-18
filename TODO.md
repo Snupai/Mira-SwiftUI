@@ -69,10 +69,23 @@
 - [x] Placeholders delete as atomic blocks
 - [x] Email template language selection (German/English)
 
+### PDF Templates
+- [x] Separate German/English PDF templates
+- [x] Footer, Closing Message, Notes/Terms per language
+- [x] Resizable template text editors
+- [x] Clickable placeholder insertion
+
+### Onboarding
+- [x] Full keyboard navigation (Tab/Enter/Escape)
+- [x] Auto-focus first field on each step
+- [x] Hide keyboard hints on text editor steps
+
 ### Technical
 - [x] JSON file storage
 - [x] DMG installer script
 - [x] App bundle script
+- [x] Self-signed code signing in CI/CD
+- [x] Custom DMG background with arrow
 
 ## Next Up 🚧
 
@@ -107,4 +120,4 @@
 
 ---
 
-Version: 0.2.19
+Version: 0.2.25

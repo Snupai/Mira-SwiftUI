@@ -4,30 +4,58 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 
 ## Features ✨
 
-- **Clean Onboarding**: Step-by-step setup wizard for your business profile (pre-populates when restarting)
+- **Clean Onboarding**: Step-by-step setup wizard with full keyboard navigation (Tab/Enter)
 - **Client Management**: Add and manage your clients with all their details
 - **Invoice Creation**: Fast, keyboard-friendly invoice editor with line items
 - **Multi-Currency Support**: Create invoices in EUR, USD, GBP, or CHF with per-invoice currency selection
 - **Exchange Rate Tracking**: Auto-fetches live rates when marking foreign invoices as paid (manual fallback)
 - **Status Tracking**: Draft → Sent → Paid workflow with overdue detection
 - **Dashboard**: Revenue charts, stats, top clients, recent invoices (all in base currency)
-- **PDF Export**: Native PDF generation in German or English
-- **Email Integration**: Open in mail client with customizable template (German/English templates)
+- **PDF Export**: Native PDF generation with German/English templates (separate templates per language)
+- **Email Integration**: Open in mail client with customizable German/English templates
 - **Invoice Templates**: Save and reuse invoice configurations
 - **German Tax Compliance**: VAT IDs, Steuernummer, Kleinunternehmerregelung (§19 UStG)
 - **Theming**: System theme or Catppuccin (Mocha/Latte) with accent color picker
 - **Brand Customization**: Custom brand color and logo on invoices
+- **Template Editor**: Resizable text editors with clickable placeholder insertion
+- **Atomic Placeholders**: Template placeholders delete as a whole unit
 
 ## Installation
 
 ### From DMG
 Download the latest `Mira-x.x.x-macOS.dmg` from [Releases](../../releases) and drag to Applications.
 
-> ⚠️ **First Launch:** Since the app isn't notarized with Apple, macOS may show "Mira is damaged". To fix:
-> ```bash
-> xattr -cr /Applications/Mira.app
-> ```
-> Or right-click the app → Open → Open anyway.
+> ⚠️ **First Launch:** macOS will show an "unidentified developer" warning. See [Why the Warning?](#why-the-unidentified-developer-warning) below.
+>
+> **To open the app:**
+> - **Right-click** (or Control-click) the app → **Open** → **Open**
+> - Or run in Terminal: `xattr -cr /Applications/Mira.app`
+
+---
+
+## Why the "Unidentified Developer" Warning?
+
+Mira is **self-signed** rather than notarized with Apple. Here's why:
+
+### 💰 Apple Developer Program costs $99/year
+To remove this warning, developers must pay for the Apple Developer Program ($99/year) to get a Developer ID certificate and notarize apps with Apple.
+
+### 🧑‍💻 This is a personal/hobby project
+Mira is developed as a side project for personal use and shared freely. The annual fee isn't justified for a free, open-source tool that I maintain in my spare time.
+
+### ✅ The app is safe
+- The source code is fully available in this repository
+- You can build it yourself: `swift build -c release`
+- The app is code-signed (just not with an Apple-issued certificate)
+- No data is sent anywhere - everything stays on your Mac
+
+### 🔓 How to open it anyway
+1. **Right-click** the app → **Open** → Click **Open** in the dialog
+2. Or run: `xattr -cr /Applications/Mira.app`
+
+macOS remembers your choice, so you only need to do this once.
+
+---
 
 ### From Source
 ```bash
