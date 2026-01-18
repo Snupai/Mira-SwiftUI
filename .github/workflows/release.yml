@@ -123,9 +123,18 @@ jobs:
             done
           fi
           
-          # Sign the entire app bundle (deep signing handles all nested code)
+          # Sign the entire app bundle
+          # Note: For ad-hoc signing, we can't use hardened runtime with library validation
+          # because Sparkle framework has a different Team ID. Only use --options runtime 
+          # when signing with a real Developer ID certificate.
           echo "🔐 Signing app bundle..."
-          codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime Mira.app
+          if [ "$SIGN_IDENTITY" = "-" ]; then
+            # Ad-hoc signing: no hardened runtime (library validation would block Sparkle)
+            codesign --force --deep --sign - Mira.app
+          else
+            # Real certificate: use hardened runtime
+            codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime Mira.app
+          fi
           
           # Verify signature
           codesign --verify --deep --verbose Mira.app || echo "⚠️ Verification had issues"

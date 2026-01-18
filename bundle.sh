@@ -55,7 +55,8 @@ else
     echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
 fi
 
-# Ad-hoc sign the entire app bundle (ensures consistent signatures)
+# Ad-hoc sign the entire app bundle (without hardened runtime for local dev)
+# Note: Hardened runtime with library validation blocks loading Sparkle with ad-hoc signing
 echo "🔐 Signing app bundle..."
 codesign --force --deep --sign - "${APP_NAME}.app"
 
