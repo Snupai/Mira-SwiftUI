@@ -18,7 +18,6 @@ struct SettingsView: View {
                 addressSection
                 taxSection
                 bankSection
-                emailTemplatesSection
                 pdfTemplatesSection
                 invoiceDefaultsSection
                 otherSection
@@ -108,83 +107,6 @@ struct SettingsView: View {
                 SettingsTextField(label: "BIC", text: binding(\.bic), colors: colors)
                 SettingsTextField(label: "Bank Name", text: binding(\.bankName), colors: colors)
             }
-        }
-    }
-
-    // MARK: - Email Templates Section
-    private var emailTemplatesSection: some View {
-        SettingsSection(title: "Email Templates", colors: colors) {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Customize templates for each language. When sending an invoice, you'll be asked which language to use.")
-                    .font(.system(size: 12))
-                    .foregroundColor(colors.subtext)
-
-                germanEmailTemplate
-                Divider().background(colors.surface1)
-                englishEmailTemplate
-            }
-        }
-    }
-
-    private var germanEmailTemplate: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("🇩🇪")
-                    .font(.system(size: 16))
-                Text("German Template")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button("Reset to Default") {
-                    appState.companyProfile?.emailTemplateGerman = CompanyProfile.germanEmailTemplate
-                    appState.saveCompanyProfile()
-                }
-                .font(.system(size: 11))
-                .foregroundColor(colors.accent)
-                .buttonStyle(.plain)
-            }
-
-            SimpleEmailTemplateEditor(
-                template: Binding(
-                    get: { appState.companyProfile?.emailTemplateGerman ?? CompanyProfile.germanEmailTemplate },
-                    set: {
-                        appState.companyProfile?.emailTemplateGerman = $0
-                        appState.saveCompanyProfile()
-                    }
-                ),
-                colors: colors
-            )
-        }
-    }
-
-    private var englishEmailTemplate: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("🇬🇧")
-                    .font(.system(size: 16))
-                Text("English Template")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button("Reset to Default") {
-                    appState.companyProfile?.emailTemplateEnglish = CompanyProfile.englishEmailTemplate
-                    appState.saveCompanyProfile()
-                }
-                .font(.system(size: 11))
-                .foregroundColor(colors.accent)
-                .buttonStyle(.plain)
-            }
-
-            SimpleEmailTemplateEditor(
-                template: Binding(
-                    get: { appState.companyProfile?.emailTemplateEnglish ?? CompanyProfile.englishEmailTemplate },
-                    set: {
-                        appState.companyProfile?.emailTemplateEnglish = $0
-                        appState.saveCompanyProfile()
-                    }
-                ),
-                colors: colors
-            )
         }
     }
 

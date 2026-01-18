@@ -24,15 +24,14 @@ struct OnboardingContainerView: View {
         case taxInfo = 4
         case bankDetails = 5
         case branding = 6
-        case emailTemplate = 7
-        case complete = 8
+        case complete = 7
     }
     
     var body: some View {
         VStack(spacing: 0) {
             // Progress
-            if currentStep.rawValue > 0 && currentStep.rawValue < 8 {
-                ProgressView(value: Double(currentStep.rawValue), total: 7)
+            if currentStep.rawValue > 0 && currentStep.rawValue < 7 {
+                ProgressView(value: Double(currentStep.rawValue), total: 6)
                     .tint(colors.accent)
                     .padding(.horizontal, 60)
                     .padding(.top, 20)
@@ -55,8 +54,6 @@ struct OnboardingContainerView: View {
                     OnboardingBankView(profile: $companyProfile, onBack: previousStep, onContinue: nextStep)
                 case .branding:
                     OnboardingBrandingView(profile: $companyProfile, onBack: previousStep, onContinue: nextStep)
-                case .emailTemplate:
-                    OnboardingEmailTemplateView(profile: $companyProfile, onBack: previousStep, onContinue: nextStep)
                 case .complete:
                     OnboardingCompleteView(profile: companyProfile, onFinish: finishOnboarding)
                 }
