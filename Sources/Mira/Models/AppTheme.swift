@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 enum AppTheme: String, Codable, CaseIterable {
     case system = "System"
@@ -171,9 +172,12 @@ struct CatppuccinAccent {
     ]
 }
 
-// App appearance settings
+// App appearance settings - bridges to ThemeManager
 class AppAppearance: ObservableObject {
     static let shared = AppAppearance()
+    
+    private var themeManager = ThemeManager.shared
+    private var cancellable: AnyCancellable?
     
     @Published var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "appTheme") }
@@ -187,19 +191,30 @@ class AppAppearance: ObservableObject {
         didSet { UserDefaults.standard.set(catppuccinAccentName, forKey: "catppuccinAccent") }
     }
     
+    // Trigger for view updates when ThemeManager changes
+    @Published private var themeUpdateTrigger = false
+    
     var accentColor: Color {
         Color(hex: accentColorHex) ?? .blue
     }
     
     func colors(for colorScheme: ColorScheme) -> ThemeColors {
-        ThemeColors.forTheme(theme, colorScheme: colorScheme, accentName: catppuccinAccentName, customAccentHex: accentColorHex)
+        // Use ThemeManager for JSON-based themes
+        return themeManager.colors(for: colorScheme)
     }
     
     init() {
-        let savedTheme = UserDefaults.standard.string(forKey: "appTheme") ?? "System"
-        self.theme = AppTheme(rawValue: savedTheme) ?? .system
+        let savedTheme = UserDefaults.standard.string(forKey: "appTheme") ?? "Catppuccin"
+        self.theme = AppTheme(rawValue: savedTheme) ?? .catppuccin
         self.accentColorHex = UserDefaults.standard.string(forKey: "appAccentColor") ?? "#0066CC"
         self.catppuccinAccentName = UserDefaults.standard.string(forKey: "catppuccinAccent") ?? "Mauve"
+        
+        // Subscribe to ThemeManager changes
+        cancellable = themeManager.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.themeUpdateTrigger.toggle()
+            }
+        }
     }
 }
 

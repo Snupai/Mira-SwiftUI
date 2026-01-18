@@ -1,0 +1,49 @@
+{
+  "name": "Default",
+  "author": "Mira",
+  "version": "1.0",
+  "dark": {
+    "base": "#1c1c1e",
+    "mantle": "#2c2c2e",
+    "crust": "#3a3a3c",
+    "surface0": "#3a3a3c",
+    "surface1": "#48484a",
+    "surface2": "#636366",
+    "overlay0": "#8e8e93",
+    "text": "#ffffff",
+    "subtext": "#ebebf5",
+    "accents": {
+      "Blue": "#0a84ff",
+      "Purple": "#bf5af2",
+      "Pink": "#ff375f",
+      "Orange": "#ff9f0a",
+      "Yellow": "#ffd60a",
+      "Green": "#30d158",
+      "Teal": "#64d2ff",
+      "Indigo": "#5e5ce6"
+    },
+    "defaultAccent": "Blue"
+  },
+  "light": {
+    "base": "#ffffff",
+    "mantle": "#f2f2f7",
+    "crust": "#e5e5ea",
+    "surface0": "#e5e5ea",
+    "surface1": "#d1d1d6",
+    "surface2": "#c7c7cc",
+    "overlay0": "#8e8e93",
+    "text": "#000000",
+    "subtext": "#3c3c43",
+    "accents": {
+      "Blue": "#007aff",
+      "Purple": "#af52de",
+      "Pink": "#ff2d55",
+      "Orange": "#ff9500",
+      "Yellow": "#ffcc00",
+      "Green": "#34c759",
+      "Teal": "#5ac8fa",
+      "Indigo": "#5856d6"
+    },
+    "defaultAccent": "Blue"
+  }
+}
