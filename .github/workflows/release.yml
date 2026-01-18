@@ -242,8 +242,34 @@ jobs:
           DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
           DMG_SIZE=$(stat -f%z "Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
           PUB_DATE=$(date -R)
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
           SIGNATURE="${SPARKLE_SIGNATURE:-}"
+          
+          # Get commit message - title and body
+          COMMIT_TITLE=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          COMMIT_BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +3)
+          
+          # Build release notes HTML
+          RELEASE_NOTES="<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;color:#333}h2{font-size:16px;margin:0 0 12px 0;color:#1a1a1a}h3{font-size:14px;margin:16px 0 8px 0;color:#444}ul{margin:8px 0;padding-left:20px}li{margin:4px 0}p{margin:8px 0}.version{color:#666;font-size:12px}</style>"
+          RELEASE_NOTES="${RELEASE_NOTES}<h2>🎉 ${COMMIT_TITLE}</h2>"
+          
+          # Convert commit body to HTML list if it has bullet points
+          if [ -n "$COMMIT_BODY" ]; then
+            # Check if body has bullet points (lines starting with -)
+            if echo "$COMMIT_BODY" | grep -q "^- "; then
+              RELEASE_NOTES="${RELEASE_NOTES}<ul>"
+              echo "$COMMIT_BODY" | grep "^- " | while read -r line; do
+                ITEM=$(echo "$line" | sed 's/^- //')
+                RELEASE_NOTES="${RELEASE_NOTES}<li>${ITEM}</li>"
+              done
+              RELEASE_NOTES="${RELEASE_NOTES}</ul>"
+            else
+              # Plain text body
+              BODY_HTML=$(echo "$COMMIT_BODY" | sed 's/$/<br>/g')
+              RELEASE_NOTES="${RELEASE_NOTES}<p>${BODY_HTML}</p>"
+            fi
+          fi
+          
+          RELEASE_NOTES="${RELEASE_NOTES}<p class=\"version\">Version ${VERSION} • <a href=\"https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}\">Full Changelog</a></p>"
           
           # Build enclosure attributes
           ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
@@ -261,11 +287,11 @@ jobs:
           printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
           printf '%s\n' '        <language>en</language>' >> appcast.xml
           printf '%s\n' '        <item>' >> appcast.xml
-          printf '%s\n' "            <title>Version ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <title>Mira ${VERSION}</title>" >> appcast.xml
           printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
           printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
           printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
-          printf '%s\n' "            <description><![CDATA[<h2>What's New</h2><p>${COMMIT_MSG}</p>]]></description>" >> appcast.xml
+          printf '%s\n' "            <description><![CDATA[${RELEASE_NOTES}]]></description>" >> appcast.xml
           printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
           printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
           printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
