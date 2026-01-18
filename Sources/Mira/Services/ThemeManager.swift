@@ -72,14 +72,19 @@ class ThemeManager: ObservableObject {
     func loadThemes() {
         var themes: [ThemeFile] = []
         
-        // Load bundled themes from Resources
+        // Load bundled themes - try multiple locations
+        // 1. Check for JSON files in the main bundle's resource path
         if let resourcePath = Bundle.main.resourcePath {
-            let themesPath = (resourcePath as NSString).appendingPathComponent("Themes")
-            themes.append(contentsOf: loadThemesFrom(directory: URL(fileURLWithPath: themesPath)))
+            let resourceURL = URL(fileURLWithPath: resourcePath)
+            themes.append(contentsOf: loadThemesFrom(directory: resourceURL))
+            
+            // Also check Themes subdirectory
+            let themesPath = resourceURL.appendingPathComponent("Themes")
+            themes.append(contentsOf: loadThemesFrom(directory: themesPath))
         }
         
-        // Also check for Themes in the bundle directly
-        if let bundleThemes = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: "Themes") {
+        // 2. Check for JSON files in any bundle resources
+        if let bundleThemes = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) {
             for url in bundleThemes {
                 if let theme = loadTheme(from: url), !themes.contains(where: { $0.name == theme.name }) {
                     themes.append(theme)
@@ -87,8 +92,24 @@ class ThemeManager: ObservableObject {
             }
         }
         
+        // 3. Check Mira_Mira.bundle specifically (SPM resource bundle)
+        if let resourceBundle = Bundle.main.url(forResource: "Mira_Mira", withExtension: "bundle"),
+           let bundle = Bundle(url: resourceBundle) {
+            if let bundlePath = bundle.resourcePath {
+                themes.append(contentsOf: loadThemesFrom(directory: URL(fileURLWithPath: bundlePath)))
+            }
+        }
+        
         // Load custom themes from Application Support
         themes.append(contentsOf: loadThemesFrom(directory: customThemesDirectory))
+        
+        // Remove duplicates (keep first occurrence)
+        var seen = Set<String>()
+        themes = themes.filter { theme in
+            if seen.contains(theme.name) { return false }
+            seen.insert(theme.name)
+            return true
+        }
         
         // If no themes loaded, create default Catppuccin in memory
         if themes.isEmpty {
