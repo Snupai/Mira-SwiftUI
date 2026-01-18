@@ -562,6 +562,7 @@ struct PDFTemplateEditorExpanded: View {
     let description: String
     @Binding var template: String
     let colors: ThemeColors
+    @State private var editorHeight: CGFloat = 100
 
     let placeholders: [(label: String, value: String)] = [
         ("Invoice #", "{invoiceNumber}"),
@@ -588,20 +589,25 @@ struct PDFTemplateEditorExpanded: View {
                     .foregroundColor(colors.subtext)
             }
 
-            TextEditor(text: $template)
-                .font(.system(size: 13))
-                .foregroundColor(colors.text)
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .frame(height: 100)
-                .background(colors.surface1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .onChange(of: template) { _, newValue in
-                    let cleaned = TemplatePlaceholderCleaner.clean(newValue)
-                    if cleaned != newValue {
-                        DispatchQueue.main.async { template = cleaned }
+            ZStack(alignment: .bottomTrailing) {
+                TextEditor(text: $template)
+                    .font(.system(size: 13))
+                    .foregroundColor(colors.text)
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .frame(height: editorHeight)
+                    .background(colors.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: template) { _, newValue in
+                        let cleaned = TemplatePlaceholderCleaner.clean(newValue)
+                        if cleaned != newValue {
+                            DispatchQueue.main.async { template = cleaned }
+                        }
                     }
-                }
+
+                // Resize handle
+                ResizeHandle(height: $editorHeight, minHeight: 60, maxHeight: 300, colors: colors)
+            }
 
             // Clickable placeholder buttons
             SimpleFlowLayout(spacing: 6) {
@@ -627,6 +633,7 @@ struct PDFTemplateEditorExpanded: View {
 struct SimpleEmailTemplateEditor: View {
     @Binding var template: String
     let colors: ThemeColors
+    @State private var editorHeight: CGFloat = 180
 
     let placeholders: [(label: String, value: String)] = [
         ("Invoice #", "{invoiceNumber}"),
@@ -643,20 +650,25 @@ struct SimpleEmailTemplateEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Multi-line text editor with placeholder cleanup
-            TextEditor(text: $template)
-                .font(.system(size: 13))
-                .foregroundColor(colors.text)
-                .scrollContentBackground(.hidden)
-                .padding(12)
-                .frame(height: 180)
-                .background(colors.surface1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .onChange(of: template) { _, newValue in
-                    let cleaned = TemplatePlaceholderCleaner.clean(newValue)
-                    if cleaned != newValue {
-                        DispatchQueue.main.async { template = cleaned }
+            ZStack(alignment: .bottomTrailing) {
+                TextEditor(text: $template)
+                    .font(.system(size: 13))
+                    .foregroundColor(colors.text)
+                    .scrollContentBackground(.hidden)
+                    .padding(12)
+                    .frame(height: editorHeight)
+                    .background(colors.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: template) { _, newValue in
+                        let cleaned = TemplatePlaceholderCleaner.clean(newValue)
+                        if cleaned != newValue {
+                            DispatchQueue.main.async { template = cleaned }
+                        }
                     }
-                }
+
+                // Resize handle
+                ResizeHandle(height: $editorHeight, minHeight: 80, maxHeight: 400, colors: colors)
+            }
 
             // Clickable placeholder buttons
             VStack(alignment: .leading, spacing: 8) {
@@ -682,6 +694,44 @@ struct SimpleEmailTemplateEditor: View {
                 }
             }
         }
+    }
+}
+
+// Resize handle for text editors
+struct ResizeHandle: View {
+    @Binding var height: CGFloat
+    let minHeight: CGFloat
+    let maxHeight: CGFloat
+    let colors: ThemeColors
+    @State private var isDragging = false
+
+    var body: some View {
+        // Diagonal lines resize indicator
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10))
+            .rotationEffect(.degrees(-45))
+            .foregroundColor(isDragging ? colors.accent : colors.subtext.opacity(0.5))
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        let newHeight = height + value.translation.height
+                        height = min(max(newHeight, minHeight), maxHeight)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .padding(4)
     }
 }
 
