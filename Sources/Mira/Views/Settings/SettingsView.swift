@@ -270,123 +270,118 @@ struct SettingsView: View {
     private var pdfTemplatesSection: some View {
         SettingsSection(title: "PDF Templates", colors: colors) {
             VStack(alignment: .leading, spacing: 20) {
-                pdfLanguageSelector
-                Divider().background(colors.surface1)
-                pdfFooterEditor
-                pdfClosingEditor
-                pdfNotesEditor
-                templateVariablesHelp
-            }
-        }
-    }
-
-    private var pdfLanguageSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Default Language")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(colors.subtext)
-
-            HStack(spacing: 12) {
-                ForEach(PDFTemplateLanguage.allCases, id: \.self) { lang in
-                    Button(action: {
-                        appState.companyProfile?.pdfTemplateLanguage = lang
-                        appState.companyProfile?.pdfFooterTemplate = lang.defaultFooter
-                        appState.companyProfile?.pdfClosingTemplate = lang.defaultClosing
-                        appState.saveCompanyProfile()
-                    }) {
-                        HStack(spacing: 8) {
-                            Text(lang.icon)
-                                .font(.system(size: 16))
-                            Text(lang.rawValue)
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(appState.companyProfile?.pdfTemplateLanguage == lang ? colors.accent : colors.surface1)
-                        .foregroundColor(appState.companyProfile?.pdfTemplateLanguage == lang ? .white : colors.text)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Spacer()
-
-                Text("Switching resets templates to defaults")
-                    .font(.system(size: 11))
+                Text("Customize PDF templates for each language. Templates are used when generating invoice PDFs.")
+                    .font(.system(size: 12))
                     .foregroundColor(colors.subtext)
+
+                germanPdfTemplates
+                Divider().background(colors.surface1)
+                englishPdfTemplates
             }
         }
     }
 
-    private var pdfFooterEditor: some View {
-        PDFTemplateEditor(
-            title: "Footer",
-            description: "Shown at the bottom of every page",
-            template: Binding(
-                get: { appState.companyProfile?.pdfFooterTemplate ?? "" },
-                set: {
-                    appState.companyProfile?.pdfFooterTemplate = $0
-                    appState.saveCompanyProfile()
-                }
-            ),
-            colors: colors
-        )
-    }
-
-    private var pdfClosingEditor: some View {
-        PDFTemplateEditor(
-            title: "Closing Message",
-            description: "Shown after the totals section",
-            template: Binding(
-                get: { appState.companyProfile?.pdfClosingTemplate ?? "" },
-                set: {
-                    appState.companyProfile?.pdfClosingTemplate = $0
-                    appState.saveCompanyProfile()
-                }
-            ),
-            colors: colors
-        )
-    }
-
-    private var pdfNotesEditor: some View {
-        PDFTemplateEditor(
-            title: "Notes / Terms",
-            description: "Optional notes shown above bank details (leave empty to hide)",
-            template: Binding(
-                get: { appState.companyProfile?.pdfNotesTemplate ?? "" },
-                set: {
-                    appState.companyProfile?.pdfNotesTemplate = $0
-                    appState.saveCompanyProfile()
-                }
-            ),
-            colors: colors
-        )
-    }
-
-    private var templateVariablesHelp: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(TemplateVariables.availableVariables, id: \.key) { variable in
-                    HStack {
-                        Text(variable.key)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(colors.accent)
-                        Text("→")
-                            .foregroundColor(colors.subtext)
-                        Text(variable.description)
-                            .font(.system(size: 12))
-                            .foregroundColor(colors.subtext)
-                    }
-                }
-            }
-            .padding(.top, 8)
-        } label: {
+    private var germanPdfTemplates: some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "info.circle")
-                Text("Available Template Variables")
+                Text("🇩🇪")
+                    .font(.system(size: 16))
+                Text("German Templates")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.text)
+                Spacer()
+                Button("Reset All to Default") {
+                    appState.companyProfile?.pdfFooterTemplateGerman = PDFTemplateLanguage.german.defaultFooter
+                    appState.companyProfile?.pdfClosingTemplateGerman = PDFTemplateLanguage.german.defaultClosing
+                    appState.companyProfile?.pdfNotesTemplateGerman = ""
+                    appState.saveCompanyProfile()
+                }
+                .font(.system(size: 11))
+                .foregroundColor(colors.accent)
+                .buttonStyle(.plain)
             }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundColor(colors.accent)
+
+            PDFTemplateEditorExpanded(
+                title: "Footer",
+                description: "Shown at the bottom of every page",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfFooterTemplateGerman ?? PDFTemplateLanguage.german.defaultFooter },
+                    set: { appState.companyProfile?.pdfFooterTemplateGerman = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
+
+            PDFTemplateEditorExpanded(
+                title: "Closing Message",
+                description: "Shown after the totals section",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfClosingTemplateGerman ?? PDFTemplateLanguage.german.defaultClosing },
+                    set: { appState.companyProfile?.pdfClosingTemplateGerman = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
+
+            PDFTemplateEditorExpanded(
+                title: "Notes / Terms",
+                description: "Optional notes shown above bank details (leave empty to hide)",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfNotesTemplateGerman ?? "" },
+                    set: { appState.companyProfile?.pdfNotesTemplateGerman = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
+        }
+    }
+
+    private var englishPdfTemplates: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("🇬🇧")
+                    .font(.system(size: 16))
+                Text("English Templates")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.text)
+                Spacer()
+                Button("Reset All to Default") {
+                    appState.companyProfile?.pdfFooterTemplateEnglish = PDFTemplateLanguage.english.defaultFooter
+                    appState.companyProfile?.pdfClosingTemplateEnglish = PDFTemplateLanguage.english.defaultClosing
+                    appState.companyProfile?.pdfNotesTemplateEnglish = ""
+                    appState.saveCompanyProfile()
+                }
+                .font(.system(size: 11))
+                .foregroundColor(colors.accent)
+                .buttonStyle(.plain)
+            }
+
+            PDFTemplateEditorExpanded(
+                title: "Footer",
+                description: "Shown at the bottom of every page",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfFooterTemplateEnglish ?? PDFTemplateLanguage.english.defaultFooter },
+                    set: { appState.companyProfile?.pdfFooterTemplateEnglish = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
+
+            PDFTemplateEditorExpanded(
+                title: "Closing Message",
+                description: "Shown after the totals section",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfClosingTemplateEnglish ?? PDFTemplateLanguage.english.defaultClosing },
+                    set: { appState.companyProfile?.pdfClosingTemplateEnglish = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
+
+            PDFTemplateEditorExpanded(
+                title: "Notes / Terms",
+                description: "Optional notes shown above bank details (leave empty to hide)",
+                template: Binding(
+                    get: { appState.companyProfile?.pdfNotesTemplateEnglish ?? "" },
+                    set: { appState.companyProfile?.pdfNotesTemplateEnglish = $0; appState.saveCompanyProfile() }
+                ),
+                colors: colors
+            )
         }
     }
 
@@ -562,6 +557,67 @@ struct PDFTemplateEditor: View {
     }
 }
 
+struct PDFTemplateEditorExpanded: View {
+    let title: String
+    let description: String
+    @Binding var template: String
+    let colors: ThemeColors
+
+    let placeholders: [(label: String, value: String)] = [
+        ("Invoice #", "{invoiceNumber}"),
+        ("Amount", "{totalAmount}"),
+        ("Due Date", "{dueDate}"),
+        ("Company", "{companyName}"),
+        ("Owner", "{ownerName}"),
+        ("Client", "{clientName}"),
+        ("Account Holder", "{accountHolder}"),
+        ("IBAN", "{iban}"),
+        ("BIC", "{bic}"),
+        ("Date", "{date}"),
+        ("Payment Terms", "{paymentTerms}")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.text)
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundColor(colors.subtext)
+            }
+
+            TextEditor(text: $template)
+                .font(.system(size: 13))
+                .foregroundColor(colors.text)
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .frame(height: 100)
+                .background(colors.surface1)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            // Clickable placeholder buttons
+            SimpleFlowLayout(spacing: 6) {
+                ForEach(placeholders, id: \.value) { placeholder in
+                    Button(action: {
+                        template += placeholder.value
+                    }) {
+                        Text(placeholder.label)
+                            .font(.system(size: 10, weight: .medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(colors.accent.opacity(0.15))
+                            .foregroundColor(colors.accent)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
 struct SimpleEmailTemplateEditor: View {
     @Binding var template: String
     let colors: ThemeColors
@@ -579,31 +635,37 @@ struct SimpleEmailTemplateEditor: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            TextField("", text: $template)
-                .textFieldStyle(.plain)
+        VStack(alignment: .leading, spacing: 12) {
+            // Multi-line text editor
+            TextEditor(text: $template)
                 .font(.system(size: 13))
                 .foregroundColor(colors.text)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxHeight: 150)
+                .scrollContentBackground(.hidden)
+                .padding(12)
+                .frame(height: 180)
                 .background(colors.surface1)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
+            // Clickable placeholder buttons
             VStack(alignment: .leading, spacing: 8) {
-                Text("Available placeholders:")
+                Text("Click to insert placeholder:")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(colors.subtext)
 
                 SimpleFlowLayout(spacing: 6) {
                     ForEach(placeholders, id: \.value) { placeholder in
-                        Text(placeholder.label)
-                            .font(.system(size: 11, weight: .medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(colors.accent.opacity(0.15))
-                            .foregroundColor(colors.accent)
-                            .clipShape(Capsule())
+                        Button(action: {
+                            template += placeholder.value
+                        }) {
+                            Text(placeholder.label)
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(colors.accent.opacity(0.15))
+                                .foregroundColor(colors.accent)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

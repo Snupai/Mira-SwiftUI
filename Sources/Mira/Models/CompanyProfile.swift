@@ -48,10 +48,22 @@ struct CompanyProfile: Codable, Identifiable {
     var emailTemplateGerman: String = CompanyProfile.germanEmailTemplate
     var emailTemplateEnglish: String = CompanyProfile.englishEmailTemplate
     
-    // PDF templates
+    // PDF templates - separate for each language
     var pdfTemplateLanguage: PDFTemplateLanguage = .german
+    
+    // German PDF templates
+    var pdfFooterTemplateGerman: String = PDFTemplateLanguage.german.defaultFooter
+    var pdfClosingTemplateGerman: String = PDFTemplateLanguage.german.defaultClosing
+    var pdfNotesTemplateGerman: String = ""
+    
+    // English PDF templates
+    var pdfFooterTemplateEnglish: String = PDFTemplateLanguage.english.defaultFooter
+    var pdfClosingTemplateEnglish: String = PDFTemplateLanguage.english.defaultClosing
+    var pdfNotesTemplateEnglish: String = ""
+    
+    // Legacy (for backward compatibility)
     var pdfFooterTemplate: String = PDFTemplateLanguage.german.defaultFooter
-    var pdfNotesTemplate: String = ""  // Optional notes section
+    var pdfNotesTemplate: String = ""
     var pdfClosingTemplate: String = PDFTemplateLanguage.german.defaultClosing
     
     // Default templates for each language
