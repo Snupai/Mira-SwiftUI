@@ -25,7 +25,9 @@ if [ -d ".build/release/Mira_Mira.bundle" ]; then
 fi
 
 # Copy app icon if exists
-if [ -f "Resources/AppIcon.icns" ]; then
+if [ -f "Sources/Mira/Resources/AppIcon.icns" ]; then
+    cp "Sources/Mira/Resources/AppIcon.icns" "${APP_NAME}.app/Contents/Resources/"
+elif [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "${APP_NAME}.app/Contents/Resources/"
 fi
 
