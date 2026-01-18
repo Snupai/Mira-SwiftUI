@@ -229,44 +229,33 @@ jobs:
           COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
           SIGNATURE="${SPARKLE_SIGNATURE:-}"
           
-          # Build signature attribute if we have one
-          SIGNATURE_ATTR=""
+          # Build enclosure attributes
+          ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
           if [ -n "$SIGNATURE" ]; then
-            SIGNATURE_ATTR="sparkle:edSignature=\"${SIGNATURE}\""
+            ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
           fi
+          ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
           
-          # Create updated appcast.xml with EdDSA signature
-          cat > appcast.xml << APPCAST_EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <channel>
-        <title>Mira Updates</title>
-        <link>https://github.com/Snupai/Mira-SwiftUI</link>
-        <description>Updates for Mira Invoice App</description>
-        <language>en</language>
-        
-        <item>
-            <title>Version ${VERSION}</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>
-            <sparkle:version>${VERSION}</sparkle:version>
-            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-            <description><![CDATA[
-                <h2>What's New</h2>
-                <p>${COMMIT_MSG}</p>
-            ]]></description>
-            <pubDate>${PUB_DATE}</pubDate>
-            <enclosure 
-                url="${DMG_URL}"
-                sparkle:version="${VERSION}"
-                sparkle:shortVersionString="${VERSION}"
-                ${SIGNATURE_ATTR}
-                length="${DMG_SIZE}"
-                type="application/octet-stream"/>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-        </item>
-    </channel>
-</rss>
-APPCAST_EOF
+          # Create appcast.xml using printf to avoid heredoc YAML issues
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
+          printf '%s\n' '    <channel>' >> appcast.xml
+          printf '%s\n' '        <title>Mira Updates</title>' >> appcast.xml
+          printf '%s\n' '        <link>https://github.com/Snupai/Mira-SwiftUI</link>' >> appcast.xml
+          printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
+          printf '%s\n' '        <language>en</language>' >> appcast.xml
+          printf '%s\n' '        <item>' >> appcast.xml
+          printf '%s\n' "            <title>Version ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
+          printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
+          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
+          printf '%s\n' "            <description><![CDATA[<h2>What's New</h2><p>${COMMIT_MSG}</p>]]></description>" >> appcast.xml
+          printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
+          printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
+          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
+          printf '%s\n' '        </item>' >> appcast.xml
+          printf '%s\n' '    </channel>' >> appcast.xml
+          printf '%s\n' '</rss>' >> appcast.xml
           
           echo "✅ Generated appcast.xml for version ${VERSION}"
           if [ -n "$SIGNATURE" ]; then
