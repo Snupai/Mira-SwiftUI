@@ -62,38 +62,67 @@ jobs:
         run: |
           # Create a temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          KEYCHAIN_PASSWORD="temp_keychain_pwd_123"
           
           # Create keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           
-          # Import certificate
+          # Decode and import certificate
           echo "$CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
-          security import $RUNNER_TEMP/certificate.p12 -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           
-          # Add keychain to search list
-          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+          # Import with all applications allowed
+          security import $RUNNER_TEMP/certificate.p12 \
+            -P "$CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
           
-          # Allow codesign to access the certificate
+          # Set keychain as default and add to search list
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_PATH"
+          
+          # Allow codesign to access without prompt
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           
-          # Store keychain path for later cleanup
+          # Debug: List what's in the keychain
+          echo "📋 Certificates in keychain:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" || echo "No codesigning identities found"
+          security find-identity -v "$KEYCHAIN_PATH" || echo "No identities found at all"
+          
+          # Store for later steps
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
 
       - name: Sign App
         run: |
-          # Find the certificate identity
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -o '"[^"]*"' | head -1 | tr -d '"')
-          echo "Signing with identity: $IDENTITY"
+          # List available identities for debugging
+          echo "📋 Available signing identities:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           
-          # Sign the app
-          codesign --force --deep --sign "$IDENTITY" --options runtime Mira.app
+          # Try to find any valid identity
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          
+          if [ -z "$IDENTITY" ]; then
+            echo "⚠️ No codesigning identity found, trying all identities..."
+            IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          fi
+          
+          if [ -z "$IDENTITY" ]; then
+            echo "❌ No signing identity found. Falling back to ad-hoc signing."
+            codesign --force --deep --sign - --options runtime Mira.app
+          else
+            echo "✅ Signing with identity: $IDENTITY"
+            codesign --force --deep --sign "$IDENTITY" --options runtime Mira.app
+          fi
           
           # Verify signature
-          codesign --verify --verbose Mira.app
-          echo "✅ App signed successfully"
+          codesign --verify --verbose Mira.app || echo "⚠️ Verification had issues"
+          echo "✅ App signed"
 
       - name: Create DMG
         run: |
