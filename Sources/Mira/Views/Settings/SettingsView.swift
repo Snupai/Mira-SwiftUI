@@ -596,6 +596,12 @@ struct PDFTemplateEditorExpanded: View {
                 .frame(height: 100)
                 .background(colors.surface1)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onChange(of: template) { _, newValue in
+                    let cleaned = TemplatePlaceholderCleaner.clean(newValue)
+                    if cleaned != newValue {
+                        DispatchQueue.main.async { template = cleaned }
+                    }
+                }
 
             // Clickable placeholder buttons
             SimpleFlowLayout(spacing: 6) {
@@ -636,7 +642,7 @@ struct SimpleEmailTemplateEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Multi-line text editor
+            // Multi-line text editor with placeholder cleanup
             TextEditor(text: $template)
                 .font(.system(size: 13))
                 .foregroundColor(colors.text)
@@ -645,6 +651,12 @@ struct SimpleEmailTemplateEditor: View {
                 .frame(height: 180)
                 .background(colors.surface1)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onChange(of: template) { _, newValue in
+                    let cleaned = TemplatePlaceholderCleaner.clean(newValue)
+                    if cleaned != newValue {
+                        DispatchQueue.main.async { template = cleaned }
+                    }
+                }
 
             // Clickable placeholder buttons
             VStack(alignment: .leading, spacing: 8) {
@@ -670,6 +682,59 @@ struct SimpleEmailTemplateEditor: View {
                 }
             }
         }
+    }
+}
+
+// Helper to clean up broken/partial placeholders
+enum TemplatePlaceholderCleaner {
+    static let validPlaceholders = [
+        "{invoiceNumber}", "{totalAmount}", "{dueDate}", "{companyName}",
+        "{ownerName}", "{clientName}", "{accountHolder}", "{iban}", "{bic}",
+        "{date}", "{paymentTerms}", "{vatId}", "{taxNumber}", "{bankName}"
+    ]
+
+    static func clean(_ text: String) -> String {
+        var result = text
+
+        // For each valid placeholder, if it's been partially deleted, remove the rest
+        for placeholder in validPlaceholders {
+            // If the full placeholder exists, leave it alone
+            if result.contains(placeholder) { continue }
+
+            // Check for any partial versions and remove them
+            // Partials that start with { (e.g., "{taxNum", "{clientNa")
+            for len in 2..<placeholder.count {
+                let prefix = String(placeholder.prefix(len))
+                if prefix.contains("{") && result.contains(prefix) {
+                    result = result.replacingOccurrences(of: prefix, with: "")
+                }
+            }
+
+            // Partials that end with } (e.g., "Number}", "me}")
+            for len in 2..<placeholder.count {
+                let suffix = String(placeholder.suffix(len))
+                if suffix.contains("}") && result.contains(suffix) {
+                    result = result.replacingOccurrences(of: suffix, with: "")
+                }
+            }
+        }
+
+        // Also clean up any orphaned braces
+        // Remove {...} patterns that aren't valid placeholders
+        if let regex = try? NSRegularExpression(pattern: "\\{[^}]*\\}") {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range).reversed()
+            for match in matches {
+                if let matchRange = Range(match.range, in: result) {
+                    let found = String(result[matchRange])
+                    if !validPlaceholders.contains(found) {
+                        result.removeSubrange(matchRange)
+                    }
+                }
+            }
+        }
+
+        return result
     }
 }
 
