@@ -2,11 +2,16 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var appearance = AppAppearance.shared
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     
     var themeColors: ThemeColors {
-        appearance.colors(for: colorScheme)
+        themeManager.colors(for: colorScheme)
+    }
+    
+    // Create a unique ID that changes when theme settings change
+    private var themeId: String {
+        "\(themeManager.selectedThemeName)-\(themeManager.selectedAccentName)"
     }
     
     var body: some View {
@@ -21,6 +26,7 @@ struct ContentView: View {
         .tint(themeColors.accent)
         .background(themeColors.base)
         .foregroundColor(themeColors.text)
+        .id(themeId) // Force refresh when theme changes
         #if os(macOS)
         .frame(minWidth: 900, minHeight: 600)
         #endif
