@@ -5,12 +5,32 @@ struct ThemePicker: View {
     @Environment(\.colorScheme) private var colorScheme
     
     var compact: Bool = false
+    var showOpenFolder: Bool = true
     
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 16) {
-            if !compact {
-                Text("Choose Theme")
-                    .font(.headline)
+            HStack {
+                if !compact {
+                    Text("Choose Theme")
+                        .font(.headline)
+                }
+                
+                Spacer()
+                
+                if showOpenFolder {
+                    Button(action: { themeManager.openThemesFolder() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder")
+                            if !compact {
+                                Text("Open Themes Folder")
+                            }
+                        }
+                        .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .help("Open custom themes folder")
+                }
             }
             
             LazyVGrid(columns: [

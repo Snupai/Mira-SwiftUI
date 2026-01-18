@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="Mira"
-VERSION="0.2.19"
+VERSION="0.2.34"
 BUNDLE_ID="com.snupai.mira"
 
 cd "$(dirname "$0")"
@@ -42,10 +42,10 @@ fi
 if [ -n "$SPARKLE_FRAMEWORK" ]; then
     echo "📦 Bundling Sparkle.framework from $SPARKLE_FRAMEWORK"
     cp -R "$SPARKLE_FRAMEWORK" "${APP_NAME}.app/Contents/Frameworks/"
-    
+
     # Update the framework's rpath in the binary
     install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
-    
+
     # Strip ALL existing signatures from Sparkle framework (including nested)
     echo "🔓 Stripping Sparkle signatures..."
     find "${APP_NAME}.app/Contents/Frameworks/Sparkle.framework" -type f \( -perm +111 -o -name "*.dylib" \) 2>/dev/null | while read binary; do
@@ -94,7 +94,7 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <true/>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
-    
+
     <!-- Sparkle Auto-Update Configuration -->
     <key>SUFeedURL</key>
     <string>${SPARKLE_FEED_URL}</string>

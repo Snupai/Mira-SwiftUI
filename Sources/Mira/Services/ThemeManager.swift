@@ -63,10 +63,17 @@ class ThemeManager: ObservableObject {
     }
     
     private init() {
-        self.selectedThemeName = UserDefaults.standard.string(forKey: "selectedTheme") ?? "Catppuccin"
-        self.selectedAccentName = UserDefaults.standard.string(forKey: "selectedAccent") ?? "Mauve"
-        self.customAccentHex = UserDefaults.standard.string(forKey: "customAccentHex") ?? "#cba6f7"
+        self.selectedThemeName = UserDefaults.standard.string(forKey: "selectedTheme") ?? "Default"
+        self.selectedAccentName = UserDefaults.standard.string(forKey: "selectedAccent") ?? "Blue"
+        self.customAccentHex = UserDefaults.standard.string(forKey: "customAccentHex") ?? "#007aff"
         loadThemes()
+    }
+    
+    /// Opens the custom themes folder in Finder
+    func openThemesFolder() {
+        // Ensure folder exists
+        try? fileManager.createDirectory(at: customThemesDirectory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(customThemesDirectory)
     }
     
     func loadThemes() {
