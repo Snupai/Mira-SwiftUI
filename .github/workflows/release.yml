@@ -160,11 +160,24 @@ jobs:
             3. Launch Mira from Applications
             
             **Requirements:** macOS 14.0 (Sonoma) or later
-            
-            > ⚠️ **First Launch:** If macOS says "Mira is damaged", run:
-            > ```bash
-            > xattr -cr /Applications/Mira.app
-            > ```
+
+            ---
+
+            ### ⚠️ First Launch (Important!)
+
+            When you first open Mira, macOS will show a warning:
+            > "Mira" Not Opened - Apple could not verify "Mira" is free of malware...
+
+            **This is expected!** Click **Done**, then:
+
+            1. Open **System Settings**
+            2. Go to **Privacy & Security**
+            3. Scroll to **Security** section
+            4. Find *"Mira" was blocked to protect your Mac*
+            5. Click **Open Anyway**
+            6. Enter your password if prompted
+
+            You only need to do this once! See [Why the warning?](../../#why-the-security-warning) in the README.
           files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
           generate_release_notes: true
           draft: false
