@@ -63,15 +63,15 @@ jobs:
           # Create a temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
           KEYCHAIN_PASSWORD="temp_keychain_pwd_123"
-          
+
           # Create keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
+
           # Decode and import certificate
           echo "$CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
-          
+
           # Import with all applications allowed
           security import $RUNNER_TEMP/certificate.p12 \
             -P "$CERTIFICATE_PASSWORD" \
@@ -81,19 +81,19 @@ jobs:
             -k "$KEYCHAIN_PATH" \
             -T /usr/bin/codesign \
             -T /usr/bin/security
-          
+
           # Set keychain as default and add to search list
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
           security default-keychain -s "$KEYCHAIN_PATH"
-          
+
           # Allow codesign to access without prompt
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
+
           # Debug: List what's in the keychain
           echo "📋 Certificates in keychain:"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" || echo "No codesigning identities found"
           security find-identity -v "$KEYCHAIN_PATH" || echo "No identities found at all"
-          
+
           # Store for later steps
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
@@ -103,18 +103,18 @@ jobs:
           # List available identities for debugging
           echo "📋 Available signing identities:"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          
+
           # Try to find any valid identity
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          
+
           if [ -z "$IDENTITY" ]; then
             echo "⚠️ No codesigning identity found, trying all identities..."
             IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
           fi
-          
+
           SIGN_IDENTITY="${IDENTITY:--}"
           echo "🔐 Using identity: $SIGN_IDENTITY"
-          
+
           # Strip ALL existing signatures from Sparkle framework first
           echo "🔓 Stripping existing Sparkle signatures..."
           if [ -d "Mira.app/Contents/Frameworks/Sparkle.framework" ]; then
@@ -122,10 +122,10 @@ jobs:
               codesign --remove-signature "$binary" 2>/dev/null || true
             done
           fi
-          
+
           # Sign the entire app bundle
           # Note: For ad-hoc signing, we can't use hardened runtime with library validation
-          # because Sparkle framework has a different Team ID. Only use --options runtime 
+          # because Sparkle framework has a different Team ID. Only use --options runtime
           # when signing with a real Developer ID certificate.
           echo "🔐 Signing app bundle..."
           if [ "$SIGN_IDENTITY" = "-" ]; then
@@ -135,7 +135,7 @@ jobs:
             # Real certificate: use hardened runtime
             codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime Mira.app
           fi
-          
+
           # Verify signature
           codesign --verify --deep --verbose Mira.app || echo "⚠️ Verification had issues"
           echo "✅ App signed"
@@ -174,7 +174,7 @@ jobs:
             1. Download `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
             2. Open the DMG and drag Mira to Applications
             3. Launch Mira from Applications
-            
+
             **Requirements:** macOS 14.0 (Sonoma) or later
 
             ---
@@ -205,7 +205,7 @@ jobs:
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
           DMG_FILE="Mira-${VERSION}-macOS.dmg"
-          
+
           # Find the sign_update tool
           SIGN_TOOL=""
           if [ -f ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
@@ -213,22 +213,22 @@ jobs:
           elif [ -f ".build/checkouts/Sparkle/sign_update" ]; then
             SIGN_TOOL=".build/checkouts/Sparkle/sign_update"
           fi
-          
+
           if [ -z "$SIGN_TOOL" ]; then
             echo "❌ sign_update tool not found"
             exit 1
           fi
-          
+
           # Sign the DMG using the EdDSA private key
           if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
             echo "🔐 Signing DMG with EdDSA key..."
             SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" | grep "sparkle:edSignature" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
-            
+
             if [ -z "$SIGNATURE" ]; then
               # Alternative: sign_update might just output the signature
               SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" 2>&1 | tr -d '\n')
             fi
-            
+
             echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
             echo "✅ DMG signed: ${SIGNATURE:0:20}..."
           else
@@ -243,15 +243,15 @@ jobs:
           DMG_SIZE=$(stat -f%z "Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
           PUB_DATE=$(date -R)
           SIGNATURE="${SPARKLE_SIGNATURE:-}"
-          
+
           # Get commit message - title and body
           COMMIT_TITLE=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
           COMMIT_BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +3)
-          
+
           # Build release notes HTML
           RELEASE_NOTES="<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;color:#333}h2{font-size:16px;margin:0 0 12px 0;color:#1a1a1a}h3{font-size:14px;margin:16px 0 8px 0;color:#444}ul{margin:8px 0;padding-left:20px}li{margin:4px 0}p{margin:8px 0}.version{color:#666;font-size:12px}</style>"
           RELEASE_NOTES="${RELEASE_NOTES}<h2>🎉 ${COMMIT_TITLE}</h2>"
-          
+
           # Convert commit body to HTML list if it has bullet points
           if [ -n "$COMMIT_BODY" ]; then
             # Check if body has bullet points (lines starting with -)
@@ -268,16 +268,16 @@ jobs:
               RELEASE_NOTES="${RELEASE_NOTES}<p>${BODY_HTML}</p>"
             fi
           fi
-          
+
           RELEASE_NOTES="${RELEASE_NOTES}<p class=\"version\">Version ${VERSION} • <a href=\"https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}\">Full Changelog</a></p>"
-          
+
           # Build enclosure attributes
           ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
           if [ -n "$SIGNATURE" ]; then
             ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
           fi
           ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
-          
+
           # Create appcast.xml using printf to avoid heredoc YAML issues
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
           printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
@@ -298,7 +298,7 @@ jobs:
           printf '%s\n' '        </item>' >> appcast.xml
           printf '%s\n' '    </channel>' >> appcast.xml
           printf '%s\n' '</rss>' >> appcast.xml
-          
+
           echo "✅ Generated appcast.xml for version ${VERSION}"
           if [ -n "$SIGNATURE" ]; then
             echo "✅ Appcast includes EdDSA signature"

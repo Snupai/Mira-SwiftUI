@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="Mira"
-VERSION="0.2.34"
+VERSION="0.2.39"
 DMG_NAME="${APP_NAME}-${VERSION}"
 DMG_TEMP="dmg-temp"
 DMG_FINAL="${DMG_NAME}.dmg"
@@ -12,10 +12,14 @@ DMG_RW="${DMG_NAME}-rw.dmg"
 WINDOW_WIDTH=660
 WINDOW_HEIGHT=400
 ICON_SIZE=128
+TEXT_SIZE=12
+# Finder positions are anchored from the bottom-left of the icon+label block.
+LABEL_HEIGHT=24
+CENTER_Y=$((WINDOW_HEIGHT / 2 + (ICON_SIZE + LABEL_HEIGHT) / 2))
 APP_X=480      # App icon on the right
-APP_Y=170
+APP_Y=${CENTER_Y}
 APPS_X=180     # Applications folder on the left
-APPS_Y=170
+APPS_Y=${CENTER_Y}
 
 cd "$(dirname "$0")"
 
@@ -34,6 +38,7 @@ ln -s /Applications "${DMG_TEMP}/Applications"
 # Copy pre-made background
 if [ -f "dmg-background/background.png" ]; then
     cp dmg-background/background.png "${DMG_TEMP}/.background/background.png"
+    chflags hidden "${DMG_TEMP}/.background"
     echo "🎨 Using custom background"
 fi
 
@@ -66,7 +71,10 @@ tell application "Finder"
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to ${ICON_SIZE}
-        set text size of viewOptions to 13
+        set text size of viewOptions to ${TEXT_SIZE}
+        set label position of viewOptions to bottom
+        set shows item info of viewOptions to false
+        set shows icon preview of viewOptions to false
         try
             set background picture of viewOptions to file ".background:background.png"
         on error
@@ -74,6 +82,9 @@ tell application "Finder"
         end try
         set position of item "${APP_NAME}.app" of container window to {${APP_X}, ${APP_Y}}
         set position of item "Applications" of container window to {${APPS_X}, ${APPS_Y}}
+        try
+            set the invisible of item ".background" of container window to true
+        end try
         close
         open
         update without registering applications

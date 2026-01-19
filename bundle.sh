@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="Mira"
-VERSION="0.2.34"
+VERSION="0.2.39"
 BUNDLE_ID="com.snupai.mira"
 
 cd "$(dirname "$0")"
