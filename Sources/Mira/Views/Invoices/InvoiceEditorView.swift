@@ -397,6 +397,8 @@ struct ClientPickerView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var colors
     @Binding var selectedClientId: UUID?
+    @State private var showingNewClient = false
+    @State private var newClient = Client()
     
     var body: some View {
         VStack(spacing: 0) {
@@ -417,8 +419,24 @@ struct ClientPickerView: View {
                 
                 Spacer()
                 
-                // Spacer for balance
-                Text("Cancel").font(.system(size: 14)).opacity(0)
+                // Create New Client button
+                Button(action: { 
+                    newClient = Client()
+                    showingNewClient = true 
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("New")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(colors.accent)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
@@ -477,6 +495,118 @@ struct ClientPickerView: View {
         }
         .frame(width: 400, height: 350)
         .background(colors.base)
+        .sheet(isPresented: $showingNewClient) {
+            QuickClientEditorView(client: $newClient) { savedClient in
+                appState.clients.append(savedClient)
+                appState.saveClients()
+                selectedClientId = savedClient.id
+                showingNewClient = false
+                dismiss()
+            }
+            .environmentObject(appState)
+            .environment(\.themeColors, colors)
+        }
+    }
+}
+
+// Quick client editor for creating new clients from invoice flow
+struct QuickClientEditorView: View {
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.themeColors) var colors
+    @Binding var client: Client
+    var onSave: (Client) -> Void
+    
+    var canSave: Bool { !client.name.isEmpty }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.accent)
+                    .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text("New Client")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(colors.text)
+                
+                Spacer()
+                
+                Button("Save") {
+                    client.updatedAt = Date()
+                    onSave(client)
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(canSave ? colors.accent : colors.subtext)
+                .buttonStyle(.plain)
+                .disabled(!canSave)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(colors.mantle)
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Basic Info
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Basic Information")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.subtext)
+                        
+                        VStack(spacing: 12) {
+                            QuickField(label: "Company / Name *", text: $client.name, colors: colors)
+                            QuickField(label: "Contact Person", text: $client.contactPerson, colors: colors)
+                            QuickField(label: "Email", text: $client.email, colors: colors)
+                            QuickField(label: "Phone", text: $client.phone, colors: colors)
+                        }
+                    }
+                    
+                    // Address
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Address")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.subtext)
+                        
+                        VStack(spacing: 12) {
+                            QuickField(label: "Street", text: $client.street, colors: colors)
+                            HStack(spacing: 12) {
+                                QuickField(label: "Postal Code", text: $client.postalCode, colors: colors)
+                                    .frame(width: 100)
+                                QuickField(label: "City", text: $client.city, colors: colors)
+                            }
+                            QuickField(label: "Country", text: $client.country, colors: colors)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 400, height: 450)
+        .background(colors.base)
+    }
+}
+
+struct QuickField: View {
+    let label: String
+    @Binding var text: String
+    let colors: ThemeColors
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(colors.subtext)
+            TextField("", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundColor(colors.text)
+                .padding(10)
+                .background(colors.surface0)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 }
 
