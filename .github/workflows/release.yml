@@ -176,6 +176,45 @@ jobs:
       - name: Create PKG
         run: ./create-pkg.sh
 
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          DMG_FILE="Mira-${VERSION}-macOS.dmg"
+          PKG_FILE="Mira-Installer.pkg"
+
+          # Skip notarization if credentials not set
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "⚠️ Notarization credentials not set - skipping notarization"
+            echo "   Set APPLE_ID, APPLE_APP_PASSWORD, and APPLE_TEAM_ID secrets to enable"
+            exit 0
+          fi
+
+          echo "📤 Submitting DMG for notarization..."
+          xcrun notarytool submit "$DMG_FILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          echo "📤 Submitting PKG for notarization..."
+          xcrun notarytool submit "$PKG_FILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          echo "📎 Stapling notarization ticket to DMG..."
+          xcrun stapler staple "$DMG_FILE"
+
+          echo "📎 Stapling notarization ticket to PKG..."
+          xcrun stapler staple "$PKG_FILE"
+
+          echo "✅ Notarization complete!"
+
       - name: Extract commit message
         id: commit
         env:
@@ -214,23 +253,7 @@ jobs:
 
             **Requirements:** macOS 14.0 (Sonoma) or later
 
-            ---
-
-            ### ⚠️ First Launch (Important!)
-
-            When you first open Mira, macOS will show a warning:
-            > "Mira" Not Opened - Apple could not verify "Mira" is free of malware...
-
-            **This is expected!** Click **Done**, then:
-
-            1. Open **System Settings**
-            2. Go to **Privacy & Security**
-            3. Scroll to **Security** section
-            4. Find *"Mira" was blocked to protect your Mac*
-            5. Click **Open Anyway**
-            6. Enter your password if prompted
-
-            You only need to do this once! See [Why the warning?](../../#why-the-security-warning) in the README.
+            ✅ **This release is signed and notarized by Apple** - no Gatekeeper warnings!
           files: |
             Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
             Mira-Installer.pkg
