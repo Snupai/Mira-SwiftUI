@@ -1,19 +1,49 @@
 import SwiftUI
+import SwiftData
 
 struct ClientListView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    // SwiftData queries
+    @Query(sort: \SDClient.name) private var sdClients: [SDClient]
+    @Query private var sdInvoices: [SDInvoice]
+    
     @State private var searchText = ""
     @State private var showingNewClient = false
     @State private var selectedClient: Client?
     
+    // Use SwiftData if migrated, fallback to legacy
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed
+    }
+    
+    private var allClients: [Client] {
+        if usesSwiftData && !sdClients.isEmpty {
+            return sdClients.map { $0.toLegacy() }
+        }
+        return appState.clients
+    }
+    
+    private var allInvoices: [Invoice] {
+        if usesSwiftData && !sdInvoices.isEmpty {
+            return sdInvoices.map { $0.toLegacy() }
+        }
+        return appState.invoices
+    }
+    
     var filteredClients: [Client] {
-        let clients = appState.clients.sorted { $0.name < $1.name }
+        let clients = allClients.sorted { $0.name < $1.name }
         if searchText.isEmpty { return clients }
         return clients.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||
             $0.email.localizedCaseInsensitiveContains(searchText)
         }
+    }
+    
+    private func invoiceCount(for clientId: UUID) -> Int {
+        allInvoices.filter { $0.clientId == clientId }.count
     }
     
     var body: some View {

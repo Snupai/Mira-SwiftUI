@@ -1,10 +1,18 @@
 import SwiftUI
+import SwiftData
+import CloudKit
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var appearance = AppAppearance.shared
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    @Query private var sdProfiles: [SDCompanyProfile]
+    
     @State private var showingColorPicker = false
+    @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
+    @State private var isCheckingCloudKit = true
 
     var body: some View {
         ScrollView {
@@ -13,6 +21,7 @@ struct SettingsView: View {
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(colors.text)
 
+                syncStatusSection
                 appearanceSection
                 companySection
                 addressSection
@@ -25,6 +34,120 @@ struct SettingsView: View {
             .padding(32)
         }
         .background(colors.base)
+        .task {
+            await checkCloudKitStatus()
+        }
+    }
+    
+    // MARK: - Sync Status Section
+    private var syncStatusSection: some View {
+        SettingsSection(title: "Sync & Security", colors: colors) {
+            VStack(alignment: .leading, spacing: 16) {
+                // CloudKit Status
+                HStack {
+                    Image(systemName: cloudKitIcon)
+                        .foregroundColor(cloudKitColor)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud Sync")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.text)
+                        Text(cloudKitStatusText)
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.subtext)
+                    }
+                    Spacer()
+                    if isCheckingCloudKit {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
+                }
+                
+                Divider().background(colors.surface1)
+                
+                // Encryption Status
+                HStack {
+                    Image(systemName: "lock.shield.fill")
+                        .foregroundColor(.green)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Data Encryption")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.text)
+                        Text(encryptionStatusText)
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.subtext)
+                    }
+                    Spacer()
+                }
+                
+                Divider().background(colors.surface1)
+                
+                // Storage Info
+                HStack {
+                    Image(systemName: "cylinder.split.1x2.fill")
+                        .foregroundColor(colors.accent)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Data Storage")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.text)
+                        Text(storageStatusText)
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.subtext)
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    private var cloudKitIcon: String {
+        switch cloudKitStatus {
+        case .available: return "checkmark.icloud.fill"
+        case .noAccount: return "icloud.slash"
+        case .restricted: return "lock.icloud"
+        default: return "icloud"
+        }
+    }
+    
+    private var cloudKitColor: Color {
+        switch cloudKitStatus {
+        case .available: return .green
+        case .noAccount, .restricted: return .orange
+        default: return colors.subtext
+        }
+    }
+    
+    private var cloudKitStatusText: String {
+        switch cloudKitStatus {
+        case .available: return "Connected - Your data syncs across devices"
+        case .noAccount: return "Not signed in to iCloud"
+        case .restricted: return "iCloud access is restricted"
+        case .temporarilyUnavailable: return "iCloud temporarily unavailable"
+        default: return "Checking status..."
+        }
+    }
+    
+    private var encryptionStatusText: String {
+        if EncryptionService.shared.hasKey {
+            return "AES-256 encryption active • Key synced via iCloud Keychain"
+        }
+        return "Encryption key will be created on first use"
+    }
+    
+    private var storageStatusText: String {
+        if MigrationService.shared.migrationStatus == .completed {
+            let profileCount = sdProfiles.count
+            return "SwiftData • \(profileCount > 0 ? "Profile loaded" : "No profile") • CloudKit enabled"
+        }
+        return "Legacy JSON storage • Migration available"
+    }
+    
+    private func checkCloudKitStatus() async {
+        isCheckingCloudKit = true
+        cloudKitStatus = await DataContainer.checkCloudKitStatus()
+        isCheckingCloudKit = false
     }
 
     // MARK: - Appearance Section

@@ -1,13 +1,22 @@
 import SwiftUI
+import SwiftData
 
 struct InvoiceListView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    // SwiftData queries
+    @Query(sort: \SDInvoice.issueDate, order: .reverse) private var sdInvoices: [SDInvoice]
+    @Query private var sdClients: [SDClient]
+    @Query private var sdProfiles: [SDCompanyProfile]
+    
     @State private var searchText = ""
     @State private var selectedStatus: InvoiceStatus? = nil
     @State private var sortBy: SortOption = .dateDesc
     @State private var showingNewInvoice = false
     @State private var selectedInvoice: Invoice?
+    @State private var selectedSDInvoice: SDInvoice?
     
     enum SortOption: String, CaseIterable {
         case dateDesc = "Newest"
@@ -17,11 +26,41 @@ struct InvoiceListView: View {
         case client = "Client"
     }
     
-    var isVatExempt: Bool { appState.companyProfile?.isVatExempt ?? false }
-    var baseCurrency: Currency { appState.companyProfile?.defaultCurrency ?? .eur }
+    // Use SwiftData if migrated, fallback to legacy
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed && !sdInvoices.isEmpty
+    }
+    
+    var isVatExempt: Bool { 
+        if let profile = sdProfiles.first {
+            return profile.isVatExempt
+        }
+        return appState.companyProfile?.isVatExempt ?? false 
+    }
+    
+    var baseCurrency: Currency { 
+        if let profile = sdProfiles.first {
+            return profile.defaultCurrency
+        }
+        return appState.companyProfile?.defaultCurrency ?? .eur 
+    }
+    
+    private var allInvoices: [Invoice] {
+        if usesSwiftData {
+            return sdInvoices.map { $0.toLegacy() }
+        }
+        return appState.invoices
+    }
+    
+    private var allClients: [Client] {
+        if usesSwiftData {
+            return sdClients.map { $0.toLegacy() }
+        }
+        return appState.clients
+    }
     
     var filteredInvoices: [Invoice] {
-        var invoices = appState.invoices
+        var invoices = allInvoices
         
         // Status filter
         if let status = selectedStatus {
@@ -31,7 +70,7 @@ struct InvoiceListView: View {
         // Search filter
         if !searchText.isEmpty {
             invoices = invoices.filter { inv in
-                let client = appState.clients.first { $0.id == inv.clientId }
+                let client = allClients.first { $0.id == inv.clientId }
                 let searchLower = searchText.lowercased()
                 return inv.invoiceNumber.lowercased().contains(searchLower) ||
                        client?.name.lowercased().contains(searchLower) == true ||
@@ -48,13 +87,17 @@ struct InvoiceListView: View {
         case .amountAsc: invoices.sort { $0.total < $1.total }
         case .client:
             invoices.sort { inv1, inv2 in
-                let c1 = appState.clients.first { $0.id == inv1.clientId }?.name ?? ""
-                let c2 = appState.clients.first { $0.id == inv2.clientId }?.name ?? ""
+                let c1 = allClients.first { $0.id == inv1.clientId }?.name ?? ""
+                let c2 = allClients.first { $0.id == inv2.clientId }?.name ?? ""
                 return c1 < c2
             }
         }
         
         return invoices
+    }
+    
+    private var invoiceCount: Int {
+        usesSwiftData ? sdInvoices.count : appState.invoices.count
     }
     
     var body: some View {

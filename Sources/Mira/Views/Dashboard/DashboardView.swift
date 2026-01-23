@@ -1,17 +1,49 @@
 import SwiftUI
+import SwiftData
 
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    // SwiftData queries
+    @Query private var sdInvoices: [SDInvoice]
+    @Query private var sdClients: [SDClient]
+    @Query private var sdProfiles: [SDCompanyProfile]
+    
     @State private var showingNewInvoice = false
     
-    var isVatExempt: Bool { appState.companyProfile?.isVatExempt ?? false }
+    // Use SwiftData if migrated
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed
+    }
+    
+    private var allInvoices: [Invoice] {
+        if usesSwiftData && !sdInvoices.isEmpty {
+            return sdInvoices.map { $0.toLegacy() }
+        }
+        return appState.invoices
+    }
+    
+    private var allClients: [Client] {
+        if usesSwiftData && !sdClients.isEmpty {
+            return sdClients.map { $0.toLegacy() }
+        }
+        return appState.clients
+    }
+    
+    var isVatExempt: Bool { 
+        if let profile = sdProfiles.first {
+            return profile.isVatExempt
+        }
+        return appState.companyProfile?.isVatExempt ?? false 
+    }
     
     // Stats calculations
     var thisMonthInvoices: [Invoice] {
         let now = Date()
         let calendar = Calendar.current
-        return appState.invoices.filter {
+        return allInvoices.filter {
             calendar.isDate($0.issueDate, equalTo: now, toGranularity: .month)
         }
     }
@@ -19,20 +51,25 @@ struct DashboardView: View {
     var thisYearInvoices: [Invoice] {
         let now = Date()
         let calendar = Calendar.current
-        return appState.invoices.filter {
+        return allInvoices.filter {
             calendar.isDate($0.issueDate, equalTo: now, toGranularity: .year)
         }
     }
     
     var outstandingInvoices: [Invoice] {
-        appState.invoices.filter { $0.status == .sent || $0.status == .overdue }
+        allInvoices.filter { $0.status == .sent || $0.status == .overdue }
     }
     
     var overdueInvoices: [Invoice] {
-        appState.invoices.filter { $0.status == .overdue || ($0.status == .sent && $0.isOverdue) }
+        allInvoices.filter { $0.status == .overdue || ($0.status == .sent && $0.isOverdue) }
     }
     
-    var baseCurrency: Currency { appState.companyProfile?.defaultCurrency ?? .eur }
+    var baseCurrency: Currency { 
+        if let profile = sdProfiles.first {
+            return profile.defaultCurrency
+        }
+        return appState.companyProfile?.defaultCurrency ?? .eur 
+    }
     
     func totalFor(_ invoices: [Invoice]) -> Double {
         invoices.reduce(0) { total, invoice in
@@ -63,7 +100,7 @@ struct DashboardView: View {
         
         return (0..<6).reversed().map { monthsAgo in
             let date = calendar.date(byAdding: .month, value: -monthsAgo, to: now)!
-            let monthInvoices = appState.invoices.filter { inv in
+            let monthInvoices = allInvoices.filter { inv in
                 inv.status == .paid && calendar.isDate(inv.issueDate, equalTo: date, toGranularity: .month)
             }
             return (formatter.string(from: date), totalFor(monthInvoices))
@@ -193,14 +230,14 @@ struct DashboardView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(colors.subtext)
                         Spacer()
-                        if appState.invoices.count > 5 {
+                        if allInvoices.count > 5 {
                             Text("View All →")
                                 .font(.system(size: 12))
                                 .foregroundColor(colors.accent)
                         }
                     }
                     
-                    if appState.invoices.isEmpty {
+                    if allInvoices.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "doc.text")
                                 .font(.system(size: 32))
@@ -219,10 +256,10 @@ struct DashboardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     } else {
                         VStack(spacing: 0) {
-                            ForEach(Array(appState.invoices.sorted { $0.createdAt > $1.createdAt }.prefix(5).enumerated()), id: \.element.id) { index, invoice in
+                            ForEach(Array(allInvoices.sorted { $0.createdAt > $1.createdAt }.prefix(5).enumerated()), id: \.element.id) { index, invoice in
                                 InvoiceRowDashboard(
                                     invoice: invoice,
-                                    client: appState.clients.first { $0.id == invoice.clientId },
+                                    client: allClients.first { $0.id == invoice.clientId },
                                     colors: colors,
                                     isVatExempt: isVatExempt,
                                     baseCurrency: baseCurrency
@@ -266,7 +303,7 @@ struct DashboardView: View {
             // Skip invoices in different currencies without conversion data
         }
         return clientTotals.compactMap { id, total in
-            guard let client = appState.clients.first(where: { $0.id == id }) else { return nil }
+            guard let client = allClients.first(where: { $0.id == id }) else { return nil }
             return (client, total)
         }.sorted { $0.total > $1.total }
     }
