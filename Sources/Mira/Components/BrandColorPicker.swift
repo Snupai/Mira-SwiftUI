@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BrandColorPicker: View {
     @Binding var selectedColorHex: String
