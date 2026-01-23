@@ -59,14 +59,27 @@ else
     echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
 fi
 
-# Ad-hoc sign the entire app bundle (without hardened runtime for local dev)
-# Note: Hardened runtime with library validation blocks loading Sparkle with ad-hoc signing
+# Code signing
+# Set SIGNING_IDENTITY to your certificate name, or leave empty for ad-hoc
+# Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+
 echo "🔐 Signing app bundle..."
-if [ -f "Mira.entitlements" ]; then
-    echo "   Using entitlements: Mira.entitlements"
-    codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+if [ -n "$SIGNING_IDENTITY" ]; then
+    echo "   Using identity: $SIGNING_IDENTITY"
+    if [ -f "Mira.entitlements" ]; then
+        echo "   Using entitlements: Mira.entitlements"
+        codesign --force --deep --sign "$SIGNING_IDENTITY" --entitlements Mira.entitlements --options runtime "${APP_NAME}.app"
+    else
+        codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime "${APP_NAME}.app"
+    fi
 else
-    codesign --force --deep --sign - "${APP_NAME}.app"
+    echo "   Using ad-hoc signing (set SIGNING_IDENTITY for iCloud support)"
+    if [ -f "Mira.entitlements" ]; then
+        codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+    else
+        codesign --force --deep --sign - "${APP_NAME}.app"
+    fi
 fi
 
 # Sparkle feed URL (hosted on GitHub)
