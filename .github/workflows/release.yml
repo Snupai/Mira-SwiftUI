@@ -16,8 +16,9 @@ jobs:
     steps:
       - name: Check commit message for release trigger
         id: check
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
           if [[ "$COMMIT_MSG" =~ \[release\ ([0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
             echo "should_release=true" >> $GITHUB_OUTPUT
             echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
@@ -151,12 +152,14 @@ jobs:
 
       - name: Extract commit message
         id: commit
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           # Get the commit message (first line only, without the [release x.x.x] tag)
-          MSG=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          MSG=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
           echo "message=$MSG" >> $GITHUB_OUTPUT
           # Get full commit body for changelog
-          BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +2)
+          BODY=$(echo "$COMMIT_MSG" | tail -n +2)
           echo "body<<EOF" >> $GITHUB_OUTPUT
           echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -247,6 +250,8 @@ jobs:
           fi
 
       - name: Update Appcast
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
           DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
@@ -255,8 +260,8 @@ jobs:
           SIGNATURE="${SPARKLE_SIGNATURE:-}"
 
           # Get commit message - title and body
-          COMMIT_TITLE=$(echo "${{ github.event.head_commit.message }}" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
-          COMMIT_BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +3)
+          COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          COMMIT_BODY=$(echo "$COMMIT_MSG" | tail -n +3)
 
           # Build release notes HTML
           RELEASE_NOTES="<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;color:#333}h2{font-size:16px;margin:0 0 12px 0;color:#1a1a1a}h3{font-size:14px;margin:16px 0 8px 0;color:#444}ul{margin:8px 0;padding-left:20px}li{margin:4px 0}p{margin:8px 0}.version{color:#666;font-size:12px}</style>"
