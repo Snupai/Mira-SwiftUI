@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 struct CompanyProfile: Codable, Identifiable {
     var id: UUID = UUID()

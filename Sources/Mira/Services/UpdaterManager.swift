@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Sparkle
+import Combine
 
 /// Manages app updates via Sparkle
 final class UpdaterManager: ObservableObject {

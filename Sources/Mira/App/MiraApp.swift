@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Sparkle
+import Combine
 
 @main
 struct MiraApp: App {

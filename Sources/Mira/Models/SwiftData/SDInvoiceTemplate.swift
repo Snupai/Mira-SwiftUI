@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Combine
 
 /// SwiftData model for invoice templates
 @Model

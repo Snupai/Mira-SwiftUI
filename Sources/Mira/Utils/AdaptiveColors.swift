@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // Adaptive colors that work in both light and dark mode
 extension Color {

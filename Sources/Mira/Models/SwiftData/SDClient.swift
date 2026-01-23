@@ -118,18 +118,6 @@ final class SDClient {
     }
 }
 
-// MARK: - Hashable
-
-extension SDClient: Hashable {
-    static func == (lhs: SDClient, rhs: SDClient) -> Bool {
-        lhs.id == rhs.id
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
-
 // MARK: - Migration Helper
 
 extension SDClient {
