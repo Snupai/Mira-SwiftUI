@@ -137,7 +137,7 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <!-- iCloud / CloudKit Configuration -->
     <key>NSUbiquitousContainers</key>
     <dict>
-        <key>iCloud.com.snupai.Mira</key>
+        <key>iCloud.com.snupai.mira</key>
         <dict>
             <key>NSUbiquitousContainerIsDocumentScopePublic</key>
             <false/>

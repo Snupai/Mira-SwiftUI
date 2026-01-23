@@ -20,7 +20,7 @@ enum DataContainer {
     
     /// iCloud container identifier
     /// ⚠️ You need to create this container in Apple Developer Portal
-    static let cloudKitContainerID = "iCloud.com.snupai.Mira"
+    static let cloudKitContainerID = "iCloud.com.snupai.mira"
     
     /// Create ModelContainer with CloudKit sync enabled
     static func createCloudKitContainer() throws -> ModelContainer {

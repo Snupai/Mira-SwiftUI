@@ -15,13 +15,13 @@
     <!-- iCloud Container -->
     <key>com.apple.developer.icloud-container-identifiers</key>
     <array>
-        <string>iCloud.com.snupai.Mira</string>
+        <string>iCloud.com.snupai.mira</string>
     </array>
     
     <!-- Keychain Access Groups (for iCloud Keychain sync) -->
     <key>keychain-access-groups</key>
     <array>
-        <string>$(AppIdentifierPrefix)com.snupai.Mira</string>
+        <string>$(AppIdentifierPrefix)com.snupai.mira</string>
     </array>
     
     <!-- Allow Outgoing Network Connections (for CloudKit sync) -->
