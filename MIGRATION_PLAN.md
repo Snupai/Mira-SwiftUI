@@ -96,18 +96,26 @@ Migrate from plain JSON file storage to encrypted SwiftData with CloudKit sync.
 - [x] Add iCloud entitlements (`Mira.entitlements`)
 - [x] Update bundle.sh for Xcode toolchain + entitlements
 - [x] Update CI workflow for Xcode DEVELOPER_DIR
-- [ ] Update remaining views to use @Query (incremental)
+- [x] Support custom SIGNING_IDENTITY for iCloud
 
-### Phase 5: CloudKit
-- [ ] Add CloudKit capability to project
-- [ ] Create iCloud container
-- [ ] Enable CloudKit in ModelContainer
-- [ ] Test sync between devices
+### Phase 5: View Updates ✅
+- [x] InvoiceListView - @Query with legacy fallback
+- [x] ClientListView - @Query with legacy fallback
+- [x] DashboardView - @Query with legacy fallback
+- [x] SettingsView - Sync & Security status section
+- [ ] OnboardingViews - Save to SwiftData (still uses legacy)
+- [ ] InvoiceEditorView - CRUD with SwiftData (still uses legacy)
+- [ ] ClientEditorView - CRUD with SwiftData (still uses legacy)
 
-### Phase 6: Polish
+### Phase 6: CloudKit Setup ✅
+- [x] Create iCloud container (iCloud.com.snupai.Mira)
+- [x] Configure App ID with CloudKit capability
+- [x] Assign container to App ID
+
+### Phase 7: Testing & Polish (In Progress)
+- [ ] Test multi-device sync
 - [ ] Error handling for sync conflicts
-- [ ] Offline indicator
-- [ ] Sync status UI
+- [ ] Test migration flow end-to-end
 - [ ] Migration rollback if needed
 
 ---
