@@ -64,6 +64,13 @@ fi
 # Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 
+# Optional provisioning profile for iCloud (exported from Xcode)
+# Place it as: ./Mira.mobileprovision
+if [ -f "Mira.mobileprovision" ]; then
+    echo "📦 Embedding provisioning profile"
+    cp "Mira.mobileprovision" "${APP_NAME}.app/Contents/embedded.provisionprofile"
+fi
+
 echo "🔐 Signing app bundle..."
 if [ -n "$SIGNING_IDENTITY" ]; then
     echo "   Using identity: $SIGNING_IDENTITY"
