@@ -177,6 +177,7 @@ jobs:
         run: ./create-pkg.sh
 
       - name: Notarize App
+        timeout-minutes: 30
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -193,33 +194,44 @@ jobs:
             exit 0
           fi
 
-          notarize_and_check() {
+          notarize_file() {
             local FILE="$1"
             local NAME="$2"
             
             echo "📤 Submitting $NAME for notarization..."
-            RESULT=$(xcrun notarytool submit "$FILE" \
+            
+            # Submit and capture output
+            if ! xcrun notarytool submit "$FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_APP_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" \
-              --wait \
-              --output-format json 2>&1) || true
+              --wait 2>&1 | tee notarize-output.txt; then
+              
+              echo "❌ Notarization command failed for $NAME"
+              
+              # Try to extract submission ID and get log
+              SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]*' notarize-output.txt | head -1 | cut -d' ' -f2)
+              if [ -n "$SUBMISSION_ID" ]; then
+                echo "📋 Fetching detailed log for $SUBMISSION_ID..."
+                xcrun notarytool log "$SUBMISSION_ID" \
+                  --apple-id "$APPLE_ID" \
+                  --password "$APPLE_APP_PASSWORD" \
+                  --team-id "$APPLE_TEAM_ID" || true
+              fi
+              return 1
+            fi
             
-            echo "$RESULT"
-            
-            # Extract submission ID and status
-            SUBMISSION_ID=$(echo "$RESULT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-            STATUS=$(echo "$RESULT" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-            
-            if [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
-              echo "❌ Notarization failed for $NAME!"
-              echo "📋 Fetching detailed log..."
-              xcrun notarytool log "$SUBMISSION_ID" \
-                --apple-id "$APPLE_ID" \
-                --password "$APPLE_APP_PASSWORD" \
-                --team-id "$APPLE_TEAM_ID" \
-                notarization-log.json || true
-              cat notarization-log.json
+            # Check if status is Invalid
+            if grep -q "status: Invalid" notarize-output.txt; then
+              echo "❌ Notarization rejected for $NAME"
+              SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]*' notarize-output.txt | head -1 | cut -d' ' -f2)
+              if [ -n "$SUBMISSION_ID" ]; then
+                echo "📋 Fetching rejection log..."
+                xcrun notarytool log "$SUBMISSION_ID" \
+                  --apple-id "$APPLE_ID" \
+                  --password "$APPLE_APP_PASSWORD" \
+                  --team-id "$APPLE_TEAM_ID" || true
+              fi
               return 1
             fi
             
@@ -228,14 +240,12 @@ jobs:
           }
 
           # Notarize DMG
-          if ! notarize_and_check "$DMG_FILE" "DMG"; then
-            echo "::error::DMG notarization failed - check log above"
+          if ! notarize_file "$DMG_FILE" "DMG"; then
             exit 1
           fi
 
-          # Notarize PKG
-          if ! notarize_and_check "$PKG_FILE" "PKG"; then
-            echo "::error::PKG notarization failed - check log above"
+          # Notarize PKG  
+          if ! notarize_file "$PKG_FILE" "PKG"; then
             exit 1
           fi
 
