@@ -42,9 +42,6 @@ final class SDClient {
     @Relationship(deleteRule: .nullify, inverse: \SDInvoice.client)
     var invoices: [SDInvoice]? = []
     
-    @Relationship(deleteRule: .nullify, inverse: \SDInvoiceTemplate.defaultClient)
-    var templates: [SDInvoiceTemplate]? = []
-    
     // MARK: - Initializer
     
     init() {}

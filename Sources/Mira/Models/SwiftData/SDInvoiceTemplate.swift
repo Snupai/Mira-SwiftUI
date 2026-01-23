@@ -20,8 +20,8 @@ final class SDInvoiceTemplate {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     
-    // MARK: - Relationships
-    var defaultClient: SDClient?
+    // MARK: - Default Client (stored as UUID to avoid relationship complexity)
+    var defaultClientId: UUID?
     
     // MARK: - Initializer
     
@@ -68,7 +68,7 @@ extension SDInvoiceTemplate {
         self.notes = legacy.notes
         self.paymentNotes = legacy.paymentNotes
         self.createdAt = legacy.createdAt
-        self.defaultClient = defaultClient
+        self.defaultClientId = defaultClient?.id ?? legacy.defaultClientId
     }
     
     /// Convert to legacy InvoiceTemplate (for compatibility during migration)
@@ -82,7 +82,7 @@ extension SDInvoiceTemplate {
         template.notes = notes
         template.paymentNotes = paymentNotes
         template.createdAt = createdAt
-        template.defaultClientId = defaultClient?.id
+        template.defaultClientId = defaultClientId
         
         return template
     }

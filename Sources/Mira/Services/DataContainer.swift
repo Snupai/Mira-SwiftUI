@@ -74,6 +74,16 @@ enum DataContainer {
     /// Uses CloudKit if available, falls back to local
     @MainActor
     static var shared: ModelContainer = {
+        // For now, use local-only to avoid CloudKit schema issues during development
+        do {
+            let container = try createLocalContainer()
+            print("✅ SwiftData container created (local-only)")
+            return container
+        } catch {
+            fatalError("❌ Failed to create ModelContainer: \(error)")
+        }
+        
+        /* CloudKit disabled for now - enable after schema is stable
         do {
             // Try CloudKit first
             let container = try createCloudKitContainer()
@@ -92,6 +102,7 @@ enum DataContainer {
                 fatalError("❌ Failed to create any ModelContainer: \(error)")
             }
         }
+        */
     }()
 }
 

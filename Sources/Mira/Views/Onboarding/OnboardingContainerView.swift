@@ -87,28 +87,34 @@ struct OnboardingContainerView: View {
     }
     
     func finishOnboarding() {
-        // Save to SwiftData (new system)
-        if let existingProfile = sdProfiles.first {
-            // Update existing profile
-            updateSDProfile(existingProfile, from: companyProfile)
-        } else {
-            // Create new profile
-            let sdProfile = SDCompanyProfile(from: companyProfile)
-            modelContext.insert(sdProfile)
-        }
+        print("🚀 finishOnboarding called")
         
-        // Try to save SwiftData
+        // Always save to legacy first (ensures it works)
+        appState.companyProfile = companyProfile
+        appState.saveCompanyProfile()
+        print("✅ Saved to legacy JSON")
+        
+        // Also save to SwiftData (new system)
         do {
+            if let existingProfile = sdProfiles.first {
+                // Update existing profile
+                updateSDProfile(existingProfile, from: companyProfile)
+                print("📝 Updated existing SwiftData profile")
+            } else {
+                // Create new profile
+                let sdProfile = SDCompanyProfile(from: companyProfile)
+                modelContext.insert(sdProfile)
+                print("📝 Created new SwiftData profile")
+            }
+            
             try modelContext.save()
-            print("✅ Saved company profile to SwiftData")
+            print("✅ Saved to SwiftData")
         } catch {
             print("⚠️ SwiftData save failed: \(error)")
-            // Fallback to legacy save
-            appState.companyProfile = companyProfile
-            appState.saveCompanyProfile()
         }
         
         appState.hasCompletedOnboarding = true
+        print("✅ Onboarding complete!")
     }
     
     private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {

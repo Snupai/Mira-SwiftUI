@@ -10,7 +10,15 @@ struct MiraApp: App {
     let modelContainer: ModelContainer
     
     init() {
-        // Initialize SwiftData container
+        // Initialize SwiftData container (local-only for now during development)
+        do {
+            modelContainer = try DataContainer.createLocalContainer()
+            print("✅ SwiftData container initialized (local-only)")
+        } catch {
+            fatalError("❌ Failed to create ModelContainer: \(error)")
+        }
+        
+        /* Enable CloudKit after schema is stable:
         do {
             modelContainer = try DataContainer.createCloudKitContainer()
             print("✅ SwiftData container initialized with CloudKit")
@@ -23,6 +31,7 @@ struct MiraApp: App {
                 fatalError("❌ Failed to create ModelContainer: \(error)")
             }
         }
+        */
     }
 
     var body: some Scene {
