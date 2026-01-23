@@ -68,6 +68,7 @@ DerivedData/
 *.dSYM
 *.dmg
 *.app
+*.pkg
 
 ## Playgrounds
 timeline.xctimeline

@@ -69,6 +69,15 @@
 - [x] Placeholders delete as atomic blocks
 - [x] Email template language selection (German/English)
 
+### Themes
+- [x] Custom themes via JSON files
+- [x] Load from `~/Library/Application Support/Mira/Themes/*.json`
+- [x] Theme preview cards with color swatches
+- [x] Import themes from JSON file (file picker)
+- [x] Export themes to JSON file
+- [x] Delete custom themes (right-click context menu)
+- [x] Theme metadata display (author, version, accent count)
+
 ### PDF Templates
 - [x] Separate German/English PDF templates
 - [x] Footer, Closing Message, Notes/Terms per language
@@ -92,13 +101,6 @@
 ### Priority
 - [ ] Recurring invoices (monthly/weekly)
 - [ ] Payment reminders (dunning levels)
-
-### Themes
-- [ ] Custom themes via JSON files
-  - Load from `~/Library/Application Support/Mira/themes/*.json`
-  - JSON schema: `{ name, dark: { base, mantle, crust, surface0-2, overlay0, text, subtext, accent }, light: { ... } }`
-  - UI to import/export themes
-  - Theme preview in settings
 
 ### Export
 - [ ] CSV export
@@ -132,4 +134,4 @@
 
 ---
 
-Version: 0.2.25
+Version: 0.2.39

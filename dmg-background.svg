@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6C5CE7"/>
+      <stop offset="100%" style="stop-color:#A29BFE"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="660" height="400" fill="url(#bg)"/>
+  
+  <!-- Decorative circles (matching app icon style) -->
+  <circle cx="80" cy="60" r="120" fill="rgba(255,255,255,0.08)"/>
+  <circle cx="580" cy="340" r="150" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="330" cy="400" r="200" fill="rgba(255,255,255,0.04)"/>
+  
+  <!-- Subtle sparkles -->
+  <circle cx="100" cy="350" r="3" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="560" cy="80" r="2" fill="rgba(255,255,255,0.6)"/>
+  <circle cx="200" cy="100" r="2" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="480" cy="300" r="3" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="600" cy="200" r="2" fill="rgba(255,255,255,0.4)"/>
+  
+  <!-- Arrow hint (drag to install) -->
+  <g transform="translate(330, 280)" fill="rgba(255,255,255,0.3)">
+    <path d="M-40,0 L40,0 L40,-8 L60,10 L40,28 L40,20 L-40,20 Z"/>
+  </g>
+  
+  <!-- Install text -->
+  <text x="330" y="350" text-anchor="middle" font-family="SF Pro Display, Helvetica Neue, sans-serif" font-size="16" font-weight="500" fill="rgba(255,255,255,0.6)">
+    Drag to Applications to install
+  </text>
+</svg>

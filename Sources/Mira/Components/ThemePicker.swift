@@ -1,8 +1,14 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ThemePicker: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingImportPicker = false
+    @State private var showingExportPicker = false
+    @State private var themeToExport: ThemeFile?
+    @State private var importError: String?
+    @State private var showingImportError = false
     
     var compact: Bool = false
     var showOpenFolder: Bool = true
@@ -17,19 +23,63 @@ struct ThemePicker: View {
                 
                 Spacer()
                 
-                if showOpenFolder {
-                    Button(action: { themeManager.openThemesFolder() }) {
+                HStack(spacing: 8) {
+                    // Import button
+                    Button(action: { showingImportPicker = true }) {
                         HStack(spacing: 4) {
-                            Image(systemName: "folder")
+                            Image(systemName: "square.and.arrow.down")
                             if !compact {
-                                Text("Open Themes Folder")
+                                Text("Import")
                             }
                         }
                         .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.secondary)
-                    .help("Open custom themes folder")
+                    .help("Import Theme – Load a custom theme from a JSON file")
+                    
+                    // Export current theme button
+                    if let theme = themeManager.selectedTheme {
+                        Button(action: {
+                            themeToExport = theme
+                            showingExportPicker = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.and.arrow.up")
+                                if !compact {
+                                    Text("Export")
+                                }
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+                        .help("Export Theme – Save \"\(theme.name)\" as a JSON file to share or backup")
+                    }
+                    
+                    if showOpenFolder {
+                        Button(action: { themeManager.openThemesFolder() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder")
+                                if !compact {
+                                    Text("Folder")
+                                }
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+                        .help("Open Themes Folder – Browse custom themes in Finder")
+                    }
                 }
             }
             
@@ -40,15 +90,19 @@ struct ThemePicker: View {
                     ThemeCard(
                         theme: theme,
                         isSelected: theme.name == themeManager.selectedThemeName,
-                        compact: compact
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            themeManager.selectedThemeName = theme.name
-                            // Reset accent to theme default
-                            let palette = colorScheme == .dark ? theme.dark : theme.light
-                            themeManager.selectedAccentName = palette.defaultAccent
+                        compact: compact,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                themeManager.selectedThemeName = theme.name
+                                // Reset accent to theme default
+                                let palette = colorScheme == .dark ? theme.dark : theme.light
+                                themeManager.selectedAccentName = palette.defaultAccent
+                            }
+                        },
+                        onDelete: {
+                            themeManager.deleteCustomTheme(theme)
                         }
-                    }
+                    )
                 }
             }
             
@@ -72,6 +126,75 @@ struct ThemePicker: View {
                 }
             }
         }
+        .fileImporter(
+            isPresented: $showingImportPicker,
+            allowedContentTypes: [UTType.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    // Need to access security-scoped resource
+                    guard url.startAccessingSecurityScopedResource() else {
+                        importError = "Unable to access the selected file"
+                        showingImportError = true
+                        return
+                    }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    
+                    if themeManager.importTheme(from: url) {
+                        // Success - theme is now loaded
+                    } else {
+                        importError = "Failed to import theme. Make sure it's a valid Mira theme JSON file."
+                        showingImportError = true
+                    }
+                }
+            case .failure(let error):
+                importError = error.localizedDescription
+                showingImportError = true
+            }
+        }
+        .fileExporter(
+            isPresented: $showingExportPicker,
+            document: themeToExport.map { ThemeDocument(theme: $0) },
+            contentType: .json,
+            defaultFilename: themeToExport?.name ?? "theme"
+        ) { result in
+            if case .failure(let error) = result {
+                importError = "Export failed: \(error.localizedDescription)"
+                showingImportError = true
+            }
+        }
+        .alert("Theme Import Error", isPresented: $showingImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(importError ?? "Unknown error")
+        }
+    }
+}
+
+// Document wrapper for theme export
+struct ThemeDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    
+    let theme: ThemeFile
+    
+    init(theme: ThemeFile) {
+        self.theme = theme
+    }
+    
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.theme = try JSONDecoder().decode(ThemeFile.self, from: data)
+    }
+    
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(theme)
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 
@@ -80,11 +203,23 @@ struct ThemeCard: View {
     let isSelected: Bool
     let compact: Bool
     let action: () -> Void
+    var onDelete: (() -> Void)? = nil
     
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingDeleteConfirm = false
     
     var palette: ThemePalette {
         colorScheme == .dark ? theme.dark : theme.light
+    }
+    
+    /// Bundled themes that cannot be deleted
+    private static let protectedThemes = ["Default", "Catppuccin"]
+    
+    var canDelete: Bool {
+        // Don't allow deletion of system themes or protected bundled themes
+        if theme.isSystemTheme == true { return false }
+        if Self.protectedThemes.contains(theme.name) { return false }
+        return true
     }
     
     var body: some View {
@@ -100,13 +235,45 @@ struct ThemeCard: View {
                     )
                 
                 // Theme name
-                Text(theme.name)
-                    .font(compact ? .caption : .subheadline)
-                    .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundColor(isSelected ? .accentColor : .primary)
+                HStack(spacing: 4) {
+                    Text(theme.name)
+                        .font(compact ? .caption : .subheadline)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                        .foregroundColor(isSelected ? .accentColor : .primary)
+                }
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let author = theme.author {
+                Text("By \(author)")
+            }
+            if let version = theme.version {
+                Text("Version \(version)")
+            }
+            Divider()
+            Text("\(palette.accents.count) accent colors")
+            if canDelete && onDelete != nil {
+                Divider()
+                Button(role: .destructive) {
+                    showingDeleteConfirm = true
+                } label: {
+                    Label("Delete Theme", systemImage: "trash")
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete \"\(theme.name)\"?",
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                onDelete?()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently remove the theme file.")
+        }
     }
 }
 

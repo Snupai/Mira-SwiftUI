@@ -146,6 +146,9 @@ jobs:
           ./create-dmg.sh
           mv "Mira-$VERSION.dmg" "Mira-$VERSION-macOS.dmg"
 
+      - name: Create PKG
+        run: ./create-pkg.sh
+
       - name: Extract commit message
         id: commit
         run: |
@@ -171,9 +174,14 @@ jobs:
             ---
 
             ### Installation
-            1. Download `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
-            2. Open the DMG and drag Mira to Applications
+            **Preferred:** `Mira-Installer.pkg` (updates existing installs)
+            1. Download `Mira-Installer.pkg`
+            2. Run the installer
             3. Launch Mira from Applications
+
+            **Alternative:** `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
+            1. Open the DMG and drag Mira to Applications
+            2. Launch Mira from Applications
 
             **Requirements:** macOS 14.0 (Sonoma) or later
 
@@ -194,7 +202,9 @@ jobs:
             6. Enter your password if prompted
 
             You only need to do this once! See [Why the warning?](../../#why-the-security-warning) in the README.
-          files: Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
+          files: |
+            Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
+            Mira-Installer.pkg
           generate_release_notes: true
           draft: false
           prerelease: false

@@ -15,12 +15,15 @@ A beautiful, freelancer-first invoice application built with SwiftUI.
 - **Email Integration**: Open in mail client with customizable German/English templates
 - **Invoice Templates**: Save and reuse invoice configurations
 - **German Tax Compliance**: VAT IDs, Steuernummer, Kleinunternehmerregelung (§19 UStG)
-- **Theming**: System theme or Catppuccin (Mocha/Latte) with accent color picker
+- **Theming**: Custom JSON themes with import/export, Catppuccin included, accent color picker
 - **Brand Customization**: Custom brand color and logo on invoices
 - **Template Editor**: Resizable text editors with clickable placeholder insertion
 - **Atomic Placeholders**: Template placeholders delete as a whole unit
 
 ## Installation
+
+### From PKG
+**Preferred.** Download the latest `Mira-Installer.pkg` from [Releases](../../releases) and run the installer.
 
 ### From DMG
 Download the latest `Mira-x.x.x-macOS.dmg` from [Releases](../../releases) and drag to Applications.
@@ -77,8 +80,15 @@ cd Mira
 ./run.sh
 ```
 
-### Create DMG Installer (locally)
+### Create Installers (locally)
 ```bash
+./bundle.sh
+
+# Option A: .pkg installer
+./create-pkg.sh
+# Creates Mira-Installer.pkg
+
+# Option B: DMG installer
 ./create-dmg.sh
 # Creates Mira-x.x.x.dmg
 ```
@@ -193,7 +203,7 @@ Mira/
 - [x] Search & filter invoices
 - [x] Sort by date/amount/client
 - [x] Customizable email template with placeholders (German/English)
-- [x] Theme support (System / Catppuccin)
+- [x] Theme support with custom JSON themes (import/export)
 - [x] Brand color & logo customization
 - [x] JSON file storage
 - [x] Keyboard shortcuts (layout-independent)
