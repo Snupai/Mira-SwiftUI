@@ -144,9 +144,13 @@ jobs:
             # Ad-hoc signing: no hardened runtime (library validation would block Sparkle)
             codesign --force --deep --sign - $ENTITLEMENTS_ARG Mira.app
           else
-            # Real certificate: use hardened runtime + entitlements
+            # Real certificate: use hardened runtime + entitlements for iCloud
+            echo "   Signing with entitlements for iCloud/CloudKit support"
             codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime $ENTITLEMENTS_ARG Mira.app
           fi
+          
+          echo "📋 Verifying entitlements..."
+          codesign -d --entitlements - Mira.app 2>/dev/null | head -20 || true
 
           # Verify signature
           codesign --verify --deep --verbose Mira.app || echo "⚠️ Verification had issues"
