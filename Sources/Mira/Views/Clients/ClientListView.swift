@@ -96,7 +96,7 @@ struct ClientListView: View {
                     Text("No clients")
                         .font(.system(size: 17))
                         .foregroundColor(colors.subtext)
-                    if appState.clients.isEmpty {
+                    if allClients.isEmpty {
                         Button("Add your first client") { showingNewClient = true }
                             .buttonStyle(.plain)
                             .foregroundColor(colors.accent)
@@ -184,9 +184,16 @@ struct ClientEditorView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    @Query private var sdClients: [SDClient]
     
     @State private var client: Client
     let isEditing: Bool
+    
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed
+    }
     
     init(client: Client?) {
         if let client = client {
@@ -287,15 +294,56 @@ struct ClientEditorView: View {
     
     func saveClient() {
         client.updatedAt = Date()
+        
+        if usesSwiftData {
+            saveClientToSwiftData()
+        } else {
+            // Legacy save
+            if isEditing {
+                if let i = appState.clients.firstIndex(where: { $0.id == client.id }) {
+                    appState.clients[i] = client
+                }
+            } else {
+                appState.clients.append(client)
+            }
+            appState.saveClients()
+        }
+        dismiss()
+    }
+    
+    private func saveClientToSwiftData() {
         if isEditing {
-            if let i = appState.clients.firstIndex(where: { $0.id == client.id }) {
-                appState.clients[i] = client
+            // Update existing client
+            if let existing = sdClients.first(where: { $0.id == client.id }) {
+                existing.name = client.name
+                existing.contactPerson = client.contactPerson
+                existing.email = client.email
+                existing.phone = client.phone
+                existing.street = client.street
+                existing.city = client.city
+                existing.postalCode = client.postalCode
+                existing.country = client.country
+                existing.vatId = client.vatId
+                existing.taxNumber = client.taxNumber
+                existing.defaultCurrencyRaw = client.defaultCurrency?.rawValue
+                existing.defaultPaymentTermsDays = client.defaultPaymentTermsDays
+                existing.defaultVatRate = client.defaultVatRate
+                existing.language = client.language
+                existing.notes = client.notes
+                existing.updatedAt = Date()
             }
         } else {
-            appState.clients.append(client)
+            // Create new client
+            let sdClient = SDClient(from: client)
+            modelContext.insert(sdClient)
         }
-        appState.saveClients()
-        dismiss()
+        
+        do {
+            try modelContext.save()
+            print("✅ Saved client to SwiftData")
+        } catch {
+            print("⚠️ SwiftData save failed: \(error)")
+        }
     }
 }
 

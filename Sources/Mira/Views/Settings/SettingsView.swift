@@ -443,14 +443,67 @@ struct SettingsView: View {
     }
 
     // MARK: - Helper
+    
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed
+    }
+    
     func binding<T>(_ keyPath: WritableKeyPath<CompanyProfile, T>) -> Binding<T> where T: Equatable {
         Binding(
             get: { appState.companyProfile?[keyPath: keyPath] ?? CompanyProfile()[keyPath: keyPath] },
             set: { newValue in
                 appState.companyProfile?[keyPath: keyPath] = newValue
-                appState.saveCompanyProfile()
+                saveCompanyProfile()
             }
         )
+    }
+    
+    private func saveCompanyProfile() {
+        // Save to SwiftData if migrated
+        if usesSwiftData, let profile = appState.companyProfile {
+            if let sdProfile = sdProfiles.first {
+                updateSDProfile(sdProfile, from: profile)
+                try? modelContext.save()
+            }
+        }
+        // Always save to legacy (for backward compatibility during transition)
+        appState.saveCompanyProfile()
+    }
+    
+    private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {
+        sdProfile.companyName = profile.companyName
+        sdProfile.ownerName = profile.ownerName
+        sdProfile.email = profile.email
+        sdProfile.phone = profile.phone
+        sdProfile.website = profile.website
+        sdProfile.street = profile.street
+        sdProfile.city = profile.city
+        sdProfile.postalCode = profile.postalCode
+        sdProfile.country = profile.country
+        sdProfile.vatId = profile.vatId
+        sdProfile.taxNumber = profile.taxNumber
+        sdProfile.companyRegistry = profile.companyRegistry
+        sdProfile.isVatExempt = profile.isVatExempt
+        sdProfile.bankName = profile.bankName
+        sdProfile.iban = profile.iban
+        sdProfile.bic = profile.bic
+        sdProfile.accountHolder = profile.accountHolder
+        sdProfile.logoData = profile.logoData
+        sdProfile.brandColorHex = profile.brandColorHex
+        sdProfile.defaultCurrencyRaw = profile.defaultCurrency.rawValue
+        sdProfile.defaultPaymentTermsDays = profile.defaultPaymentTermsDays
+        sdProfile.defaultVatRate = profile.defaultVatRate
+        sdProfile.invoiceNumberPrefix = profile.invoiceNumberPrefix
+        sdProfile.nextInvoiceNumber = profile.nextInvoiceNumber
+        sdProfile.emailTemplateGerman = profile.emailTemplateGerman
+        sdProfile.emailTemplateEnglish = profile.emailTemplateEnglish
+        sdProfile.pdfFooterTemplateGerman = profile.pdfFooterTemplateGerman
+        sdProfile.pdfClosingTemplateGerman = profile.pdfClosingTemplateGerman
+        sdProfile.pdfNotesTemplateGerman = profile.pdfNotesTemplateGerman
+        sdProfile.pdfFooterTemplateEnglish = profile.pdfFooterTemplateEnglish
+        sdProfile.pdfClosingTemplateEnglish = profile.pdfClosingTemplateEnglish
+        sdProfile.pdfNotesTemplateEnglish = profile.pdfNotesTemplateEnglish
+        sdProfile.updatedAt = Date()
     }
 }
 

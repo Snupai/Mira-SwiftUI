@@ -1,9 +1,15 @@
 import SwiftUI
+import SwiftData
 
 struct InvoiceEditorView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    
+    @Query private var sdClients: [SDClient]
+    @Query private var sdInvoices: [SDInvoice]
+    @Query private var sdTemplates: [SDInvoiceTemplate]
     
     @State private var invoice: Invoice
     @State private var selectedClientId: UUID?
@@ -13,6 +19,10 @@ struct InvoiceEditorView: View {
     @State private var templateName = ""
     
     let isEditing: Bool
+    
+    private var usesSwiftData: Bool {
+        MigrationService.shared.migrationStatus == .completed
+    }
     
     init(invoice: Invoice?) {
         if let invoice = invoice {
@@ -26,9 +36,23 @@ struct InvoiceEditorView: View {
         }
     }
     
+    private var allClients: [Client] {
+        if usesSwiftData && !sdClients.isEmpty {
+            return sdClients.map { $0.toLegacy() }
+        }
+        return appState.clients
+    }
+    
+    private var allTemplates: [InvoiceTemplate] {
+        if usesSwiftData && !sdTemplates.isEmpty {
+            return sdTemplates.map { $0.toLegacy() }
+        }
+        return appState.templates
+    }
+    
     var selectedClient: Client? {
         guard let id = selectedClientId else { return nil }
-        return appState.clients.first { $0.id == id }
+        return allClients.first { $0.id == id }
     }
     
     var canSave: Bool { selectedClientId != nil && !invoice.lineItems.isEmpty }
@@ -38,7 +62,7 @@ struct InvoiceEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     // Template picker (for new invoices only)
-                    if !isEditing && !appState.templates.isEmpty {
+                    if !isEditing && !allTemplates.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Template")
                                 .font(.system(size: 13, weight: .medium))
@@ -49,7 +73,7 @@ struct InvoiceEditorView: View {
                                     // Reset to blank
                                 }
                                 Divider()
-                                ForEach(appState.templates) { template in
+                                ForEach(allTemplates) { template in
                                     Button(template.name) {
                                         applyTemplate(template)
                                     }
@@ -303,12 +327,21 @@ struct InvoiceEditorView: View {
         template.notes = invoice.notes
         template.paymentNotes = invoice.paymentNotes
         template.defaultClientId = selectedClientId
-        appState.templates.append(template)
-        appState.saveTemplates()
+        
+        if usesSwiftData {
+            let sdClient = selectedClientId.flatMap { id in sdClients.first { $0.id == id } }
+            let sdTemplate = SDInvoiceTemplate(from: template, defaultClient: sdClient)
+            modelContext.insert(sdTemplate)
+            try? modelContext.save()
+        } else {
+            appState.templates.append(template)
+            appState.saveTemplates()
+        }
         templateName = ""
     }
     
     func generateInvoiceNumber() {
+        // TODO: Handle invoice number generation from SwiftData profile when migrated
         if var profile = appState.companyProfile {
             invoice.invoiceNumber = profile.generateInvoiceNumber()
             profile.nextInvoiceNumber += 1
@@ -322,15 +355,59 @@ struct InvoiceEditorView: View {
         invoice.clientId = clientId
         invoice.updatedAt = Date()
         
+        if usesSwiftData {
+            saveInvoiceToSwiftData()
+        } else {
+            // Legacy save
+            if isEditing {
+                if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                    appState.invoices[i] = invoice
+                }
+            } else {
+                appState.invoices.append(invoice)
+            }
+            appState.saveInvoices()
+        }
+        dismiss()
+    }
+    
+    private func saveInvoiceToSwiftData() {
+        let sdClient = sdClients.first { $0.id == selectedClientId }
+        
         if isEditing {
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices[i] = invoice
+            // Update existing invoice
+            if let existing = sdInvoices.first(where: { $0.id == invoice.id }) {
+                existing.invoiceNumber = invoice.invoiceNumber
+                existing.status = invoice.status
+                existing.issueDate = invoice.issueDate
+                existing.dueDate = invoice.dueDate
+                existing.serviceDate = invoice.serviceDate
+                existing.serviceDateEnd = invoice.serviceDateEnd
+                existing.lineItems = invoice.lineItems.map { SDLineItem(from: $0) }
+                existing.currency = invoice.currency
+                existing.discountPercent = invoice.discountPercent
+                existing.discountFixed = invoice.discountFixed
+                existing.paymentReference = invoice.paymentReference
+                existing.paymentNotes = invoice.paymentNotes
+                existing.notes = invoice.notes
+                existing.internalNotes = invoice.internalNotes
+                existing.poNumber = invoice.poNumber
+                existing.projectCode = invoice.projectCode
+                existing.updatedAt = Date()
+                existing.client = sdClient
             }
         } else {
-            appState.invoices.append(invoice)
+            // Create new invoice
+            let sdInvoice = SDInvoice(from: invoice, client: sdClient)
+            modelContext.insert(sdInvoice)
         }
-        appState.saveInvoices()
-        dismiss()
+        
+        do {
+            try modelContext.save()
+            print("✅ Saved invoice to SwiftData")
+        } catch {
+            print("⚠️ SwiftData save failed: \(error)")
+        }
     }
     
     func formatCurrency(_ value: Double) -> String {

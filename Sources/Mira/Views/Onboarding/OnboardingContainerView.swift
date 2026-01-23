@@ -1,9 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.modelContext) private var modelContext
+    
+    @Query private var sdProfiles: [SDCompanyProfile]
+    
     @State private var currentStep: OnboardingStep = .welcome
     @State private var companyProfile: CompanyProfile
     
@@ -82,9 +87,62 @@ struct OnboardingContainerView: View {
     }
     
     func finishOnboarding() {
-        appState.companyProfile = companyProfile
-        appState.saveCompanyProfile()
+        // Save to SwiftData (new system)
+        if let existingProfile = sdProfiles.first {
+            // Update existing profile
+            updateSDProfile(existingProfile, from: companyProfile)
+        } else {
+            // Create new profile
+            let sdProfile = SDCompanyProfile(from: companyProfile)
+            modelContext.insert(sdProfile)
+        }
+        
+        // Try to save SwiftData
+        do {
+            try modelContext.save()
+            print("✅ Saved company profile to SwiftData")
+        } catch {
+            print("⚠️ SwiftData save failed: \(error)")
+            // Fallback to legacy save
+            appState.companyProfile = companyProfile
+            appState.saveCompanyProfile()
+        }
+        
         appState.hasCompletedOnboarding = true
+    }
+    
+    private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {
+        sdProfile.companyName = profile.companyName
+        sdProfile.ownerName = profile.ownerName
+        sdProfile.email = profile.email
+        sdProfile.phone = profile.phone
+        sdProfile.website = profile.website
+        
+        sdProfile.street = profile.street
+        sdProfile.city = profile.city
+        sdProfile.postalCode = profile.postalCode
+        sdProfile.country = profile.country
+        
+        sdProfile.vatId = profile.vatId
+        sdProfile.taxNumber = profile.taxNumber
+        sdProfile.companyRegistry = profile.companyRegistry
+        sdProfile.isVatExempt = profile.isVatExempt
+        
+        sdProfile.bankName = profile.bankName
+        sdProfile.iban = profile.iban
+        sdProfile.bic = profile.bic
+        sdProfile.accountHolder = profile.accountHolder
+        
+        sdProfile.logoData = profile.logoData
+        sdProfile.brandColorHex = profile.brandColorHex
+        
+        sdProfile.defaultCurrencyRaw = profile.defaultCurrency.rawValue
+        sdProfile.defaultPaymentTermsDays = profile.defaultPaymentTermsDays
+        sdProfile.defaultVatRate = profile.defaultVatRate
+        sdProfile.invoiceNumberPrefix = profile.invoiceNumberPrefix
+        sdProfile.nextInvoiceNumber = profile.nextInvoiceNumber
+        
+        sdProfile.updatedAt = Date()
     }
 }
 
