@@ -98,6 +98,24 @@ struct SettingsView: View {
                     }
                     Spacer()
                 }
+                
+                Divider().background(colors.surface1)
+                
+                // Delete legacy JSON after migration
+                Toggle(isOn: Binding(
+                    get: { UserDefaults.standard.bool(forKey: "mira.deleteLegacyAfterMigration") },
+                    set: { UserDefaults.standard.set($0, forKey: "mira.deleteLegacyAfterMigration") }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete Legacy JSON After Migration")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.text)
+                        Text("Removes old JSON files after successful migration")
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.subtext)
+                    }
+                }
+                .toggleStyle(.switch)
             }
         }
     }

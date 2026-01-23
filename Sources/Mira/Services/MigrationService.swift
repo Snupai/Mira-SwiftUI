@@ -163,14 +163,23 @@ final class MigrationService {
             migrationStatus = .completed
             print("✅ Migration completed successfully!")
             
-            // Step 9: Optionally rename old files (don't delete yet)
-            try renameLegacyFiles()
+            // Step 9: Handle legacy files (rename or delete)
+            if shouldDeleteLegacyFiles {
+                try deleteLegacyFiles()
+            } else {
+                try renameLegacyFiles()
+            }
             
         } catch {
             migrationStatus = .failed
             print("❌ Migration failed: \(error)")
             throw error
         }
+    }
+    
+    /// Whether to delete legacy JSON after migration
+    var shouldDeleteLegacyFiles: Bool {
+        UserDefaults.standard.bool(forKey: "mira.deleteLegacyAfterMigration")
     }
     
     /// Rename legacy files to .migrated extension
@@ -186,6 +195,19 @@ final class MigrationService {
                 try? fileManager.removeItem(at: destURL)
                 try fileManager.moveItem(at: sourceURL, to: destURL)
                 print("📁 Renamed \(fileName) → \(fileName).migrated")
+            }
+        }
+    }
+    
+    /// Delete legacy JSON files after migration
+    private func deleteLegacyFiles() throws {
+        let filesToDelete = ["profile.json", "clients.json", "invoices.json", "templates.json"]
+        
+        for fileName in filesToDelete {
+            let url = appSupportURL.appendingPathComponent(fileName)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+                print("🗑️ Deleted legacy file: \(fileName)")
             }
         }
     }
