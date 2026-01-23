@@ -102,10 +102,10 @@ Migrate from plain JSON file storage to encrypted SwiftData with CloudKit sync.
 - [x] InvoiceListView - @Query with legacy fallback
 - [x] ClientListView - @Query with legacy fallback
 - [x] DashboardView - @Query with legacy fallback
-- [x] SettingsView - Sync & Security status section
-- [ ] OnboardingViews - Save to SwiftData (still uses legacy)
-- [ ] InvoiceEditorView - CRUD with SwiftData (still uses legacy)
-- [ ] ClientEditorView - CRUD with SwiftData (still uses legacy)
+- [x] SettingsView - Sync & Security status section + SwiftData sync
+- [x] OnboardingContainerView - Saves to SwiftData
+- [x] InvoiceEditorView - Full CRUD with SwiftData
+- [x] ClientEditorView - Full CRUD with SwiftData
 
 ### Phase 6: CloudKit Setup ✅
 - [x] Create iCloud container (iCloud.com.snupai.Mira)
