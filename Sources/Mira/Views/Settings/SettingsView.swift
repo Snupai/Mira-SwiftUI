@@ -143,7 +143,8 @@ struct SettingsView: View {
         case .noAccount: return "Not signed in to iCloud"
         case .restricted: return "iCloud access is restricted"
         case .temporarilyUnavailable: return "iCloud temporarily unavailable"
-        default: return "Checking status..."
+        case .couldNotDetermine: return "Status unavailable (local build)"
+        @unknown default: return "Status unavailable"
         }
     }
     
@@ -163,11 +164,10 @@ struct SettingsView: View {
     }
     
     private func checkCloudKitStatus() async {
-        isCheckingCloudKit = true
+        isCheckingCloudKit = false
         // Skip CloudKit check for now - requires entitlements that don't work with ad-hoc signing
         // cloudKitStatus = await DataContainer.checkCloudKitStatus()
         cloudKitStatus = .couldNotDetermine
-        isCheckingCloudKit = false
     }
 
     // MARK: - Appearance Section
