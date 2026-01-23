@@ -263,38 +263,26 @@ class AppState: ObservableObject {
     
     // Legacy save methods - deprecated, will be removed after full migration
     func saveCompanyProfile() {
-        guard MigrationService.shared.migrationStatus != .completed else {
-            print("⚠️ saveCompanyProfile called but migration is complete - use SwiftData instead")
-            return
-        }
+        guard MigrationService.shared.needsMigration else { return }
         guard let profile = companyProfile,
               let data = try? JSONEncoder().encode(profile) else { return }
         try? data.write(to: profileURL)
     }
     
     func saveClients() {
-        guard MigrationService.shared.migrationStatus != .completed else {
-            print("⚠️ saveClients called but migration is complete - use SwiftData instead")
-            return
-        }
+        guard MigrationService.shared.needsMigration else { return }
         guard let data = try? JSONEncoder().encode(clients) else { return }
         try? data.write(to: clientsURL)
     }
     
     func saveInvoices() {
-        guard MigrationService.shared.migrationStatus != .completed else {
-            print("⚠️ saveInvoices called but migration is complete - use SwiftData instead")
-            return
-        }
+        guard MigrationService.shared.needsMigration else { return }
         guard let data = try? JSONEncoder().encode(invoices) else { return }
         try? data.write(to: invoicesURL)
     }
     
     func saveTemplates() {
-        guard MigrationService.shared.migrationStatus != .completed else {
-            print("⚠️ saveTemplates called but migration is complete - use SwiftData instead")
-            return
-        }
+        guard MigrationService.shared.needsMigration else { return }
         guard let data = try? JSONEncoder().encode(templates) else { return }
         try? data.write(to: templatesURL)
     }

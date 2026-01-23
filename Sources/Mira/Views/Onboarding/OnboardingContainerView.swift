@@ -89,12 +89,14 @@ struct OnboardingContainerView: View {
     func finishOnboarding() {
         print("🚀 finishOnboarding called")
         
-        // Always save to legacy first (ensures it works)
-        appState.companyProfile = companyProfile
-        appState.saveCompanyProfile()
-        print("✅ Saved to legacy JSON")
+        // Save to legacy only if migrating existing data
+        if MigrationService.shared.needsMigration {
+            appState.companyProfile = companyProfile
+            appState.saveCompanyProfile()
+            print("✅ Saved to legacy JSON")
+        }
         
-        // Also save to SwiftData (new system)
+        // Save to SwiftData (new system)
         do {
             if let existingProfile = sdProfiles.first {
                 // Update existing profile

@@ -468,7 +468,7 @@ struct SettingsView: View {
                 try? modelContext.save()
             }
         }
-        // Always save to legacy (for backward compatibility during transition)
+        // Save to legacy only when migrating old data
         appState.saveCompanyProfile()
     }
     
