@@ -6,17 +6,84 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		74A1E5922F23D241007D97FB /* AppIcon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 74A1E5742F23D241007D97FB /* AppIcon.svg */; };
+		74A1E5932F23D241007D97FB /* Default.json in Resources */ = {isa = PBXBuildFile; fileRef = 74A1E5712F23D241007D97FB /* Default.json */; };
+		74A1E5942F23D241007D97FB /* Catppuccin.json in Resources */ = {isa = PBXBuildFile; fileRef = 74A1E5702F23D241007D97FB /* Catppuccin.json */; };
+		74A1E5952F23D241007D97FB /* generate-icon.sh in Resources */ = {isa = PBXBuildFile; fileRef = 74A1E5752F23D241007D97FB /* generate-icon.sh */; };
+		74A1E5962F23D241007D97FB /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 74A1E5732F23D241007D97FB /* AppIcon.icns */; };
+		74A1E5972F23D241007D97FB /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E56A2F23D241007D97FB /* AppTheme.swift */; };
+		74A1E5982F23D241007D97FB /* SDInvoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5672F23D241007D97FB /* SDInvoice.swift */; };
+		74A1E5992F23D241007D97FB /* ColorExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E57F2F23D241007D97FB /* ColorExtensions.swift */; };
+		74A1E59A2F23D241007D97FB /* InvoiceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5862F23D241007D97FB /* InvoiceDetailView.swift */; };
+		74A1E59B2F23D241007D97FB /* SDCompanyProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5662F23D241007D97FB /* SDCompanyProfile.swift */; };
+		74A1E59C2F23D241007D97FB /* OnboardingContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E58A2F23D241007D97FB /* OnboardingContainerView.swift */; };
+		74A1E59D2F23D241007D97FB /* ClientListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5822F23D241007D97FB /* ClientListView.swift */; };
+		74A1E59E2F23D241007D97FB /* Invoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E56D2F23D241007D97FB /* Invoice.swift */; };
+		74A1E59F2F23D241007D97FB /* UpdaterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E57C2F23D241007D97FB /* UpdaterManager.swift */; };
+		74A1E5A02F23D241007D97FB /* AdaptiveColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E57E2F23D241007D97FB /* AdaptiveColors.swift */; };
+		74A1E5A12F23D241007D97FB /* SDInvoiceTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5682F23D241007D97FB /* SDInvoiceTemplate.swift */; };
+		74A1E5A22F23D241007D97FB /* CompanyProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E56C2F23D241007D97FB /* CompanyProfile.swift */; };
+		74A1E5A32F23D241007D97FB /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5842F23D241007D97FB /* DashboardView.swift */; };
+		74A1E5A42F23D241007D97FB /* SDClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5652F23D241007D97FB /* SDClient.swift */; };
+		74A1E5A52F23D241007D97FB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E55F2F23D241007D97FB /* ContentView.swift */; };
+		74A1E5A62F23D241007D97FB /* MiraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5602F23D241007D97FB /* MiraApp.swift */; };
+		74A1E5A72F23D241007D97FB /* OnboardingStepViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E58B2F23D241007D97FB /* OnboardingStepViews.swift */; };
+		74A1E5A82F23D241007D97FB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E58E2F23D241007D97FB /* SettingsView.swift */; };
+		74A1E5A92F23D241007D97FB /* PDFGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E57A2F23D241007D97FB /* PDFGenerator.swift */; };
+		74A1E5AA2F23D241007D97FB /* Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E56B2F23D241007D97FB /* Client.swift */; };
+		74A1E5AB2F23D241007D97FB /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E57B2F23D241007D97FB /* ThemeManager.swift */; };
+		74A1E5AC2F23D241007D97FB /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5782F23D241007D97FB /* EncryptionService.swift */; };
+		74A1E5AD2F23D241007D97FB /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5902F23D241007D97FB /* AboutView.swift */; };
+		74A1E5AE2F23D241007D97FB /* InvoiceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5882F23D241007D97FB /* InvoiceListView.swift */; };
+		74A1E5AF2F23D241007D97FB /* DataContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5772F23D241007D97FB /* DataContainer.swift */; };
+		74A1E5B02F23D241007D97FB /* InvoiceTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E56E2F23D241007D97FB /* InvoiceTemplate.swift */; };
+		74A1E5B12F23D241007D97FB /* OnboardingWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E58C2F23D241007D97FB /* OnboardingWelcomeView.swift */; };
+		74A1E5B22F23D241007D97FB /* InvoiceEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5872F23D241007D97FB /* InvoiceEditorView.swift */; };
+		74A1E5B32F23D241007D97FB /* MigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5792F23D241007D97FB /* MigrationService.swift */; };
+		74A1E5B42F23D241007D97FB /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5632F23D241007D97FB /* ThemePicker.swift */; };
+		74A1E5B52F23D241007D97FB /* BrandColorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5622F23D241007D97FB /* BrandColorPicker.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		747617942F23BADF00A11E14 /* Mira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mira.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		74A1E55F2F23D241007D97FB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		74A1E5602F23D241007D97FB /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
+		74A1E5622F23D241007D97FB /* BrandColorPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColorPicker.swift; sourceTree = "<group>"; };
+		74A1E5632F23D241007D97FB /* ThemePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePicker.swift; sourceTree = "<group>"; };
+		74A1E5652F23D241007D97FB /* SDClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDClient.swift; sourceTree = "<group>"; };
+		74A1E5662F23D241007D97FB /* SDCompanyProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDCompanyProfile.swift; sourceTree = "<group>"; };
+		74A1E5672F23D241007D97FB /* SDInvoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDInvoice.swift; sourceTree = "<group>"; };
+		74A1E5682F23D241007D97FB /* SDInvoiceTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDInvoiceTemplate.swift; sourceTree = "<group>"; };
+		74A1E56A2F23D241007D97FB /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		74A1E56B2F23D241007D97FB /* Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Client.swift; sourceTree = "<group>"; };
+		74A1E56C2F23D241007D97FB /* CompanyProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyProfile.swift; sourceTree = "<group>"; };
+		74A1E56D2F23D241007D97FB /* Invoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Invoice.swift; sourceTree = "<group>"; };
+		74A1E56E2F23D241007D97FB /* InvoiceTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceTemplate.swift; sourceTree = "<group>"; };
+		74A1E5702F23D241007D97FB /* Catppuccin.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Catppuccin.json; sourceTree = "<group>"; };
+		74A1E5712F23D241007D97FB /* Default.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Default.json; sourceTree = "<group>"; };
+		74A1E5732F23D241007D97FB /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		74A1E5742F23D241007D97FB /* AppIcon.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = AppIcon.svg; sourceTree = "<group>"; };
+		74A1E5752F23D241007D97FB /* generate-icon.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "generate-icon.sh"; sourceTree = "<group>"; };
+		74A1E5772F23D241007D97FB /* DataContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataContainer.swift; sourceTree = "<group>"; };
+		74A1E5782F23D241007D97FB /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
+		74A1E5792F23D241007D97FB /* MigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationService.swift; sourceTree = "<group>"; };
+		74A1E57A2F23D241007D97FB /* PDFGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFGenerator.swift; sourceTree = "<group>"; };
+		74A1E57B2F23D241007D97FB /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
+		74A1E57C2F23D241007D97FB /* UpdaterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterManager.swift; sourceTree = "<group>"; };
+		74A1E57E2F23D241007D97FB /* AdaptiveColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveColors.swift; sourceTree = "<group>"; };
+		74A1E57F2F23D241007D97FB /* ColorExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtensions.swift; sourceTree = "<group>"; };
+		74A1E5822F23D241007D97FB /* ClientListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientListView.swift; sourceTree = "<group>"; };
+		74A1E5842F23D241007D97FB /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		74A1E5862F23D241007D97FB /* InvoiceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceDetailView.swift; sourceTree = "<group>"; };
+		74A1E5872F23D241007D97FB /* InvoiceEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceEditorView.swift; sourceTree = "<group>"; };
+		74A1E5882F23D241007D97FB /* InvoiceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceListView.swift; sourceTree = "<group>"; };
+		74A1E58A2F23D241007D97FB /* OnboardingContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingContainerView.swift; sourceTree = "<group>"; };
+		74A1E58B2F23D241007D97FB /* OnboardingStepViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
+		74A1E58C2F23D241007D97FB /* OnboardingWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWelcomeView.swift; sourceTree = "<group>"; };
+		74A1E58E2F23D241007D97FB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		74A1E5902F23D241007D97FB /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		747617962F23BADF00A11E14 /* Mira */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Mira;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		747617912F23BADF00A11E14 /* Frameworks */ = {
@@ -32,7 +99,14 @@
 		7476178B2F23BADF00A11E14 = {
 			isa = PBXGroup;
 			children = (
-				747617962F23BADF00A11E14 /* Mira */,
+				74A1E5612F23D241007D97FB /* App */,
+				74A1E5642F23D241007D97FB /* Components */,
+				74A1E56F2F23D241007D97FB /* Models */,
+				74A1E5762F23D241007D97FB /* Resources */,
+				74A1E57D2F23D241007D97FB /* Services */,
+				74A1E5802F23D241007D97FB /* Utils */,
+				74A1E5812F23D241007D97FB /* ViewModels */,
+				74A1E5912F23D241007D97FB /* Views */,
 				747617952F23BADF00A11E14 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +117,162 @@
 				747617942F23BADF00A11E14 /* Mira.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		74A1E5612F23D241007D97FB /* App */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E55F2F23D241007D97FB /* ContentView.swift */,
+				74A1E5602F23D241007D97FB /* MiraApp.swift */,
+			);
+			name = App;
+			path = Sources/Mira/App;
+			sourceTree = "<group>";
+		};
+		74A1E5642F23D241007D97FB /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5622F23D241007D97FB /* BrandColorPicker.swift */,
+				74A1E5632F23D241007D97FB /* ThemePicker.swift */,
+			);
+			name = Components;
+			path = Sources/Mira/Components;
+			sourceTree = "<group>";
+		};
+		74A1E5692F23D241007D97FB /* SwiftData */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5652F23D241007D97FB /* SDClient.swift */,
+				74A1E5662F23D241007D97FB /* SDCompanyProfile.swift */,
+				74A1E5672F23D241007D97FB /* SDInvoice.swift */,
+				74A1E5682F23D241007D97FB /* SDInvoiceTemplate.swift */,
+			);
+			path = SwiftData;
+			sourceTree = "<group>";
+		};
+		74A1E56F2F23D241007D97FB /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5692F23D241007D97FB /* SwiftData */,
+				74A1E56A2F23D241007D97FB /* AppTheme.swift */,
+				74A1E56B2F23D241007D97FB /* Client.swift */,
+				74A1E56C2F23D241007D97FB /* CompanyProfile.swift */,
+				74A1E56D2F23D241007D97FB /* Invoice.swift */,
+				74A1E56E2F23D241007D97FB /* InvoiceTemplate.swift */,
+			);
+			name = Models;
+			path = Sources/Mira/Models;
+			sourceTree = "<group>";
+		};
+		74A1E5722F23D241007D97FB /* Themes */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5702F23D241007D97FB /* Catppuccin.json */,
+				74A1E5712F23D241007D97FB /* Default.json */,
+			);
+			path = Themes;
+			sourceTree = "<group>";
+		};
+		74A1E5762F23D241007D97FB /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5722F23D241007D97FB /* Themes */,
+				74A1E5732F23D241007D97FB /* AppIcon.icns */,
+				74A1E5742F23D241007D97FB /* AppIcon.svg */,
+				74A1E5752F23D241007D97FB /* generate-icon.sh */,
+			);
+			name = Resources;
+			path = Sources/Mira/Resources;
+			sourceTree = "<group>";
+		};
+		74A1E57D2F23D241007D97FB /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5772F23D241007D97FB /* DataContainer.swift */,
+				74A1E5782F23D241007D97FB /* EncryptionService.swift */,
+				74A1E5792F23D241007D97FB /* MigrationService.swift */,
+				74A1E57A2F23D241007D97FB /* PDFGenerator.swift */,
+				74A1E57B2F23D241007D97FB /* ThemeManager.swift */,
+				74A1E57C2F23D241007D97FB /* UpdaterManager.swift */,
+			);
+			name = Services;
+			path = Sources/Mira/Services;
+			sourceTree = "<group>";
+		};
+		74A1E5802F23D241007D97FB /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E57E2F23D241007D97FB /* AdaptiveColors.swift */,
+				74A1E57F2F23D241007D97FB /* ColorExtensions.swift */,
+			);
+			name = Utils;
+			path = Sources/Mira/Utils;
+			sourceTree = "<group>";
+		};
+		74A1E5812F23D241007D97FB /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = ViewModels;
+			path = Sources/Mira/ViewModels;
+			sourceTree = "<group>";
+		};
+		74A1E5832F23D241007D97FB /* Clients */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5822F23D241007D97FB /* ClientListView.swift */,
+			);
+			path = Clients;
+			sourceTree = "<group>";
+		};
+		74A1E5852F23D241007D97FB /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5842F23D241007D97FB /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		74A1E5892F23D241007D97FB /* Invoices */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5862F23D241007D97FB /* InvoiceDetailView.swift */,
+				74A1E5872F23D241007D97FB /* InvoiceEditorView.swift */,
+				74A1E5882F23D241007D97FB /* InvoiceListView.swift */,
+			);
+			path = Invoices;
+			sourceTree = "<group>";
+		};
+		74A1E58D2F23D241007D97FB /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E58A2F23D241007D97FB /* OnboardingContainerView.swift */,
+				74A1E58B2F23D241007D97FB /* OnboardingStepViews.swift */,
+				74A1E58C2F23D241007D97FB /* OnboardingWelcomeView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		74A1E58F2F23D241007D97FB /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E58E2F23D241007D97FB /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		74A1E5912F23D241007D97FB /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				74A1E5832F23D241007D97FB /* Clients */,
+				74A1E5852F23D241007D97FB /* Dashboard */,
+				74A1E5892F23D241007D97FB /* Invoices */,
+				74A1E58D2F23D241007D97FB /* Onboarding */,
+				74A1E58F2F23D241007D97FB /* Settings */,
+				74A1E5902F23D241007D97FB /* AboutView.swift */,
+			);
+			name = Views;
+			path = Sources/Mira/Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -59,9 +289,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				747617962F23BADF00A11E14 /* Mira */,
 			);
 			name = Mira;
 			packageProductDependencies = (
@@ -109,6 +336,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				74A1E5922F23D241007D97FB /* AppIcon.svg in Resources */,
+				74A1E5932F23D241007D97FB /* Default.json in Resources */,
+				74A1E5942F23D241007D97FB /* Catppuccin.json in Resources */,
+				74A1E5952F23D241007D97FB /* generate-icon.sh in Resources */,
+				74A1E5962F23D241007D97FB /* AppIcon.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,6 +351,37 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				74A1E5972F23D241007D97FB /* AppTheme.swift in Sources */,
+				74A1E5982F23D241007D97FB /* SDInvoice.swift in Sources */,
+				74A1E5992F23D241007D97FB /* ColorExtensions.swift in Sources */,
+				74A1E59A2F23D241007D97FB /* InvoiceDetailView.swift in Sources */,
+				74A1E59B2F23D241007D97FB /* SDCompanyProfile.swift in Sources */,
+				74A1E59C2F23D241007D97FB /* OnboardingContainerView.swift in Sources */,
+				74A1E59D2F23D241007D97FB /* ClientListView.swift in Sources */,
+				74A1E59E2F23D241007D97FB /* Invoice.swift in Sources */,
+				74A1E59F2F23D241007D97FB /* UpdaterManager.swift in Sources */,
+				74A1E5A02F23D241007D97FB /* AdaptiveColors.swift in Sources */,
+				74A1E5A12F23D241007D97FB /* SDInvoiceTemplate.swift in Sources */,
+				74A1E5A22F23D241007D97FB /* CompanyProfile.swift in Sources */,
+				74A1E5A32F23D241007D97FB /* DashboardView.swift in Sources */,
+				74A1E5A42F23D241007D97FB /* SDClient.swift in Sources */,
+				74A1E5A52F23D241007D97FB /* ContentView.swift in Sources */,
+				74A1E5A62F23D241007D97FB /* MiraApp.swift in Sources */,
+				74A1E5A72F23D241007D97FB /* OnboardingStepViews.swift in Sources */,
+				74A1E5A82F23D241007D97FB /* SettingsView.swift in Sources */,
+				74A1E5A92F23D241007D97FB /* PDFGenerator.swift in Sources */,
+				74A1E5AA2F23D241007D97FB /* Client.swift in Sources */,
+				74A1E5AB2F23D241007D97FB /* ThemeManager.swift in Sources */,
+				74A1E5AC2F23D241007D97FB /* EncryptionService.swift in Sources */,
+				74A1E5AD2F23D241007D97FB /* AboutView.swift in Sources */,
+				74A1E5AE2F23D241007D97FB /* InvoiceListView.swift in Sources */,
+				74A1E5AF2F23D241007D97FB /* DataContainer.swift in Sources */,
+				74A1E5B02F23D241007D97FB /* InvoiceTemplate.swift in Sources */,
+				74A1E5B12F23D241007D97FB /* OnboardingWelcomeView.swift in Sources */,
+				74A1E5B22F23D241007D97FB /* InvoiceEditorView.swift in Sources */,
+				74A1E5B32F23D241007D97FB /* MigrationService.swift in Sources */,
+				74A1E5B42F23D241007D97FB /* ThemePicker.swift in Sources */,
+				74A1E5B52F23D241007D97FB /* BrandColorPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,7 +513,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Mira/Mira.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Mira.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -285,7 +548,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Mira/Mira.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Mira.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
