@@ -164,6 +164,9 @@ jobs:
           codesign --verify --deep --verbose Mira.app || echo "⚠️ Verification had issues"
           echo "✅ App signed"
 
+      - name: Install create-dmg
+        run: brew install create-dmg
+
       - name: Create DMG
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
