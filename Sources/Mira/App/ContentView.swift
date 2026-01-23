@@ -1,17 +1,35 @@
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.modelContext) private var modelContext
+    
+    // SwiftData query for company profile
+    @Query private var profiles: [SDCompanyProfile]
     
     var themeColors: ThemeColors {
         themeManager.colors(for: colorScheme)
     }
     
+    /// Check if setup is complete (works with both old and new data)
+    private var isSetupComplete: Bool {
+        // Check SwiftData first (new system)
+        if let profile = profiles.first, profile.isComplete {
+            return appState.hasCompletedOnboarding
+        }
+        // Fallback to legacy (during transition)
+        if let profile = appState.companyProfile, profile.isComplete {
+            return appState.hasCompletedOnboarding
+        }
+        return false
+    }
+    
     var body: some View {
         Group {
-            if appState.hasCompletedOnboarding && appState.companyProfile != nil {
+            if isSetupComplete {
                 MainView()
             } else {
                 OnboardingContainerView()

@@ -44,6 +44,11 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Set Xcode Developer Directory
+        run: |
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> $GITHUB_ENV
+          echo "Using Xcode at: $(xcode-select -p)"
+
       - name: Update version in scripts
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
@@ -129,12 +134,18 @@ jobs:
           # because Sparkle framework has a different Team ID. Only use --options runtime
           # when signing with a real Developer ID certificate.
           echo "🔐 Signing app bundle..."
+          ENTITLEMENTS_ARG=""
+          if [ -f "Mira.entitlements" ]; then
+            echo "   Using entitlements: Mira.entitlements"
+            ENTITLEMENTS_ARG="--entitlements Mira.entitlements"
+          fi
+          
           if [ "$SIGN_IDENTITY" = "-" ]; then
             # Ad-hoc signing: no hardened runtime (library validation would block Sparkle)
-            codesign --force --deep --sign - Mira.app
+            codesign --force --deep --sign - $ENTITLEMENTS_ARG Mira.app
           else
-            # Real certificate: use hardened runtime
-            codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime Mira.app
+            # Real certificate: use hardened runtime + entitlements
+            codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime $ENTITLEMENTS_ARG Mira.app
           fi
 
           # Verify signature

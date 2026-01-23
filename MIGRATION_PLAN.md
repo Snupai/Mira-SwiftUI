@@ -88,10 +88,15 @@ Migrate from plain JSON file storage to encrypted SwiftData with CloudKit sync.
 - [x] Rollback support
 - [ ] `DataManager` - ObservableObject wrapper (optional, may not need)
 
-### Phase 4: View Updates
-- [ ] Update `MiraApp` with ModelContainer
-- [ ] Update all views to use @Query / @Environment
-- [ ] Remove old JSON persistence code
+### Phase 4: App Integration ✅
+- [x] Update `MiraApp` with ModelContainer + CloudKit
+- [x] Add `RootView` with migration handling
+- [x] Add `MigrationView` for upgrade UX
+- [x] Update `ContentView` to check SwiftData profile
+- [x] Add iCloud entitlements (`Mira.entitlements`)
+- [x] Update bundle.sh for Xcode toolchain + entitlements
+- [x] Update CI workflow for Xcode DEVELOPER_DIR
+- [ ] Update remaining views to use @Query (incremental)
 
 ### Phase 5: CloudKit
 - [ ] Add CloudKit capability to project

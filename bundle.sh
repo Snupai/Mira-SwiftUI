@@ -7,7 +7,9 @@ BUNDLE_ID="com.snupai.mira"
 
 cd "$(dirname "$0")"
 
-# Build
+# Build (use Xcode toolchain for SwiftData macros)
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+echo "🔨 Building with DEVELOPER_DIR=$DEVELOPER_DIR"
 swift build -c release
 
 # Create .app structure
@@ -60,7 +62,12 @@ fi
 # Ad-hoc sign the entire app bundle (without hardened runtime for local dev)
 # Note: Hardened runtime with library validation blocks loading Sparkle with ad-hoc signing
 echo "🔐 Signing app bundle..."
-codesign --force --deep --sign - "${APP_NAME}.app"
+if [ -f "Mira.entitlements" ]; then
+    echo "   Using entitlements: Mira.entitlements"
+    codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+else
+    codesign --force --deep --sign - "${APP_NAME}.app"
+fi
 
 # Sparkle feed URL (hosted on GitHub)
 SPARKLE_FEED_URL="https://raw.githubusercontent.com/Snupai/Mira-SwiftUI/main/appcast.xml"
@@ -106,6 +113,20 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <true/>
     <key>SUAllowsAutomaticUpdates</key>
     <true/>
+
+    <!-- iCloud / CloudKit Configuration -->
+    <key>NSUbiquitousContainers</key>
+    <dict>
+        <key>iCloud.com.snupai.Mira</key>
+        <dict>
+            <key>NSUbiquitousContainerIsDocumentScopePublic</key>
+            <false/>
+            <key>NSUbiquitousContainerName</key>
+            <string>Mira</string>
+            <key>NSUbiquitousContainerSupportedFolderLevels</key>
+            <string>None</string>
+        </dict>
+    </dict>
 </dict>
 </plist>
 EOF

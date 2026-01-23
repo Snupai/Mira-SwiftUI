@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox (required for App Store, optional for direct distribution) -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    
+    <!-- CloudKit -->
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+    
+    <!-- iCloud Container -->
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.com.snupai.Mira</string>
+    </array>
+    
+    <!-- Keychain Access Groups (for iCloud Keychain sync) -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.snupai.Mira</string>
+    </array>
+    
+    <!-- Allow Outgoing Network Connections (for CloudKit sync) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
