@@ -33,69 +33,14 @@ elif [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "${APP_NAME}.app/Contents/Resources/"
 fi
 
-# Copy Sparkle.framework (check multiple possible locations)
-SPARKLE_FRAMEWORK=""
-if [ -d ".build/release/Sparkle.framework" ]; then
-    SPARKLE_FRAMEWORK=".build/release/Sparkle.framework"
-elif [ -d ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
-    SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
-elif [ -d ".build/arm64-apple-macosx/release/Sparkle.framework" ]; then
-    SPARKLE_FRAMEWORK=".build/arm64-apple-macosx/release/Sparkle.framework"
-fi
-
-if [ -n "$SPARKLE_FRAMEWORK" ]; then
-    echo "📦 Bundling Sparkle.framework from $SPARKLE_FRAMEWORK"
-    cp -R "$SPARKLE_FRAMEWORK" "${APP_NAME}.app/Contents/Frameworks/"
-
-    # Update the framework's rpath in the binary
-    install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
-
-    # Strip ALL existing signatures from Sparkle framework (including nested)
-    echo "🔓 Stripping Sparkle signatures..."
-    find "${APP_NAME}.app/Contents/Frameworks/Sparkle.framework" -type f \( -perm +111 -o -name "*.dylib" \) 2>/dev/null | while read binary; do
-        codesign --remove-signature "$binary" 2>/dev/null || true
-    done
-else
-    echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
-fi
-
-# Code signing
-# Set SIGNING_IDENTITY to your certificate name, or leave empty for ad-hoc
-# Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
-SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
-
-# Optional provisioning profile for iCloud (exported from Xcode)
-# Place it as: ./Mira.mobileprovision
-if [ -f "Mira.mobileprovision" ]; then
-    echo "📦 Embedding provisioning profile"
-    cp "Mira.mobileprovision" "${APP_NAME}.app/Contents/embedded.provisionprofile"
-fi
-
-echo "🔐 Signing app bundle..."
-if [ -n "$SIGNING_IDENTITY" ]; then
-    echo "   Using identity: $SIGNING_IDENTITY"
-    if [ -f "Mira.entitlements" ]; then
-        echo "   Using entitlements: Mira.entitlements"
-        codesign --force --deep --sign "$SIGNING_IDENTITY" --entitlements Mira.entitlements --options runtime "${APP_NAME}.app"
-    else
-        codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime "${APP_NAME}.app"
-    fi
-else
-    echo "   Using ad-hoc signing (set SIGNING_IDENTITY for iCloud support)"
-    if [ -f "Mira.entitlements" ]; then
-        codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
-    else
-        codesign --force --deep --sign - "${APP_NAME}.app"
-    fi
-fi
-
 # Sparkle feed URL (hosted on GitHub)
 SPARKLE_FEED_URL="https://raw.githubusercontent.com/Snupai/Mira-SwiftUI/main/appcast.xml"
 
 # EdDSA public key for Sparkle update verification
 SPARKLE_PUBLIC_KEY="lAu3sHrnhreoAC+WIbYbY39XUqmfjvytjJbBWpaTb/k="
 
-# Create Info.plist with Sparkle configuration
+# Create Info.plist BEFORE signing (must be bound to code signature)
+echo "📝 Creating Info.plist..."
 cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -150,5 +95,61 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
 </dict>
 </plist>
 EOF
+
+# Copy Sparkle.framework (check multiple possible locations)
+SPARKLE_FRAMEWORK=""
+if [ -d ".build/release/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/release/Sparkle.framework"
+elif [ -d ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+elif [ -d ".build/arm64-apple-macosx/release/Sparkle.framework" ]; then
+    SPARKLE_FRAMEWORK=".build/arm64-apple-macosx/release/Sparkle.framework"
+fi
+
+if [ -n "$SPARKLE_FRAMEWORK" ]; then
+    echo "📦 Bundling Sparkle.framework from $SPARKLE_FRAMEWORK"
+    cp -R "$SPARKLE_FRAMEWORK" "${APP_NAME}.app/Contents/Frameworks/"
+
+    # Update the framework's rpath in the binary
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
+
+    # Strip ALL existing signatures from Sparkle framework (including nested)
+    echo "🔓 Stripping Sparkle signatures..."
+    find "${APP_NAME}.app/Contents/Frameworks/Sparkle.framework" -type f \( -perm +111 -o -name "*.dylib" \) 2>/dev/null | while read binary; do
+        codesign --remove-signature "$binary" 2>/dev/null || true
+    done
+else
+    echo "⚠️ Warning: Sparkle.framework not found. Auto-updates will not work."
+fi
+
+# Optional provisioning profile for iCloud (exported from Xcode)
+# Place it as: ./Mira.mobileprovision
+if [ -f "Mira.mobileprovision" ]; then
+    echo "📦 Embedding provisioning profile"
+    cp "Mira.mobileprovision" "${APP_NAME}.app/Contents/embedded.provisionprofile"
+fi
+
+# Code signing (MUST happen AFTER Info.plist is created)
+# Set SIGNING_IDENTITY to your certificate name, or leave empty for ad-hoc
+# Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+
+echo "🔐 Signing app bundle..."
+if [ -n "$SIGNING_IDENTITY" ]; then
+    echo "   Using identity: $SIGNING_IDENTITY"
+    if [ -f "Mira.entitlements" ]; then
+        echo "   Using entitlements: Mira.entitlements"
+        codesign --force --deep --sign "$SIGNING_IDENTITY" --entitlements Mira.entitlements --options runtime "${APP_NAME}.app"
+    else
+        codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime "${APP_NAME}.app"
+    fi
+else
+    echo "   Using ad-hoc signing (set SIGNING_IDENTITY for iCloud support)"
+    if [ -f "Mira.entitlements" ]; then
+        codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+    else
+        codesign --force --deep --sign - "${APP_NAME}.app"
+    fi
+fi
 
 echo "✅ Created ${APP_NAME}.app (v${VERSION}) with Sparkle support"
