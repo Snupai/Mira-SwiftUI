@@ -174,6 +174,7 @@ struct ThemePicker: View {
 }
 
 // Document wrapper for theme export
+@MainActor
 struct ThemeDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
     

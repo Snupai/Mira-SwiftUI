@@ -329,7 +329,6 @@ struct InvoiceEditorView: View {
         template.defaultClientId = selectedClientId
         
         if usesSwiftData {
-            let sdClient = selectedClientId.flatMap { id in sdClients.first { $0.id == id } }
             let sdTemplate = SDInvoiceTemplate(from: template, defaultClient: nil)
             sdTemplate.defaultClientId = selectedClientId
             modelContext.insert(sdTemplate)
