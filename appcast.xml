@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.70</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.70</link>
-            <sparkle:version>0.2.70</sparkle:version>
-            <sparkle:shortVersionString>0.2.70</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix: Use NSOpenPanel for logo picker (more reliable than fileImporter)</h2><p class="version">Version 0.2.70</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 20:29:08 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.70/Mira-0.2.70-macOS.dmg" sparkle:version="0.2.70" sparkle:shortVersionString="0.2.70" sparkle:edSignature="RWpt9uELqqSx8qFCVuXpn9z+9neG5zqdH2netilHIImaOFmxCLmhgxkInum3S2tk4HEZc6e3Urtwecy+epYeCw==" length="9696458" type="application/octet-stream"/>
+            <title>Mira 0.2.71</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.71</link>
+            <sparkle:version>0.2.71</sparkle:version>
+            <sparkle:shortVersionString>0.2.71</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix: Add user-selected file read entitlement for sandbox</h2><p class="version">Version 0.2.71</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 20:51:58 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.71/Mira-0.2.71-macOS.dmg" sparkle:version="0.2.71" sparkle:shortVersionString="0.2.71" sparkle:edSignature="3xAdCWZ+YBsKhYZoQusd3T0OqDc+iexmk54zT/t0mfXaax9kzA3BVgfSBgxU2rquIKe6+CdLw5bY/LYydHZNDw==" length="9696695" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
