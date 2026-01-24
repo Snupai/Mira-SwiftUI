@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.54</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.54</link>
-            <sparkle:version>0.2.54</sparkle:version>
-            <sparkle:shortVersionString>0.2.54</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix app icon - use proper macOS export without white border</h2><p class="version">Version 0.2.54</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 15:46:50 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.54/Mira-0.2.54-macOS.dmg" sparkle:version="0.2.54" sparkle:shortVersionString="0.2.54" sparkle:edSignature="Z7O5eK2AlscVT2/cHevwx6WilsAJKl4FmbI3oF4cQ1MlB3oYN2Sl3WuVNuo0j2IaZj2+rdWZNZV30hfQmMcFDQ==" length="9650765" type="application/octet-stream"/>
+            <title>Mira 0.2.55</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.55</link>
+            <sparkle:version>0.2.55</sparkle:version>
+            <sparkle:shortVersionString>0.2.55</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Add mach-lookup exceptions for Sparkle XPC services in sandbox</h2><p class="version">Version 0.2.55</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 15:55:40 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.55/Mira-0.2.55-macOS.dmg" sparkle:version="0.2.55" sparkle:shortVersionString="0.2.55" sparkle:edSignature="l1oFQ01PtFQXBz7MJTDyvlhhasYJsTupbrxHrtWIobiN24ikHg1cUKpzUWGGfW40RFrK3VtLvKp/TbH0S4kNAg==" length="9650778" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
