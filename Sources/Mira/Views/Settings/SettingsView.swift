@@ -166,12 +166,7 @@ struct SettingsView: View {
     }
     
     private func checkCloudKitStatus() async {
-        do {
-            cloudKitStatus = await DataContainer.checkCloudKitStatus()
-        } catch {
-            print("⚠️ CloudKit status check error: \(error)")
-            cloudKitStatus = .couldNotDetermine
-        }
+        cloudKitStatus = await DataContainer.checkCloudKitStatus()
         isCheckingCloudKit = false
     }
 

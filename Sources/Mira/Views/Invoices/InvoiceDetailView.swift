@@ -46,101 +46,117 @@ struct InvoiceDetailView: View {
     }
     var displayTotal: Double { isVatExempt ? currentInvoice.subtotal : currentInvoice.total }
     
+    // MARK: - Body Sections (split to help compiler)
+    
+    private var headerSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(currentInvoice.invoiceNumber)
+                    .font(.system(size: 24, weight: .semibold))
+                Text(client?.name ?? "—")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(formatCurrency(displayTotal))
+                    .font(.system(size: 24, weight: .semibold))
+                StatusBadge(status: currentInvoice.status)
+            }
+        }
+    }
+    
+    private var datesSection: some View {
+        HStack(spacing: 32) {
+            DateBlock(label: "Issued", date: currentInvoice.issueDate)
+            DateBlock(label: "Due", date: currentInvoice.dueDate, isOverdue: currentInvoice.isOverdue)
+            if let paid = currentInvoice.paidAt {
+                DateBlock(label: "Paid", date: paid)
+            }
+        }
+    }
+    
+    private var lineItemsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Items")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 0) {
+                ForEach(currentInvoice.lineItems) { item in
+                    lineItemRow(item)
+                }
+            }
+            .padding(16)
+            .background(Color.primary.opacity(0.03))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+    
+    private func lineItemRow(_ item: LineItem) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(item.description)
+                    .font(.system(size: 14))
+                Spacer()
+                Text("\(formatQty(item.quantity)) × \(formatCurrency(item.unitPrice))")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                Text(formatCurrency(item.total))
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 80, alignment: .trailing)
+            }
+            .padding(.vertical, 10)
+            if item.id != currentInvoice.lineItems.last?.id {
+                Divider()
+            }
+        }
+    }
+    
+    private var totalsSection: some View {
+        HStack {
+            Spacer()
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 32) {
+                    Text("Subtotal").foregroundColor(.secondary)
+                    Text(formatCurrency(currentInvoice.subtotal))
+                }
+                .font(.system(size: 14))
+                
+                if isVatExempt {
+                    Text("VAT exempt (§19 UStG)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                } else {
+                    ForEach(currentInvoice.taxBreakdown, id: \.rate) { breakdown in
+                        HStack(spacing: 32) {
+                            Text("VAT \(Int(breakdown.rate))%").foregroundColor(.secondary)
+                            Text(formatCurrency(breakdown.amount))
+                        }
+                        .font(.system(size: 14))
+                    }
+                }
+                
+                Divider().frame(width: 180)
+                
+                HStack(spacing: 32) {
+                    Text("Total")
+                    Text(formatCurrency(displayTotal))
+                }
+                .font(.system(size: 17, weight: .semibold))
+            }
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    // Header
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(currentInvoice.invoiceNumber)
-                                .font(.system(size: 24, weight: .semibold))
-                            Text(client?.name ?? "—")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text(formatCurrency(displayTotal))
-                                .font(.system(size: 24, weight: .semibold))
-                            StatusBadge(status: currentInvoice.status)
-                        }
-                    }
-                    
+                    headerSection
                     Divider()
-                    
-                    // Dates
-                    HStack(spacing: 32) {
-                        DateBlock(label: "Issued", date: currentInvoice.issueDate)
-                        DateBlock(label: "Due", date: currentInvoice.dueDate, isOverdue: currentInvoice.isOverdue)
-                        if let paid = currentInvoice.paidAt {
-                            DateBlock(label: "Paid", date: paid)
-                        }
-                    }
-                    
-                    // Line Items
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Items")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        VStack(spacing: 0) {
-                            ForEach(currentInvoice.lineItems) { item in
-                                HStack {
-                                    Text(item.description)
-                                        .font(.system(size: 14))
-                                    Spacer()
-                                    Text("\(formatQty(item.quantity)) × \(formatCurrency(item.unitPrice))")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                    Text(formatCurrency(item.total))
-                                        .font(.system(size: 14, weight: .medium))
-                                        .frame(width: 80, alignment: .trailing)
-                                }
-                                .padding(.vertical, 10)
-                                if item.id != currentInvoice.lineItems.last?.id {
-                                    Divider()
-                                }
-                            }
-                        }
-                        .padding(16)
-                        .background(Color.primary.opacity(0.03))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    
-                    // Totals
-                    HStack {
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 8) {
-                            HStack(spacing: 32) {
-                                Text("Subtotal").foregroundColor(.secondary)
-                                Text(formatCurrency(currentInvoice.subtotal))
-                            }
-                            .font(.system(size: 14))
-                            
-                            if isVatExempt {
-                                Text("VAT exempt (§19 UStG)")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.orange)
-                            } else {
-                                ForEach(currentInvoice.taxBreakdown, id: \.rate) { b in
-                                    HStack(spacing: 32) {
-                                        Text("VAT \(Int(b.rate))%").foregroundColor(.secondary)
-                                        Text(formatCurrency(b.amount))
-                                    }
-                                    .font(.system(size: 14))
-                                }
-                            }
-                            
-                            Divider().frame(width: 180)
-                            
-                            HStack(spacing: 32) {
-                                Text("Total")
-                                Text(formatCurrency(displayTotal))
-                            }
-                            .font(.system(size: 17, weight: .semibold))
-                        }
-                    }
+                    datesSection
+                    lineItemsSection
+                    totalsSection
                     
                     // Actions
                     HStack(spacing: 12) {
@@ -220,9 +236,9 @@ struct InvoiceDetailView: View {
                         if usesSwiftData {
                             if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
                                 sdInvoice.status = .paid
-                                sdInvoice.paidDate = Date()
-                                sdInvoice.exchangeRate = rate
-                                sdInvoice.amountInBaseCurrency = baseAmount
+                                sdInvoice.paidAt = Date()
+                                sdInvoice.paidExchangeRate = rate
+                                sdInvoice.paidAmountInBaseCurrency = baseAmount
                                 sdInvoice.updatedAt = Date()
                                 try? modelContext.save()
                             }
@@ -271,7 +287,7 @@ struct InvoiceDetailView: View {
             if usesSwiftData {
                 if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
                     sdInvoice.status = .paid
-                    sdInvoice.paidDate = Date()
+                    sdInvoice.paidAt = Date()
                     sdInvoice.updatedAt = Date()
                     try? modelContext.save()
                 }
