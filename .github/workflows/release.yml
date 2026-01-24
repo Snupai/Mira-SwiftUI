@@ -61,10 +61,12 @@ jobs:
       - name: Create App Bundle
         run: ./bundle.sh
 
-      - name: Import Code Signing Certificate
+      - name: Import Code Signing Certificates
         env:
           CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          INSTALLER_CERTIFICATE_BASE64: ${{ secrets.INSTALLER_CERTIFICATE_BASE64 }}
+          INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.INSTALLER_CERTIFICATE_PASSWORD }}
         run: |
           # Create a temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
@@ -75,10 +77,8 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Decode and import certificate
+          # Import Application certificate
           echo "$CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
-
-          # Import with all applications allowed
           security import $RUNNER_TEMP/certificate.p12 \
             -P "$CERTIFICATE_PASSWORD" \
             -A \
@@ -86,19 +86,36 @@ jobs:
             -f pkcs12 \
             -k "$KEYCHAIN_PATH" \
             -T /usr/bin/codesign \
-            -T /usr/bin/security
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+
+          # Import Installer certificate if provided
+          if [ -n "$INSTALLER_CERTIFICATE_BASE64" ]; then
+            echo "📦 Importing installer certificate..."
+            INSTALLER_PASS="${INSTALLER_CERTIFICATE_PASSWORD:-$CERTIFICATE_PASSWORD}"
+            echo "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/installer.p12
+            security import $RUNNER_TEMP/installer.p12 \
+              -P "$INSTALLER_PASS" \
+              -A \
+              -t cert \
+              -f pkcs12 \
+              -k "$KEYCHAIN_PATH" \
+              -T /usr/bin/codesign \
+              -T /usr/bin/security \
+              -T /usr/bin/productbuild
+            rm -f $RUNNER_TEMP/installer.p12
+          fi
 
           # Set keychain as default and add to search list
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
           security default-keychain -s "$KEYCHAIN_PATH"
 
-          # Allow codesign to access without prompt
+          # Allow access without prompt
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           # Debug: List what's in the keychain
           echo "📋 Certificates in keychain:"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH" || echo "No codesigning identities found"
-          security find-identity -v "$KEYCHAIN_PATH" || echo "No identities found at all"
+          security find-identity -v "$KEYCHAIN_PATH"
 
           # Store for later steps
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
@@ -108,30 +125,23 @@ jobs:
         env:
           PROVISION_PROFILE_BASE64: ${{ secrets.PROVISION_PROFILE_BASE64 }}
         run: |
-          # List available identities for debugging
           echo "📋 Available signing identities:"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
-          # Try to find any valid identity
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
           if [ -z "$IDENTITY" ]; then
-            echo "⚠️ No codesigning identity found, trying all identities..."
-            IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -E "^\s+\d+\)" | head -1 | sed 's/.*"\(.*\)".*/\1/')
           fi
 
           SIGN_IDENTITY="${IDENTITY:--}"
           echo "🔐 Using identity: $SIGN_IDENTITY"
 
-          # Embed provisioning profile if provided
           if [ -n "$PROVISION_PROFILE_BASE64" ]; then
             echo "📦 Embedding provisioning profile"
             echo "$PROVISION_PROFILE_BASE64" | base64 --decode > Mira.app/Contents/embedded.provisionprofile
           fi
 
-          # === PROPER SIGNING (inside-out, no --deep, with --timestamp) ===
-          # Following Apple's guidelines: https://developer.apple.com/documentation/security/customizing-the-notarization-workflow
-          
           SIGN_FLAGS="--force --timestamp --options runtime"
           ENTITLEMENTS_ARG=""
           if [ -f "Mira.entitlements" ]; then
@@ -142,97 +152,56 @@ jobs:
             echo "⚠️ Ad-hoc signing - notarization will NOT work"
             codesign --force --deep --sign - $ENTITLEMENTS_ARG Mira.app
           else
-            echo "🔐 Signing with Developer ID (inside-out, proper method)..."
+            echo "🔐 Signing with Developer ID (inside-out)..."
             
-            # Helper function to sign a Mach-O binary
             sign_binary() {
               local binary="$1"
-              local name=$(basename "$binary")
-              echo "   → Signing binary: $name"
+              echo "   → Signing: $(basename "$binary")"
               codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$binary"
             }
             
-            # Helper function to sign a bundle
             sign_bundle() {
               local bundle="$1"
-              local name=$(basename "$bundle")
-              echo "   → Signing bundle: $name"
+              echo "   → Signing: $(basename "$bundle")"
               codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$bundle"
             }
             
-            # 1. Sign Sparkle framework components (inside-out, deepest first)
             if [ -d "Mira.app/Contents/Frameworks/Sparkle.framework" ]; then
-              echo "📦 Signing Sparkle.framework components (inside-out)..."
+              echo "📦 Signing Sparkle.framework..."
               SPARKLE="Mira.app/Contents/Frameworks/Sparkle.framework"
               
-              # 1a. Find and sign ALL Mach-O binaries first (before bundles)
-              echo "   Finding all Mach-O binaries..."
               find "$SPARKLE" -type f ! -name ".*" ! -name "*.plist" ! -name "*.strings" ! -name "*.nib" ! -name "*.png" ! -name "*.icns" ! -name "*.car" ! -name "CodeResources" ! -name "_CodeSignature" -print0 2>/dev/null | while IFS= read -r -d '' file; do
-                # Check if it's a Mach-O binary using file command
                 if file "$file" | grep -qE "Mach-O|bundle"; then
                   sign_binary "$file"
                 fi
               done
               
-              # 1b. Sign XPC services (bundles, inside-out)
-              echo "   Signing XPC services..."
               find "$SPARKLE" -name "*.xpc" -type d -print0 2>/dev/null | while IFS= read -r -d '' xpc; do
                 sign_bundle "$xpc"
               done
               
-              # 1c. Sign helper apps
-              echo "   Signing helper apps..."
               find "$SPARKLE" -name "*.app" -type d -print0 2>/dev/null | while IFS= read -r -d '' app; do
                 sign_bundle "$app"
               done
               
-              # 1d. Sign the framework bundle itself (outermost)
-              echo "   Signing Sparkle.framework bundle..."
               sign_bundle "$SPARKLE"
             fi
             
-            # 2. Sign any other frameworks in the app
-            echo "📦 Signing other frameworks..."
             find Mira.app/Contents/Frameworks -maxdepth 1 -name "*.framework" -type d ! -name "Sparkle.framework" -print0 2>/dev/null | while IFS= read -r -d '' fw; do
               sign_bundle "$fw"
             done
             
-            # 3. Sign any dylibs directly in Frameworks folder
-            echo "📦 Signing loose dylibs..."
             find Mira.app/Contents/Frameworks -maxdepth 1 -name "*.dylib" -type f -print0 2>/dev/null | while IFS= read -r -d '' dylib; do
               sign_binary "$dylib"
             done
             
-            # 4. Sign the main executable (with entitlements)
-            echo "📦 Signing main executable..."
             codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" $ENTITLEMENTS_ARG "Mira.app/Contents/MacOS/Mira"
-            
-            # 5. Sign the entire app bundle (outermost, with entitlements)
-            echo "📦 Signing app bundle..."
             codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" $ENTITLEMENTS_ARG Mira.app
           fi
           
-          # Verify the signature thoroughly
-          echo ""
           echo "📋 Verifying signature..."
           codesign --verify --deep --strict --verbose=2 Mira.app
-          
-          echo ""
-          echo "📋 Checking all binaries are properly signed..."
-          find Mira.app -type f -print0 2>/dev/null | while IFS= read -r -d '' file; do
-            if file "$file" | grep -qE "Mach-O"; then
-              if ! codesign --verify --strict "$file" 2>/dev/null; then
-                echo "   ❌ UNSIGNED: $file"
-              fi
-            fi
-          done
-          
-          echo ""
-          echo "📋 Checking entitlements..."
-          codesign -d --entitlements - Mira.app 2>/dev/null | head -20 || true
-          
-          echo ""
-          echo "✅ App signed properly (inside-out, with timestamp)"
+          echo "✅ App signed"
 
       - name: Install create-dmg
         run: brew install create-dmg
@@ -243,156 +212,93 @@ jobs:
           ./create-dmg.sh
           mv "Mira-$VERSION.dmg" "Mira-$VERSION-macOS.dmg"
 
-      - name: Create PKG
-        run: ./create-pkg.sh
+      - name: Create and Sign PKG
+        id: pkg
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          
+          # Check for installer identity
+          INSTALLER_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          
+          if [ -n "$INSTALLER_IDENTITY" ]; then
+            echo "🔐 Found installer identity: $INSTALLER_IDENTITY"
+            echo "has_installer_cert=true" >> $GITHUB_OUTPUT
+            
+            # Build signed PKG
+            pkgbuild \
+              --identifier "com.snupai.mira" \
+              --version "$VERSION" \
+              --install-location "/Applications" \
+              --component "Mira.app" \
+              --sign "$INSTALLER_IDENTITY" \
+              "Mira-component.pkg"
+            
+            productbuild \
+              --package "Mira-component.pkg" \
+              --identifier "com.snupai.mira" \
+              --version "$VERSION" \
+              --sign "$INSTALLER_IDENTITY" \
+              "Mira-Installer.pkg"
+            
+            rm -f "Mira-component.pkg"
+            echo "✅ Created signed PKG"
+          else
+            echo "⚠️ No installer certificate found - creating unsigned PKG"
+            echo "has_installer_cert=false" >> $GITHUB_OUTPUT
+            ./create-pkg.sh
+          fi
 
-      - name: Submit for Notarization (Async)
-        id: notarize
+      - name: Notarize
+        timeout-minutes: 60
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          NOTARIZATION_WEBHOOK_URL: ${{ secrets.NOTARIZATION_WEBHOOK_URL }}
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
           DMG_FILE="Mira-${VERSION}-macOS.dmg"
           PKG_FILE="Mira-Installer.pkg"
 
-          # Skip notarization if credentials not set
           if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
-            echo "⚠️ Notarization credentials not set - skipping notarization"
-            echo "   Set APPLE_ID, APPLE_APP_PASSWORD, and APPLE_TEAM_ID secrets to enable"
-            echo "dmg_submission_id=" >> $GITHUB_OUTPUT
-            echo "pkg_submission_id=" >> $GITHUB_OUTPUT
-            echo "notarization_skipped=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Notarization credentials not set - skipping"
             exit 0
           fi
 
-          # Build webhook argument if URL is set
-          WEBHOOK_ARG=""
-          if [ -n "$NOTARIZATION_WEBHOOK_URL" ]; then
-            WEBHOOK_ARG="--webhook $NOTARIZATION_WEBHOOK_URL"
-            echo "🔔 Webhook configured: notifications will be sent when complete"
-          else
-            echo "⚠️ NOTARIZATION_WEBHOOK_URL not set - no automatic promotion"
-            echo "   You'll need to manually check and promote the release"
-          fi
-
-          submit_for_notarization() {
+          notarize_and_staple() {
             local FILE="$1"
             local NAME="$2"
             
-            echo "📤 Submitting $NAME for notarization (async)..."
+            echo "📤 Submitting $NAME for notarization..."
             
-            # Submit without waiting
-            OUTPUT=$(xcrun notarytool submit "$FILE" \
+            xcrun notarytool submit "$FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_APP_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" \
-              $WEBHOOK_ARG \
-              --no-wait 2>&1)
+              --wait
             
-            echo "$OUTPUT"
-            
-            # Extract submission ID
-            SUBMISSION_ID=$(echo "$OUTPUT" | grep -o 'id: [a-f0-9-]*' | head -1 | cut -d' ' -f2)
-            
-            if [ -z "$SUBMISSION_ID" ]; then
-              echo "❌ Failed to get submission ID for $NAME"
-              return 1
-            fi
-            
-            echo "✅ $NAME submitted with ID: $SUBMISSION_ID"
-            echo "$SUBMISSION_ID"
+            echo "📎 Stapling $NAME..."
+            xcrun stapler staple "$FILE"
+            echo "✅ $NAME notarized and stapled"
           }
 
-          # Submit DMG
-          DMG_ID=$(submit_for_notarization "$DMG_FILE" "DMG")
-          if [ $? -ne 0 ]; then
-            echo "dmg_submission_id=" >> $GITHUB_OUTPUT
-          else
-            # Extract just the ID (last line of output)
-            DMG_ID=$(echo "$DMG_ID" | tail -1)
-            echo "dmg_submission_id=$DMG_ID" >> $GITHUB_OUTPUT
-          fi
+          notarize_and_staple "$DMG_FILE" "DMG"
+          notarize_and_staple "$PKG_FILE" "PKG"
 
-          # Submit PKG
-          PKG_ID=$(submit_for_notarization "$PKG_FILE" "PKG")
-          if [ $? -ne 0 ]; then
-            echo "pkg_submission_id=" >> $GITHUB_OUTPUT
-          else
-            PKG_ID=$(echo "$PKG_ID" | tail -1)
-            echo "pkg_submission_id=$PKG_ID" >> $GITHUB_OUTPUT
-          fi
-
-          echo "notarization_skipped=false" >> $GITHUB_OUTPUT
-          echo ""
-          echo "📋 Notarization submissions:"
-          echo "   DMG: $DMG_ID"
-          echo "   PKG: $PKG_ID"
-          echo ""
-          echo "⏳ Notarization is processing in the background."
-          echo "   Apple will notify via webhook when complete."
+          echo "✅ Notarization complete!"
 
       - name: Extract commit message
         id: commit
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          # Get the commit message (first line only, without the [release x.x.x] tag)
           MSG=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
           echo "message=$MSG" >> $GITHUB_OUTPUT
-          # Get full commit body for changelog
           BODY=$(echo "$COMMIT_MSG" | tail -n +2)
           echo "body<<EOF" >> $GITHUB_OUTPUT
           echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Pre-Release
-        if: steps.notarize.outputs.notarization_skipped != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.check-release.outputs.version }}
-          name: Mira v${{ needs.check-release.outputs.version }}
-          body: |
-            ## What's New
-            ${{ steps.commit.outputs.message }}
-            ${{ steps.commit.outputs.body }}
-
-            ---
-
-            ⏳ **Notarization pending** - This is a pre-release. The final notarized version will be available once Apple completes processing.
-
-            <!-- NOTARIZATION_PENDING -->
-            **Notarization Status:** Processing...
-            - DMG Submission ID: `${{ steps.notarize.outputs.dmg_submission_id }}`
-            - PKG Submission ID: `${{ steps.notarize.outputs.pkg_submission_id }}`
-            
-            The release will be automatically promoted once notarization completes.
-            <!-- /NOTARIZATION_PENDING -->
-
-            ---
-
-            ### Installation (after notarization completes)
-            **Preferred:** `Mira-Installer.pkg` (updates existing installs)
-            1. Download `Mira-Installer.pkg`
-            2. Run the installer
-            3. Launch Mira from Applications
-
-            **Alternative:** `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
-            1. Open the DMG and drag Mira to Applications
-            2. Launch Mira from Applications
-
-            **Requirements:** macOS 14.0 (Sonoma) or later
-          files: |
-            Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
-            Mira-Installer.pkg
-          generate_release_notes: true
-          draft: false
-          prerelease: true
-
-      - name: Create Release (No Notarization)
-        if: steps.notarize.outputs.notarization_skipped == 'true'
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-release.outputs.version }}
@@ -415,8 +321,8 @@ jobs:
             2. Launch Mira from Applications
 
             **Requirements:** macOS 14.0 (Sonoma) or later
-            
-            ⚠️ **Note:** This release is not notarized. You may see a Gatekeeper warning on first launch.
+
+            ✅ **This release is signed and notarized by Apple** - no Gatekeeper warnings!
           files: |
             Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
             Mira-Installer.pkg
@@ -431,7 +337,6 @@ jobs:
           VERSION="${{ needs.check-release.outputs.version }}"
           DMG_FILE="Mira-${VERSION}-macOS.dmg"
 
-          # Find the sign_update tool
           SIGN_TOOL=""
           if [ -f ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
             SIGN_TOOL=".build/artifacts/sparkle/Sparkle/bin/sign_update"
@@ -444,25 +349,20 @@ jobs:
             exit 1
           fi
 
-          # Sign the DMG using the EdDSA private key
           if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
             echo "🔐 Signing DMG with EdDSA key..."
             SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" | grep "sparkle:edSignature" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
-
             if [ -z "$SIGNATURE" ]; then
-              # Alternative: sign_update might just output the signature
               SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" 2>&1 | tr -d '\n')
             fi
-
             echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
             echo "✅ DMG signed: ${SIGNATURE:0:20}..."
           else
-            echo "⚠️ SPARKLE_PRIVATE_KEY not set - appcast will not have signature"
+            echo "⚠️ SPARKLE_PRIVATE_KEY not set"
             echo "SPARKLE_SIGNATURE=" >> $GITHUB_ENV
           fi
 
-      - name: Update Appcast (Pre-release note)
-        if: steps.notarize.outputs.notarization_skipped != 'true'
+      - name: Update Appcast
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -474,9 +374,9 @@ jobs:
 
           COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
 
-          # Note: This appcast is for the pre-release. It will be updated by promote-release.yml
-          # when notarization completes.
-          RELEASE_NOTES="<h2>${COMMIT_TITLE}</h2><p><strong>Note:</strong> Notarization pending. Auto-update will use this version once verified.</p>"
+          RELEASE_NOTES="<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style>"
+          RELEASE_NOTES="${RELEASE_NOTES}<h2>🎉 ${COMMIT_TITLE}</h2>"
+          RELEASE_NOTES="${RELEASE_NOTES}<p class=\"version\">Version ${VERSION}</p>"
 
           ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
           if [ -n "$SIGNATURE" ]; then
@@ -484,76 +384,36 @@ jobs:
           fi
           ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
 
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
-          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
-          printf '%s\n' '    <channel>' >> appcast.xml
-          printf '%s\n' '        <title>Mira Updates</title>' >> appcast.xml
-          printf '%s\n' '        <link>https://github.com/Snupai/Mira-SwiftUI</link>' >> appcast.xml
-          printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
-          printf '%s\n' '        <language>en</language>' >> appcast.xml
-          printf '%s\n' '        <item>' >> appcast.xml
-          printf '%s\n' "            <title>Mira ${VERSION}</title>" >> appcast.xml
-          printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
-          printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
-          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
-          printf '%s\n' "            <description><![CDATA[${RELEASE_NOTES}]]></description>" >> appcast.xml
-          printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
-          printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
-          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
-          printf '%s\n' '        </item>' >> appcast.xml
-          printf '%s\n' '    </channel>' >> appcast.xml
-          printf '%s\n' '</rss>' >> appcast.xml
+          cat > appcast.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Mira Updates</title>
+        <link>https://github.com/Snupai/Mira-SwiftUI</link>
+        <description>Updates for Mira Invoice App</description>
+        <language>en</language>
+        <item>
+            <title>Mira ${VERSION}</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>
+            <sparkle:version>${VERSION}</sparkle:version>
+            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+            <description><![CDATA[${RELEASE_NOTES}]]></description>
+            <pubDate>${PUB_DATE}</pubDate>
+            <enclosure ${ENCLOSURE_ATTRS}/>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+        </item>
+    </channel>
+</rss>
+EOF
 
-          echo "✅ Generated appcast.xml for version ${VERSION} (pre-release)"
-
-      - name: Update Appcast (No Notarization)
-        if: steps.notarize.outputs.notarization_skipped == 'true'
-        env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          VERSION="${{ needs.check-release.outputs.version }}"
-          DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
-          DMG_SIZE=$(stat -f%z "Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
-          PUB_DATE=$(date -R)
-          SIGNATURE="${SPARKLE_SIGNATURE:-}"
-
-          COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
-          RELEASE_NOTES="<h2>${COMMIT_TITLE}</h2><p>Version ${VERSION}</p>"
-
-          ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
-          if [ -n "$SIGNATURE" ]; then
-            ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
-          fi
-          ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
-
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
-          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
-          printf '%s\n' '    <channel>' >> appcast.xml
-          printf '%s\n' '        <title>Mira Updates</title>' >> appcast.xml
-          printf '%s\n' '        <link>https://github.com/Snupai/Mira-SwiftUI</link>' >> appcast.xml
-          printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
-          printf '%s\n' '        <language>en</language>' >> appcast.xml
-          printf '%s\n' '        <item>' >> appcast.xml
-          printf '%s\n' "            <title>Mira ${VERSION}</title>" >> appcast.xml
-          printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
-          printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
-          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
-          printf '%s\n' "            <description><![CDATA[${RELEASE_NOTES}]]></description>" >> appcast.xml
-          printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
-          printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
-          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
-          printf '%s\n' '        </item>' >> appcast.xml
-          printf '%s\n' '    </channel>' >> appcast.xml
-          printf '%s\n' '</rss>' >> appcast.xml
-
-          echo "✅ Generated appcast.xml for version ${VERSION}"
+          echo "✅ Generated appcast.xml"
 
       - name: Commit Appcast
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add appcast.xml
-          git commit -m "chore: update appcast for v${{ needs.check-release.outputs.version }}" || echo "No changes to commit"
+          git commit -m "chore: update appcast for v${{ needs.check-release.outputs.version }}" || echo "No changes"
           git push || echo "Nothing to push"
 
       - name: Cleanup Keychain
@@ -563,25 +423,3 @@ jobs:
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
           rm -f $RUNNER_TEMP/certificate.p12 || true
-
-      - name: Summary
-        run: |
-          VERSION="${{ needs.check-release.outputs.version }}"
-          echo ""
-          echo "============================================"
-          echo "📦 Release v${VERSION} created!"
-          echo "============================================"
-          echo ""
-          if [ "${{ steps.notarize.outputs.notarization_skipped }}" == "true" ]; then
-            echo "ℹ️ Notarization was skipped (credentials not set)"
-            echo "🔗 https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}"
-          else
-            echo "⏳ Notarization is processing..."
-            echo "   DMG: ${{ steps.notarize.outputs.dmg_submission_id }}"
-            echo "   PKG: ${{ steps.notarize.outputs.pkg_submission_id }}"
-            echo ""
-            echo "📋 The release is currently a PRE-RELEASE."
-            echo "   It will be automatically promoted once Apple completes notarization."
-            echo ""
-            echo "🔗 https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}"
-          fi
