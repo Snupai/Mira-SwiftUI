@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.51</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.51</link>
-            <sparkle:version>0.2.51</sparkle:version>
-            <sparkle:shortVersionString>0.2.51</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Only show update popup when new version is found (silent background check on startup)</h2><p class="version">Version 0.2.51</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 14:51:51 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.51/Mira-0.2.51-macOS.dmg" sparkle:version="0.2.51" sparkle:shortVersionString="0.2.51" sparkle:edSignature="iyh+BK0PDHOg2xUZZNSDJ/Ie0Cv9QbwF+afDu06Lub+dCjXAfS6TYSpebzS6QuKR7LTdH1PtQKSYzGST23sEAA==" length="5255784" type="application/octet-stream"/>
+            <title>Mira 0.2.52</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.52</link>
+            <sparkle:version>0.2.52</sparkle:version>
+            <sparkle:shortVersionString>0.2.52</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 New app icon from Apple Icon Creator</h2><p class="version">Version 0.2.52</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 15:09:29 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.52/Mira-0.2.52-macOS.dmg" sparkle:version="0.2.52" sparkle:shortVersionString="0.2.52" sparkle:edSignature="sgFllZthqoMHIJ0rMpH+BCHje5JNfZSiugCCIy9Z1MBYngwIBEmcghpV77fwjwaxZa4P/10kV5mQuPJa9O4lCQ==" length="18663077" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
