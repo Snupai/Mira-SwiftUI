@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.68</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.68</link>
-            <sparkle:version>0.2.68</sparkle:version>
-            <sparkle:shortVersionString>0.2.68</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix build errors</h2><p class="version">Version 0.2.68</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 18:32:31 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.68/Mira-0.2.68-macOS.dmg" sparkle:version="0.2.68" sparkle:shortVersionString="0.2.68" sparkle:edSignature="M+E177dgxzCNDYcdUf+/pDKszP2nlSI2kyndpwL3J7dGQzVekAzflJ8I2O+gWrrgBHCyCyStsHGq4gsZVruwAQ==" length="9682230" type="application/octet-stream"/>
+            <title>Mira 0.2.69</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.69</link>
+            <sparkle:version>0.2.69</sparkle:version>
+            <sparkle:shortVersionString>0.2.69</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix: Optional email, invoice delete, SwiftData settings sync, logo picker</h2><p class="version">Version 0.2.69</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 20:22:04 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.69/Mira-0.2.69-macOS.dmg" sparkle:version="0.2.69" sparkle:shortVersionString="0.2.69" sparkle:edSignature="sVmoesSNwsC6mB4DLC/WYLNuN943EcF0Dhd0qkI/otmjJ3FL+TM1UNEzF/pNb76MI1dHGmDvzrME8As3Dc2BDw==" length="9697052" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
