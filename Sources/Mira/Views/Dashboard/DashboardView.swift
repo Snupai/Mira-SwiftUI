@@ -13,9 +13,9 @@ struct DashboardView: View {
     
     @State private var showingNewInvoice = false
     
-    // Use SwiftData if migrated
+    // Use SwiftData if migrated or no legacy data exists
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed
+        MigrationService.shared.useSwiftData
     }
     
     private var allInvoices: [Invoice] {

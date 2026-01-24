@@ -14,9 +14,9 @@ struct ClientListView: View {
     @State private var showingNewClient = false
     @State private var selectedClient: Client?
     
-    // Use SwiftData if migrated, fallback to legacy
+    // Use SwiftData if migrated or no legacy data exists
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed
+        MigrationService.shared.useSwiftData
     }
     
     private var allClients: [Client] {
@@ -192,7 +192,7 @@ struct ClientEditorView: View {
     let isEditing: Bool
     
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed
+        MigrationService.shared.useSwiftData
     }
     
     init(client: Client?) {

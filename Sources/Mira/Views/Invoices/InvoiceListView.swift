@@ -26,9 +26,9 @@ struct InvoiceListView: View {
         case client = "Client"
     }
     
-    // Use SwiftData if migrated, fallback to legacy
+    // Use SwiftData if migrated or no legacy data exists
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed && !sdInvoices.isEmpty
+        MigrationService.shared.useSwiftData
     }
     
     var isVatExempt: Bool { 

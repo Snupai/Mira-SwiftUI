@@ -44,6 +44,11 @@ final class MigrationService {
         return profileExists && migrationStatus != .completed
     }
     
+    /// Whether to use SwiftData (migration completed OR no legacy data exists)
+    var useSwiftData: Bool {
+        migrationStatus == .completed || !needsMigration
+    }
+    
     // MARK: - Backup
     
     /// Backup all JSON files before migration

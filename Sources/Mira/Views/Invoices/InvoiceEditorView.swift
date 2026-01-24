@@ -21,7 +21,7 @@ struct InvoiceEditorView: View {
     let isEditing: Bool
     
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed
+        MigrationService.shared.useSwiftData
     }
     
     init(invoice: Invoice?) {

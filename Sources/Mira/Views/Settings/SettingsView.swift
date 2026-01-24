@@ -156,8 +156,9 @@ struct SettingsView: View {
     }
     
     private var storageStatusText: String {
-        if MigrationService.shared.migrationStatus == .completed {
-            let profileCount = (try? sdProfiles.count) ?? 0
+        // Show SwiftData status if migration completed OR no legacy data exists
+        if MigrationService.shared.useSwiftData {
+            let profileCount = sdProfiles.count
             let syncStatus = cloudKitStatus == .available ? "CloudKit enabled" : "Local storage"
             return "SwiftData • \(profileCount > 0 ? "Profile loaded" : "No profile") • \(syncStatus)"
         }
@@ -469,7 +470,7 @@ struct SettingsView: View {
     // MARK: - Helper
     
     private var usesSwiftData: Bool {
-        MigrationService.shared.migrationStatus == .completed
+        MigrationService.shared.useSwiftData
     }
     
     func binding<T>(_ keyPath: WritableKeyPath<CompanyProfile, T>) -> Binding<T> where T: Equatable {
