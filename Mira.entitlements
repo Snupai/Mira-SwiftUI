@@ -20,5 +20,10 @@
 	<array>
 		<string>NDVF8F4X96.com.snupai.mira</string>
 	</array>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.snupai.mira-spks</string>
+		<string>com.snupai.mira-spki</string>
+	</array>
 </dict>
 </plist>
