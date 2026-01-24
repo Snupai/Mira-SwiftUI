@@ -164,10 +164,8 @@ struct SettingsView: View {
     }
     
     private func checkCloudKitStatus() async {
+        cloudKitStatus = await DataContainer.checkCloudKitStatus()
         isCheckingCloudKit = false
-        // Skip CloudKit check for now - requires entitlements that don't work with ad-hoc signing
-        // cloudKitStatus = await DataContainer.checkCloudKitStatus()
-        cloudKitStatus = .couldNotDetermine
     }
 
     // MARK: - Appearance Section
