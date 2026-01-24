@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.50</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.50</link>
-            <sparkle:version>0.2.50</sparkle:version>
-            <sparkle:shortVersionString>0.2.50</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix aps-environment entitlement mismatch (development → production)</h2><p class="version">Version 0.2.50</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 14:44:48 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.50/Mira-0.2.50-macOS.dmg" sparkle:version="0.2.50" sparkle:shortVersionString="0.2.50" sparkle:edSignature="X6xUlJQ8RdUPnGlOXtOnmX5P6nb7irgolByyJ5hUWabDriAtSp3+MkhH4HUuuXh8KJCFdqVCXZLQBiq1QHWDDQ==" length="5255879" type="application/octet-stream"/>
+            <title>Mira 0.2.51</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.51</link>
+            <sparkle:version>0.2.51</sparkle:version>
+            <sparkle:shortVersionString>0.2.51</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Only show update popup when new version is found (silent background check on startup)</h2><p class="version">Version 0.2.51</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 14:51:51 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.51/Mira-0.2.51-macOS.dmg" sparkle:version="0.2.51" sparkle:shortVersionString="0.2.51" sparkle:edSignature="iyh+BK0PDHOg2xUZZNSDJ/Ie0Cv9QbwF+afDu06Lub+dCjXAfS6TYSpebzS6QuKR7LTdH1PtQKSYzGST23sEAA==" length="5255784" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
