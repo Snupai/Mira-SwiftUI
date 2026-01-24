@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.62</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.62</link>
-            <sparkle:version>0.2.62</sparkle:version>
-            <sparkle:shortVersionString>0.2.62</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Better CloudKit status detection</h2><p class="version">Version 0.2.62</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 16:52:39 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.62/Mira-0.2.62-macOS.dmg" sparkle:version="0.2.62" sparkle:shortVersionString="0.2.62" sparkle:edSignature="eL4jSooz1hPYKGNLhs6/OcGN4m2NgfyOEsCNSSjkdf+cmkVY+aQS8AKXOVa4pK4j4hl8Tiurg4GeJh2pagYqBg==" length="9652689" type="application/octet-stream"/>
+            <title>Mira 0.2.63</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.63</link>
+            <sparkle:version>0.2.63</sparkle:version>
+            <sparkle:shortVersionString>0.2.63</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Add missing CloudKit entitlements</h2><p class="version">Version 0.2.63</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 17:01:35 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.63/Mira-0.2.63-macOS.dmg" sparkle:version="0.2.63" sparkle:shortVersionString="0.2.63" sparkle:edSignature="vsJDKOSeRej/NVz4QYPLjL+UCIeZkrbjuf4H0clxYTQS9fX9y67QWyl6brTPKoBu7130w/OVV8cXJJRXGUtsBg==" length="9653020" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
