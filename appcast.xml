@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.58</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.58</link>
-            <sparkle:version>0.2.58</sparkle:version>
-            <sparkle:shortVersionString>0.2.58</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Test Sparkle update from 0.2.57 with all sandbox fixes</h2><p class="version">Version 0.2.58</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 16:09:14 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.58/Mira-0.2.58-macOS.dmg" sparkle:version="0.2.58" sparkle:shortVersionString="0.2.58" sparkle:edSignature="/dMBRGeXSyTwabUK+0+GkxaDhUj6sLPDKTeMTNi+e+HVqXrUwMalMPX/bKLhZEHbKHFs2QIpffSaDr+ehYJoAA==" length="9650884" type="application/octet-stream"/>
+            <title>Mira 0.2.59</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.59</link>
+            <sparkle:version>0.2.59</sparkle:version>
+            <sparkle:shortVersionString>0.2.59</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix iCloud sync status detection</h2><p class="version">Version 0.2.59</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 16:31:44 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.59/Mira-0.2.59-macOS.dmg" sparkle:version="0.2.59" sparkle:shortVersionString="0.2.59" sparkle:edSignature="fbmBJ1EL18qwjFi63d0R+Oy/8D2+KsXZDZ/UmzRMmf7pCJGKu4T2HVVK51puTDldZ+QF97vl4S2/0oTWZHN2Dw==" length="9651627" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
