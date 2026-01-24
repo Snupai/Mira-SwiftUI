@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
@@ -7,6 +8,10 @@ import AppKit
 struct InvoiceDetailView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var sdInvoices: [SDInvoice]
+    @Query private var sdClients: [SDClient]
+    @Query private var sdProfiles: [SDCompanyProfile]
     
     let invoice: Invoice
     @State private var showingEdit = false
@@ -15,9 +20,30 @@ struct InvoiceDetailView: View {
     @State private var showingExchangeRateDialog = false
     @State private var exchangeRateInput: String = ""
     
-    var client: Client? { appState.clients.first { $0.id == invoice.clientId } }
-    var currentInvoice: Invoice { appState.invoices.first { $0.id == invoice.id } ?? invoice }
-    var isVatExempt: Bool { appState.companyProfile?.isVatExempt ?? false }
+    private var usesSwiftData: Bool {
+        MigrationService.shared.useSwiftData
+    }
+    
+    var client: Client? {
+        if usesSwiftData {
+            return sdClients.first { $0.id == invoice.clientId }?.toLegacy()
+        }
+        return appState.clients.first { $0.id == invoice.clientId }
+    }
+    
+    var currentInvoice: Invoice {
+        if usesSwiftData {
+            return sdInvoices.first { $0.id == invoice.id }?.toLegacy() ?? invoice
+        }
+        return appState.invoices.first { $0.id == invoice.id } ?? invoice
+    }
+    
+    var isVatExempt: Bool {
+        if usesSwiftData {
+            return sdProfiles.first?.isVatExempt ?? false
+        }
+        return appState.companyProfile?.isVatExempt ?? false
+    }
     var displayTotal: Double { isVatExempt ? currentInvoice.subtotal : currentInvoice.total }
     
     var body: some View {
@@ -186,12 +212,25 @@ struct InvoiceDetailView: View {
             .sheet(isPresented: $showingExchangeRateDialog) {
                 ExchangeRateDialog(
                     invoice: currentInvoice,
-                    baseCurrency: appState.companyProfile?.defaultCurrency ?? .eur,
+                    baseCurrency: usesSwiftData
+                        ? (sdProfiles.first?.defaultCurrency ?? .eur)
+                        : (appState.companyProfile?.defaultCurrency ?? .eur),
                     exchangeRateInput: $exchangeRateInput,
                     onConfirm: { rate, baseAmount in
-                        if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                            appState.invoices[i].markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount)
-                            appState.saveInvoices()
+                        if usesSwiftData {
+                            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
+                                sdInvoice.status = .paid
+                                sdInvoice.paidDate = Date()
+                                sdInvoice.exchangeRate = rate
+                                sdInvoice.amountInBaseCurrency = baseAmount
+                                sdInvoice.updatedAt = Date()
+                                try? modelContext.save()
+                            }
+                        } else {
+                            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                                appState.invoices[i].markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount)
+                                appState.saveInvoices()
+                            }
                         }
                         showingExchangeRateDialog = false
                     },
@@ -204,14 +243,24 @@ struct InvoiceDetailView: View {
     }
     
     func markAsSent() {
-        if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-            appState.invoices[i].markAsSent()
-            appState.saveInvoices()
+        if usesSwiftData {
+            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
+                sdInvoice.status = .sent
+                sdInvoice.updatedAt = Date()
+                try? modelContext.save()
+            }
+        } else {
+            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                appState.invoices[i].markAsSent()
+                appState.saveInvoices()
+            }
         }
     }
     
     func markAsPaid() {
-        let baseCurrency = appState.companyProfile?.defaultCurrency ?? .eur
+        let baseCurrency = usesSwiftData
+            ? (sdProfiles.first?.defaultCurrency ?? .eur)
+            : (appState.companyProfile?.defaultCurrency ?? .eur)
         
         // If currencies differ, show exchange rate dialog
         if currentInvoice.currency != baseCurrency {
@@ -219,9 +268,18 @@ struct InvoiceDetailView: View {
             showingExchangeRateDialog = true
         } else {
             // Same currency, no conversion needed
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices[i].markAsPaid()
-                appState.saveInvoices()
+            if usesSwiftData {
+                if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
+                    sdInvoice.status = .paid
+                    sdInvoice.paidDate = Date()
+                    sdInvoice.updatedAt = Date()
+                    try? modelContext.save()
+                }
+            } else {
+                if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                    appState.invoices[i].markAsPaid()
+                    appState.saveInvoices()
+                }
             }
         }
     }

@@ -473,9 +473,22 @@ struct ClientPickerView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var colors
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \SDClient.name) private var sdClients: [SDClient]
     @Binding var selectedClientId: UUID?
     @State private var showingNewClient = false
     @State private var newClient = Client()
+    
+    private var usesSwiftData: Bool {
+        MigrationService.shared.useSwiftData
+    }
+    
+    private var allClients: [Client] {
+        if usesSwiftData {
+            return sdClients.map { $0.toLegacy() }
+        }
+        return appState.clients
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -522,7 +535,7 @@ struct ClientPickerView: View {
             // Client list
             ScrollView {
                 VStack(spacing: 8) {
-                    if appState.clients.isEmpty {
+                    if allClients.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "person.2.slash")
                                 .font(.system(size: 32))
@@ -530,13 +543,13 @@ struct ClientPickerView: View {
                             Text("No clients yet")
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(colors.text)
-                            Text("Add a client first from the Clients tab")
+                            Text("Create a new client using the button above")
                                 .font(.system(size: 13))
                                 .foregroundColor(colors.subtext)
                         }
                         .padding(.top, 60)
                     } else {
-                        ForEach(appState.clients) { client in
+                        ForEach(allClients) { client in
                             Button(action: {
                                 selectedClientId = client.id
                                 dismiss()
@@ -574,8 +587,16 @@ struct ClientPickerView: View {
         .background(colors.base)
         .sheet(isPresented: $showingNewClient) {
             QuickClientEditorView(client: $newClient) { savedClient in
-                appState.clients.append(savedClient)
-                appState.saveClients()
+                if usesSwiftData {
+                    // Save to SwiftData
+                    let sdClient = SDClient(from: savedClient)
+                    modelContext.insert(sdClient)
+                    try? modelContext.save()
+                } else {
+                    // Legacy save
+                    appState.clients.append(savedClient)
+                    appState.saveClients()
+                }
                 selectedClientId = savedClient.id
                 showingNewClient = false
                 dismiss()
