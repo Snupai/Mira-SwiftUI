@@ -37,14 +37,14 @@ struct InvoiceEditorView: View {
     }
     
     private var allClients: [Client] {
-        if usesSwiftData && !sdClients.isEmpty {
+        if usesSwiftData {
             return sdClients.map { $0.toLegacy() }
         }
         return appState.clients
     }
     
     private var allTemplates: [InvoiceTemplate] {
-        if usesSwiftData && !sdTemplates.isEmpty {
+        if usesSwiftData {
             return sdTemplates.map { $0.toLegacy() }
         }
         return appState.templates

@@ -19,14 +19,14 @@ struct DashboardView: View {
     }
     
     private var allInvoices: [Invoice] {
-        if usesSwiftData && !sdInvoices.isEmpty {
+        if usesSwiftData {
             return sdInvoices.map { $0.toLegacy() }
         }
         return appState.invoices
     }
     
     private var allClients: [Client] {
-        if usesSwiftData && !sdClients.isEmpty {
+        if usesSwiftData {
             return sdClients.map { $0.toLegacy() }
         }
         return appState.clients
