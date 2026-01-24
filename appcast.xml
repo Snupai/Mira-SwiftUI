@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.69</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.69</link>
-            <sparkle:version>0.2.69</sparkle:version>
-            <sparkle:shortVersionString>0.2.69</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix: Optional email, invoice delete, SwiftData settings sync, logo picker</h2><p class="version">Version 0.2.69</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 20:22:04 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.69/Mira-0.2.69-macOS.dmg" sparkle:version="0.2.69" sparkle:shortVersionString="0.2.69" sparkle:edSignature="sVmoesSNwsC6mB4DLC/WYLNuN943EcF0Dhd0qkI/otmjJ3FL+TM1UNEzF/pNb76MI1dHGmDvzrME8As3Dc2BDw==" length="9697052" type="application/octet-stream"/>
+            <title>Mira 0.2.70</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.70</link>
+            <sparkle:version>0.2.70</sparkle:version>
+            <sparkle:shortVersionString>0.2.70</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix: Use NSOpenPanel for logo picker (more reliable than fileImporter)</h2><p class="version">Version 0.2.70</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 20:29:08 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.70/Mira-0.2.70-macOS.dmg" sparkle:version="0.2.70" sparkle:shortVersionString="0.2.70" sparkle:edSignature="RWpt9uELqqSx8qFCVuXpn9z+9neG5zqdH2netilHIImaOFmxCLmhgxkInum3S2tk4HEZc6e3Urtwecy+epYeCw==" length="9696458" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
