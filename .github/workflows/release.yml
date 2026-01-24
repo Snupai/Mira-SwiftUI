@@ -246,12 +246,13 @@ jobs:
       - name: Create PKG
         run: ./create-pkg.sh
 
-      - name: Notarize App
-        timeout-minutes: 30
+      - name: Submit for Notarization (Async)
+        id: notarize
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZATION_WEBHOOK_URL: ${{ secrets.NOTARIZATION_WEBHOOK_URL }}
         run: |
           VERSION="${{ needs.check-release.outputs.version }}"
           DMG_FILE="Mira-${VERSION}-macOS.dmg"
@@ -261,71 +262,77 @@ jobs:
           if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
             echo "⚠️ Notarization credentials not set - skipping notarization"
             echo "   Set APPLE_ID, APPLE_APP_PASSWORD, and APPLE_TEAM_ID secrets to enable"
+            echo "dmg_submission_id=" >> $GITHUB_OUTPUT
+            echo "pkg_submission_id=" >> $GITHUB_OUTPUT
+            echo "notarization_skipped=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          notarize_file() {
+          # Build webhook argument if URL is set
+          WEBHOOK_ARG=""
+          if [ -n "$NOTARIZATION_WEBHOOK_URL" ]; then
+            WEBHOOK_ARG="--webhook $NOTARIZATION_WEBHOOK_URL"
+            echo "🔔 Webhook configured: notifications will be sent when complete"
+          else
+            echo "⚠️ NOTARIZATION_WEBHOOK_URL not set - no automatic promotion"
+            echo "   You'll need to manually check and promote the release"
+          fi
+
+          submit_for_notarization() {
             local FILE="$1"
             local NAME="$2"
             
-            echo "📤 Submitting $NAME for notarization..."
+            echo "📤 Submitting $NAME for notarization (async)..."
             
-            # Submit and capture output
-            if ! xcrun notarytool submit "$FILE" \
+            # Submit without waiting
+            OUTPUT=$(xcrun notarytool submit "$FILE" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_APP_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" \
-              --wait 2>&1 | tee notarize-output.txt; then
-              
-              echo "❌ Notarization command failed for $NAME"
-              
-              # Try to extract submission ID and get log
-              SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]*' notarize-output.txt | head -1 | cut -d' ' -f2)
-              if [ -n "$SUBMISSION_ID" ]; then
-                echo "📋 Fetching detailed log for $SUBMISSION_ID..."
-                xcrun notarytool log "$SUBMISSION_ID" \
-                  --apple-id "$APPLE_ID" \
-                  --password "$APPLE_APP_PASSWORD" \
-                  --team-id "$APPLE_TEAM_ID" || true
-              fi
+              $WEBHOOK_ARG \
+              --no-wait 2>&1)
+            
+            echo "$OUTPUT"
+            
+            # Extract submission ID
+            SUBMISSION_ID=$(echo "$OUTPUT" | grep -o 'id: [a-f0-9-]*' | head -1 | cut -d' ' -f2)
+            
+            if [ -z "$SUBMISSION_ID" ]; then
+              echo "❌ Failed to get submission ID for $NAME"
               return 1
             fi
             
-            # Check if status is Invalid
-            if grep -q "status: Invalid" notarize-output.txt; then
-              echo "❌ Notarization rejected for $NAME"
-              SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]*' notarize-output.txt | head -1 | cut -d' ' -f2)
-              if [ -n "$SUBMISSION_ID" ]; then
-                echo "📋 Fetching rejection log..."
-                xcrun notarytool log "$SUBMISSION_ID" \
-                  --apple-id "$APPLE_ID" \
-                  --password "$APPLE_APP_PASSWORD" \
-                  --team-id "$APPLE_TEAM_ID" || true
-              fi
-              return 1
-            fi
-            
-            echo "✅ $NAME notarized successfully!"
-            return 0
+            echo "✅ $NAME submitted with ID: $SUBMISSION_ID"
+            echo "$SUBMISSION_ID"
           }
 
-          # Notarize DMG
-          if ! notarize_file "$DMG_FILE" "DMG"; then
-            exit 1
+          # Submit DMG
+          DMG_ID=$(submit_for_notarization "$DMG_FILE" "DMG")
+          if [ $? -ne 0 ]; then
+            echo "dmg_submission_id=" >> $GITHUB_OUTPUT
+          else
+            # Extract just the ID (last line of output)
+            DMG_ID=$(echo "$DMG_ID" | tail -1)
+            echo "dmg_submission_id=$DMG_ID" >> $GITHUB_OUTPUT
           fi
 
-          # Notarize PKG  
-          if ! notarize_file "$PKG_FILE" "PKG"; then
-            exit 1
+          # Submit PKG
+          PKG_ID=$(submit_for_notarization "$PKG_FILE" "PKG")
+          if [ $? -ne 0 ]; then
+            echo "pkg_submission_id=" >> $GITHUB_OUTPUT
+          else
+            PKG_ID=$(echo "$PKG_ID" | tail -1)
+            echo "pkg_submission_id=$PKG_ID" >> $GITHUB_OUTPUT
           fi
 
-          echo "📎 Stapling notarization ticket to DMG..."
-          xcrun stapler staple "$DMG_FILE"
-
-          echo "📎 Stapling notarization ticket to PKG..."
-          xcrun stapler staple "$PKG_FILE"
-
-          echo "✅ Notarization complete!"
+          echo "notarization_skipped=false" >> $GITHUB_OUTPUT
+          echo ""
+          echo "📋 Notarization submissions:"
+          echo "   DMG: $DMG_ID"
+          echo "   PKG: $PKG_ID"
+          echo ""
+          echo "⏳ Notarization is processing in the background."
+          echo "   Apple will notify via webhook when complete."
 
       - name: Extract commit message
         id: commit
@@ -341,7 +348,51 @@ jobs:
           echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Release
+      - name: Create Pre-Release
+        if: steps.notarize.outputs.notarization_skipped != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-release.outputs.version }}
+          name: Mira v${{ needs.check-release.outputs.version }}
+          body: |
+            ## What's New
+            ${{ steps.commit.outputs.message }}
+            ${{ steps.commit.outputs.body }}
+
+            ---
+
+            ⏳ **Notarization pending** - This is a pre-release. The final notarized version will be available once Apple completes processing.
+
+            <!-- NOTARIZATION_PENDING -->
+            **Notarization Status:** Processing...
+            - DMG Submission ID: `${{ steps.notarize.outputs.dmg_submission_id }}`
+            - PKG Submission ID: `${{ steps.notarize.outputs.pkg_submission_id }}`
+            
+            The release will be automatically promoted once notarization completes.
+            <!-- /NOTARIZATION_PENDING -->
+
+            ---
+
+            ### Installation (after notarization completes)
+            **Preferred:** `Mira-Installer.pkg` (updates existing installs)
+            1. Download `Mira-Installer.pkg`
+            2. Run the installer
+            3. Launch Mira from Applications
+
+            **Alternative:** `Mira-${{ needs.check-release.outputs.version }}-macOS.dmg`
+            1. Open the DMG and drag Mira to Applications
+            2. Launch Mira from Applications
+
+            **Requirements:** macOS 14.0 (Sonoma) or later
+          files: |
+            Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
+            Mira-Installer.pkg
+          generate_release_notes: true
+          draft: false
+          prerelease: true
+
+      - name: Create Release (No Notarization)
+        if: steps.notarize.outputs.notarization_skipped == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-release.outputs.version }}
@@ -364,8 +415,8 @@ jobs:
             2. Launch Mira from Applications
 
             **Requirements:** macOS 14.0 (Sonoma) or later
-
-            ✅ **This release is signed and notarized by Apple** - no Gatekeeper warnings!
+            
+            ⚠️ **Note:** This release is not notarized. You may see a Gatekeeper warning on first launch.
           files: |
             Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
             Mira-Installer.pkg
@@ -410,7 +461,8 @@ jobs:
             echo "SPARKLE_SIGNATURE=" >> $GITHUB_ENV
           fi
 
-      - name: Update Appcast
+      - name: Update Appcast (Pre-release note)
+        if: steps.notarize.outputs.notarization_skipped != 'true'
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -420,41 +472,60 @@ jobs:
           PUB_DATE=$(date -R)
           SIGNATURE="${SPARKLE_SIGNATURE:-}"
 
-          # Get commit message - title and body
           COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
-          COMMIT_BODY=$(echo "$COMMIT_MSG" | tail -n +3)
 
-          # Build release notes HTML
-          RELEASE_NOTES="<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;color:#333}h2{font-size:16px;margin:0 0 12px 0;color:#1a1a1a}h3{font-size:14px;margin:16px 0 8px 0;color:#444}ul{margin:8px 0;padding-left:20px}li{margin:4px 0}p{margin:8px 0}.version{color:#666;font-size:12px}</style>"
-          RELEASE_NOTES="${RELEASE_NOTES}<h2>🎉 ${COMMIT_TITLE}</h2>"
+          # Note: This appcast is for the pre-release. It will be updated by promote-release.yml
+          # when notarization completes.
+          RELEASE_NOTES="<h2>${COMMIT_TITLE}</h2><p><strong>Note:</strong> Notarization pending. Auto-update will use this version once verified.</p>"
 
-          # Convert commit body to HTML list if it has bullet points
-          if [ -n "$COMMIT_BODY" ]; then
-            # Check if body has bullet points (lines starting with -)
-            if echo "$COMMIT_BODY" | grep -q "^- "; then
-              RELEASE_NOTES="${RELEASE_NOTES}<ul>"
-              echo "$COMMIT_BODY" | grep "^- " | while read -r line; do
-                ITEM=$(echo "$line" | sed 's/^- //')
-                RELEASE_NOTES="${RELEASE_NOTES}<li>${ITEM}</li>"
-              done
-              RELEASE_NOTES="${RELEASE_NOTES}</ul>"
-            else
-              # Plain text body
-              BODY_HTML=$(echo "$COMMIT_BODY" | sed 's/$/<br>/g')
-              RELEASE_NOTES="${RELEASE_NOTES}<p>${BODY_HTML}</p>"
-            fi
-          fi
-
-          RELEASE_NOTES="${RELEASE_NOTES}<p class=\"version\">Version ${VERSION} • <a href=\"https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}\">Full Changelog</a></p>"
-
-          # Build enclosure attributes
           ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
           if [ -n "$SIGNATURE" ]; then
             ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
           fi
           ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
 
-          # Create appcast.xml using printf to avoid heredoc YAML issues
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
+          printf '%s\n' '    <channel>' >> appcast.xml
+          printf '%s\n' '        <title>Mira Updates</title>' >> appcast.xml
+          printf '%s\n' '        <link>https://github.com/Snupai/Mira-SwiftUI</link>' >> appcast.xml
+          printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
+          printf '%s\n' '        <language>en</language>' >> appcast.xml
+          printf '%s\n' '        <item>' >> appcast.xml
+          printf '%s\n' "            <title>Mira ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
+          printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
+          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
+          printf '%s\n' "            <description><![CDATA[${RELEASE_NOTES}]]></description>" >> appcast.xml
+          printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
+          printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
+          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
+          printf '%s\n' '        </item>' >> appcast.xml
+          printf '%s\n' '    </channel>' >> appcast.xml
+          printf '%s\n' '</rss>' >> appcast.xml
+
+          echo "✅ Generated appcast.xml for version ${VERSION} (pre-release)"
+
+      - name: Update Appcast (No Notarization)
+        if: steps.notarize.outputs.notarization_skipped == 'true'
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
+          DMG_SIZE=$(stat -f%z "Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
+          PUB_DATE=$(date -R)
+          SIGNATURE="${SPARKLE_SIGNATURE:-}"
+
+          COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\[release [0-9.]*\]//' | xargs)
+          RELEASE_NOTES="<h2>${COMMIT_TITLE}</h2><p>Version ${VERSION}</p>"
+
+          ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
+          if [ -n "$SIGNATURE" ]; then
+            ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
+          fi
+          ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
+
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
           printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
           printf '%s\n' '    <channel>' >> appcast.xml
@@ -476,11 +547,6 @@ jobs:
           printf '%s\n' '</rss>' >> appcast.xml
 
           echo "✅ Generated appcast.xml for version ${VERSION}"
-          if [ -n "$SIGNATURE" ]; then
-            echo "✅ Appcast includes EdDSA signature"
-          else
-            echo "⚠️ Appcast does NOT include signature - auto-updates may not work"
-          fi
 
       - name: Commit Appcast
         run: |
@@ -497,3 +563,25 @@ jobs:
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
           rm -f $RUNNER_TEMP/certificate.p12 || true
+
+      - name: Summary
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          echo ""
+          echo "============================================"
+          echo "📦 Release v${VERSION} created!"
+          echo "============================================"
+          echo ""
+          if [ "${{ steps.notarize.outputs.notarization_skipped }}" == "true" ]; then
+            echo "ℹ️ Notarization was skipped (credentials not set)"
+            echo "🔗 https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}"
+          else
+            echo "⏳ Notarization is processing..."
+            echo "   DMG: ${{ steps.notarize.outputs.dmg_submission_id }}"
+            echo "   PKG: ${{ steps.notarize.outputs.pkg_submission_id }}"
+            echo ""
+            echo "📋 The release is currently a PRE-RELEASE."
+            echo "   It will be automatically promoted once Apple completes notarization."
+            echo ""
+            echo "🔗 https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}"
+          fi

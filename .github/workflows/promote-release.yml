@@ -1,0 +1,270 @@
+name: Promote Pre-Release
+
+on:
+  repository_dispatch:
+    types: [notarization-complete]
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log webhook payload
+        run: |
+          echo "📨 Received notarization-complete webhook"
+          echo "   Submission ID: ${{ github.event.client_payload.submission_id }}"
+          echo "   Team ID: ${{ github.event.client_payload.team_id }}"
+          echo "   Timestamp: ${{ github.event.client_payload.timestamp }}"
+
+      - name: Find pre-release with matching submission ID
+        id: find-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUBMISSION_ID: ${{ github.event.client_payload.submission_id }}
+        run: |
+          echo "🔍 Looking for pre-release with submission ID: $SUBMISSION_ID"
+          
+          # Get all pre-releases
+          RELEASES=$(gh release list --json tagName,isPrerelease,body -q '.[] | select(.isPrerelease)')
+          
+          if [ -z "$RELEASES" ]; then
+            echo "❌ No pre-releases found"
+            exit 1
+          fi
+          
+          # Find the release containing this submission ID
+          RELEASE_TAG=$(gh release list --json tagName,isPrerelease,body -q ".[] | select(.isPrerelease) | select(.body | contains(\"$SUBMISSION_ID\")) | .tagName" | head -1)
+          
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "❌ No pre-release found with submission ID: $SUBMISSION_ID"
+            echo "   This might mean the notarization was for a different submission"
+            exit 1
+          fi
+          
+          echo "✅ Found pre-release: $RELEASE_TAG"
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          
+          # Extract version from tag (v0.2.45 -> 0.2.45)
+          VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download pre-release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.find-release.outputs.tag }}"
+          VERSION="${{ steps.find-release.outputs.version }}"
+          
+          echo "📥 Downloading assets from $TAG..."
+          mkdir -p release-assets
+          cd release-assets
+          
+          gh release download "$TAG" --pattern "*.dmg" --pattern "*.pkg"
+          
+          echo "📦 Downloaded files:"
+          ls -la
+
+      - name: Verify notarization status
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SUBMISSION_ID: ${{ github.event.client_payload.submission_id }}
+        run: |
+          echo "🔍 Verifying notarization status for $SUBMISSION_ID..."
+          
+          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" 2>&1)
+          
+          echo "$STATUS"
+          
+          if echo "$STATUS" | grep -q "status: Accepted"; then
+            echo "✅ Notarization accepted!"
+          else
+            echo "❌ Notarization not accepted yet"
+            echo "$STATUS"
+            exit 1
+          fi
+
+      - name: Staple notarization tickets
+        run: |
+          VERSION="${{ steps.find-release.outputs.version }}"
+          cd release-assets
+          
+          DMG_FILE="Mira-${VERSION}-macOS.dmg"
+          PKG_FILE="Mira-Installer.pkg"
+          
+          echo "📎 Stapling DMG..."
+          if [ -f "$DMG_FILE" ]; then
+            xcrun stapler staple "$DMG_FILE"
+            echo "✅ DMG stapled"
+          else
+            echo "⚠️ DMG not found: $DMG_FILE"
+          fi
+          
+          echo "📎 Stapling PKG..."
+          if [ -f "$PKG_FILE" ]; then
+            xcrun stapler staple "$PKG_FILE"
+            echo "✅ PKG stapled"
+          else
+            echo "⚠️ PKG not found: $PKG_FILE"
+          fi
+          
+          echo ""
+          echo "📦 Stapled files:"
+          ls -la
+
+      - name: Update release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.find-release.outputs.tag }}"
+          VERSION="${{ steps.find-release.outputs.version }}"
+          cd release-assets
+          
+          echo "🔄 Replacing release assets with stapled versions..."
+          
+          # Delete old assets and upload new ones
+          DMG_FILE="Mira-${VERSION}-macOS.dmg"
+          PKG_FILE="Mira-Installer.pkg"
+          
+          if [ -f "$DMG_FILE" ]; then
+            echo "   Uploading stapled DMG..."
+            gh release upload "$TAG" "$DMG_FILE" --clobber
+          fi
+          
+          if [ -f "$PKG_FILE" ]; then
+            echo "   Uploading stapled PKG..."
+            gh release upload "$TAG" "$PKG_FILE" --clobber
+          fi
+          
+          echo "✅ Assets updated"
+
+      - name: Sign DMG for Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.find-release.outputs.version }}"
+          cd release-assets
+          DMG_FILE="Mira-${VERSION}-macOS.dmg"
+
+          # Clone Sparkle to get sign_update tool
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "🔐 Getting Sparkle sign_update tool..."
+            
+            # Download sign_update from Sparkle releases
+            curl -L -o sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/latest/download/Sparkle-2.6.4.tar.xz" 2>/dev/null || \
+            curl -L -o sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/2.5.2/Sparkle-2.5.2.tar.xz" 2>/dev/null
+            
+            mkdir -p sparkle-tools
+            tar -xf sparkle.tar.xz -C sparkle-tools 2>/dev/null || true
+            
+            SIGN_TOOL=$(find sparkle-tools -name "sign_update" -type f | head -1)
+            
+            if [ -n "$SIGN_TOOL" ] && [ -f "$SIGN_TOOL" ]; then
+              chmod +x "$SIGN_TOOL"
+              echo "🔐 Signing DMG with EdDSA key..."
+              SIGNATURE=$("$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" | grep -o 'sparkle:edSignature="[^"]*"' | sed 's/sparkle:edSignature="\([^"]*\)"/\1/' || "$SIGN_TOOL" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") "$DMG_FILE" 2>&1 | tr -d '\n')
+              echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+              echo "✅ DMG signed: ${SIGNATURE:0:20}..."
+            else
+              echo "⚠️ sign_update tool not found"
+            fi
+          else
+            echo "⚠️ SPARKLE_PRIVATE_KEY not set - appcast will not have signature"
+          fi
+
+      - name: Update Appcast
+        run: |
+          VERSION="${{ steps.find-release.outputs.version }}"
+          DMG_URL="https://github.com/Snupai/Mira-SwiftUI/releases/download/v${VERSION}/Mira-${VERSION}-macOS.dmg"
+          DMG_SIZE=$(stat -f%z "release-assets/Mira-${VERSION}-macOS.dmg" 2>/dev/null || echo "10000000")
+          PUB_DATE=$(date -R)
+          SIGNATURE="${SPARKLE_SIGNATURE:-}"
+
+          # Build enclosure attributes
+          ENCLOSURE_ATTRS="url=\"${DMG_URL}\" sparkle:version=\"${VERSION}\" sparkle:shortVersionString=\"${VERSION}\""
+          if [ -n "$SIGNATURE" ]; then
+            ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${SIGNATURE}\""
+          fi
+          ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
+
+          # Create appcast.xml
+          cat > appcast.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <channel>
+                  <title>Mira Updates</title>
+                  <link>https://github.com/Snupai/Mira-SwiftUI</link>
+                  <description>Updates for Mira Invoice App</description>
+                  <language>en</language>
+                  <item>
+                      <title>Mira ${VERSION}</title>
+                      <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>
+                      <sparkle:version>${VERSION}</sparkle:version>
+                      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                      <description><![CDATA[<h2>Mira ${VERSION}</h2><p>This release is signed and notarized by Apple.</p>]]></description>
+                      <pubDate>${PUB_DATE}</pubDate>
+                      <enclosure ${ENCLOSURE_ATTRS}/>
+                      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+                  </item>
+              </channel>
+          </rss>
+          EOF
+
+          echo "✅ Generated appcast.xml for version ${VERSION}"
+
+      - name: Promote to full release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.find-release.outputs.tag }}"
+          VERSION="${{ steps.find-release.outputs.version }}"
+          
+          echo "🚀 Promoting $TAG to full release..."
+          
+          # Get current release body and update it
+          CURRENT_BODY=$(gh release view "$TAG" --json body -q '.body')
+          
+          # Remove the notarization pending notice and submission IDs
+          NEW_BODY=$(echo "$CURRENT_BODY" | sed '/<!-- NOTARIZATION_PENDING -->/,/<!-- \/NOTARIZATION_PENDING -->/d')
+          NEW_BODY=$(echo "$NEW_BODY" | sed 's/⏳ \*\*Notarization pending\*\*.*/✅ **This release is signed and notarized by Apple** - no Gatekeeper warnings!/')
+          
+          # Update release: remove prerelease flag and update body
+          gh release edit "$TAG" \
+            --prerelease=false \
+            --notes "$NEW_BODY"
+          
+          echo "✅ Release $TAG promoted to full release!"
+
+      - name: Commit Appcast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
+          git add appcast.xml
+          git commit -m "chore: update appcast for v${{ steps.find-release.outputs.version }} (notarized)" || echo "No changes to commit"
+          git push || echo "Nothing to push"
+
+      - name: Summary
+        run: |
+          TAG="${{ steps.find-release.outputs.tag }}"
+          echo ""
+          echo "============================================"
+          echo "🎉 Release $TAG is now fully notarized!"
+          echo "============================================"
+          echo ""
+          echo "✅ Notarization verified"
+          echo "✅ DMG and PKG stapled"
+          echo "✅ Release assets updated"
+          echo "✅ Appcast updated"
+          echo "✅ Pre-release promoted to full release"
+          echo ""
+          echo "🔗 https://github.com/Snupai/Mira-SwiftUI/releases/tag/$TAG"
