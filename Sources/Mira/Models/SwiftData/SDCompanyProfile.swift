@@ -54,6 +54,9 @@ final class SDCompanyProfile {
     var locale: String = "de_DE"
     var dateFormat: String = "dd.MM.yyyy"
     
+    // MARK: - Export
+    var defaultExportPath: String = ""  // Empty = ask each time
+    
     // MARK: - Email Templates
     var emailTemplateGerman: String = SDCompanyProfile.defaultGermanEmailTemplate
     var emailTemplateEnglish: String = SDCompanyProfile.defaultEnglishEmailTemplate
@@ -288,6 +291,7 @@ extension SDCompanyProfile {
         
         profile.locale = locale
         profile.dateFormat = dateFormat
+        profile.defaultExportPath = defaultExportPath
         
         profile.emailTemplateGerman = emailTemplateGerman
         profile.emailTemplateEnglish = emailTemplateEnglish

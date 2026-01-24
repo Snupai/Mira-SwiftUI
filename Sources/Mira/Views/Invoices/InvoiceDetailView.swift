@@ -338,12 +338,38 @@ struct InvoiceDetailView: View {
     }
     
     func exportPDF() {
-        guard let client = client, let profile = appState.companyProfile else { return }
+        guard let client = client else { return }
+        
+        // Use SwiftData profile if available
+        let profile: CompanyProfile
+        if usesSwiftData, let sdProfile = sdProfiles.first {
+            profile = sdProfile.toLegacy()
+        } else if let legacyProfile = appState.companyProfile {
+            profile = legacyProfile
+        } else {
+            return
+        }
         
         #if os(macOS)
+        let fileName = "\(currentInvoice.invoiceNumber).pdf"
+        
+        // Check for default export path
+        if !profile.defaultExportPath.isEmpty {
+            let folderURL = URL(fileURLWithPath: profile.defaultExportPath)
+            let fileURL = folderURL.appendingPathComponent(fileName)
+            
+            // Check if folder exists and is writable
+            if FileManager.default.isWritableFile(atPath: profile.defaultExportPath) {
+                _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: fileURL, language: exportLanguage)
+                NSWorkspace.shared.selectFile(fileURL.path, inFileViewerRootedAtPath: folderURL.path)
+                return
+            }
+        }
+        
+        // Fallback to save panel
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = "\(currentInvoice.invoiceNumber).pdf"
+        panel.nameFieldStringValue = fileName
         panel.begin { [exportLanguage] r in
             if r == .OK, let url = panel.url {
                 _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: url, language: exportLanguage)

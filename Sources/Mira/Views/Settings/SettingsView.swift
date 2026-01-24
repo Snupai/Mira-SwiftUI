@@ -30,6 +30,7 @@ struct SettingsView: View {
                 bankSection
                 pdfTemplatesSection
                 invoiceDefaultsSection
+                exportSection
                 otherSection
             }
             .padding(32)
@@ -516,6 +517,76 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Export Section
+    private var exportSection: some View {
+        SettingsSection(title: "Export", colors: colors) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Default Export Location")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(colors.subtext)
+                
+                HStack(spacing: 12) {
+                    Text(exportPathDisplay)
+                        .font(.system(size: 14))
+                        .foregroundColor(colors.text)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(colors.surface0)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    
+                    Button(action: chooseExportFolder) {
+                        Text("Choose...")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    if !(appState.companyProfile?.defaultExportPath.isEmpty ?? true) {
+                        Button(action: {
+                            appState.companyProfile?.defaultExportPath = ""
+                            saveCompanyProfile()
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(colors.subtext)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear default location (will ask each time)")
+                    }
+                }
+                
+                Text("Leave empty to choose location each time you export")
+                    .font(.system(size: 11))
+                    .foregroundColor(colors.subtext)
+            }
+        }
+    }
+    
+    private var exportPathDisplay: String {
+        guard let path = appState.companyProfile?.defaultExportPath, !path.isEmpty else {
+            return "Ask each time..."
+        }
+        return (path as NSString).lastPathComponent
+    }
+    
+    private func chooseExportFolder() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose default folder for PDF exports"
+        panel.prompt = "Select Folder"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            appState.companyProfile?.defaultExportPath = url.path
+            saveCompanyProfile()
+        }
+        #endif
+    }
+    
     // MARK: - Other Section
     private var otherSection: some View {
         SettingsSection(title: "Other", colors: colors) {
@@ -592,6 +663,7 @@ struct SettingsView: View {
         sdProfile.pdfFooterTemplateEnglish = profile.pdfFooterTemplateEnglish
         sdProfile.pdfClosingTemplateEnglish = profile.pdfClosingTemplateEnglish
         sdProfile.pdfNotesTemplateEnglish = profile.pdfNotesTemplateEnglish
+        sdProfile.defaultExportPath = profile.defaultExportPath
         sdProfile.updatedAt = Date()
     }
 }
