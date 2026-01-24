@@ -143,7 +143,7 @@ struct SettingsView: View {
         case .noAccount: return "Not signed in to iCloud"
         case .restricted: return "iCloud access is restricted"
         case .temporarilyUnavailable: return "iCloud temporarily unavailable"
-        case .couldNotDetermine: return "Status unavailable (local build)"
+        case .couldNotDetermine: return "Could not check iCloud status"
         @unknown default: return "Status unavailable"
         }
     }
