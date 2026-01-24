@@ -42,7 +42,7 @@ enum DataContainer {
     /// Create ModelContainer for local-only storage (no CloudKit)
     static func createLocalContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            "Mira-Local",
+            "Mira",  // Same name as CloudKit container to share the same store
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
