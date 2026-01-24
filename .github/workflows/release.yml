@@ -177,7 +177,8 @@ jobs:
         run: ./create-pkg.sh
 
       - name: Notarize App
-        timeout-minutes: 30
+        continue-on-error: true
+        timeout-minutes: 15
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -295,7 +296,7 @@ jobs:
 
             **Requirements:** macOS 14.0 (Sonoma) or later
 
-            ✅ **This release is signed and notarized by Apple** - no Gatekeeper warnings!
+            > ℹ️ **First launch:** If macOS shows a security warning, right-click the app → Open, or go to System Settings → Privacy & Security → Open Anyway
           files: |
             Mira-${{ needs.check-release.outputs.version }}-macOS.dmg
             Mira-Installer.pkg
