@@ -205,7 +205,7 @@ struct ClientEditorView: View {
         }
     }
     
-    var canSave: Bool { !client.name.isEmpty && !client.email.isEmpty }
+    var canSave: Bool { !client.name.isEmpty }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -247,7 +247,7 @@ struct ClientEditorView: View {
                             FormField(label: "Company / Name", text: $client.name, required: true, colors: colors)
                             FormField(label: "Contact Person", text: $client.contactPerson, colors: colors)
                             HStack(spacing: 16) {
-                                FormField(label: "Email", text: $client.email, required: true, colors: colors)
+                                FormField(label: "Email", text: $client.email, colors: colors)
                                 FormField(label: "Phone", text: $client.phone, colors: colors)
                             }
                         }

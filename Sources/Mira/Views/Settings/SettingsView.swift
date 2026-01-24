@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showingColorPicker = false
     @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
     @State private var isCheckingCloudKit = true
+    @State private var hasLoadedFromSwiftData = false
 
     var body: some View {
         ScrollView {
@@ -36,6 +37,29 @@ struct SettingsView: View {
         .background(colors.base)
         .task {
             await checkCloudKitStatus()
+        }
+        .onAppear {
+            loadProfileFromSwiftData()
+        }
+        .onChange(of: sdProfiles.count) { _, _ in
+            // Reload when SwiftData profile becomes available (initial load)
+            loadProfileFromSwiftData()
+        }
+        .onChange(of: sdProfiles.first?.updatedAt) { _, _ in
+            // Reload when SwiftData profile changes (e.g., from CloudKit sync)
+            if usesSwiftData, let sdProfile = sdProfiles.first {
+                appState.companyProfile = sdProfile.toLegacy()
+            }
+        }
+    }
+    
+    private func loadProfileFromSwiftData() {
+        // Load SwiftData profile into appState for editing
+        guard usesSwiftData else { return }
+        guard !hasLoadedFromSwiftData || appState.companyProfile == nil else { return }
+        if let sdProfile = sdProfiles.first {
+            appState.companyProfile = sdProfile.toLegacy()
+            hasLoadedFromSwiftData = true
         }
     }
     
@@ -186,6 +210,51 @@ struct SettingsView: View {
                 SettingsTextField(label: "Email", text: binding(\.email), colors: colors)
                 SettingsTextField(label: "Phone", text: binding(\.phone), colors: colors)
                 SettingsTextField(label: "Website", text: binding(\.website), colors: colors)
+                
+                Divider().background(colors.surface1)
+                
+                // Brand Logo
+                LogoPicker(logoData: Binding(
+                    get: { appState.companyProfile?.logoData },
+                    set: { newValue in
+                        appState.companyProfile?.logoData = newValue
+                        saveCompanyProfile()
+                    }
+                ))
+                
+                // Brand Color
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Brand Color")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.subtext)
+                    
+                    HStack(spacing: 10) {
+                        ForEach(BrandColors.presets.prefix(6), id: \.hex) { preset in
+                            Circle()
+                                .fill(Color(hex: preset.hex) ?? .blue)
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    Circle()
+                                        .stroke(colors.text, lineWidth: appState.companyProfile?.brandColorHex == preset.hex ? 2 : 0)
+                                        .padding(-3)
+                                )
+                                .onTapGesture {
+                                    appState.companyProfile?.brandColorHex = preset.hex
+                                    saveCompanyProfile()
+                                }
+                        }
+                        
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hex: appState.companyProfile?.brandColorHex ?? "#0066CC") ?? .blue },
+                            set: {
+                                appState.companyProfile?.brandColorHex = $0.toHex()
+                                saveCompanyProfile()
+                            }
+                        ))
+                        .labelsHidden()
+                        .frame(width: 28, height: 28)
+                    }
+                }
             }
         }
     }

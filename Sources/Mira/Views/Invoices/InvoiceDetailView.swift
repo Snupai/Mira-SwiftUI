@@ -19,6 +19,7 @@ struct InvoiceDetailView: View {
     @State private var exportLanguage: PDFLanguage = .german
     @State private var showingExchangeRateDialog = false
     @State private var exchangeRateInput: String = ""
+    @State private var showingDeleteConfirmation = false
     
     private var usesSwiftData: Bool {
         MigrationService.shared.useSwiftData
@@ -207,6 +208,21 @@ struct InvoiceDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         
+                        Spacer()
+                        
+                        Button(action: { showingDeleteConfirmation = true }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash")
+                                Text("Delete")
+                            }
+                            .font(.system(size: 14, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(32)
@@ -224,6 +240,12 @@ struct InvoiceDetailView: View {
             }
             .sheet(isPresented: $showingEdit) {
                 InvoiceEditorView(invoice: currentInvoice).environmentObject(appState)
+            }
+            .alert("Delete Invoice", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) { deleteInvoice() }
+            } message: {
+                Text("Are you sure you want to delete invoice \(currentInvoice.invoiceNumber)? This action cannot be undone.")
             }
             .sheet(isPresented: $showingExchangeRateDialog) {
                 ExchangeRateDialog(
@@ -271,6 +293,21 @@ struct InvoiceDetailView: View {
                 appState.saveInvoices()
             }
         }
+    }
+    
+    func deleteInvoice() {
+        if usesSwiftData {
+            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
+                modelContext.delete(sdInvoice)
+                try? modelContext.save()
+            }
+        } else {
+            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                appState.invoices.remove(at: i)
+                appState.saveInvoices()
+            }
+        }
+        dismiss()
     }
     
     func markAsPaid() {

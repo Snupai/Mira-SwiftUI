@@ -10,6 +10,7 @@ struct InvoiceEditorView: View {
     @Query private var sdClients: [SDClient]
     @Query private var sdInvoices: [SDInvoice]
     @Query private var sdTemplates: [SDInvoiceTemplate]
+    @Query private var sdProfiles: [SDCompanyProfile]
     
     @State private var invoice: Invoice
     @State private var selectedClientId: UUID?
@@ -341,12 +342,22 @@ struct InvoiceEditorView: View {
     }
     
     func generateInvoiceNumber() {
-        // TODO: Handle invoice number generation from SwiftData profile when migrated
-        if var profile = appState.companyProfile {
-            invoice.invoiceNumber = profile.generateInvoiceNumber()
-            profile.nextInvoiceNumber += 1
-            appState.companyProfile = profile
-            appState.saveCompanyProfile()
+        if usesSwiftData {
+            // Generate from SwiftData profile
+            if let sdProfile = sdProfiles.first {
+                let year = Calendar.current.component(.year, from: Date())
+                invoice.invoiceNumber = "\(sdProfile.invoiceNumberPrefix)\(year)-\(String(format: "%04d", sdProfile.nextInvoiceNumber))"
+                sdProfile.nextInvoiceNumber += 1
+                try? modelContext.save()
+            }
+        } else {
+            // Legacy: Generate from appState profile
+            if var profile = appState.companyProfile {
+                invoice.invoiceNumber = profile.generateInvoiceNumber()
+                profile.nextInvoiceNumber += 1
+                appState.companyProfile = profile
+                appState.saveCompanyProfile()
+            }
         }
     }
     

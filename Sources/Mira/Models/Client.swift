@@ -31,7 +31,7 @@ struct Client: Codable, Identifiable, Hashable {
     var notes: String = ""
     
     var isComplete: Bool {
-        !name.isEmpty && !email.isEmpty
+        !name.isEmpty
     }
     
     var formattedAddress: String {

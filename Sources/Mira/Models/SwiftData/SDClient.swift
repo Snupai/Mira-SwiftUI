@@ -77,7 +77,7 @@ final class SDClient {
     }
     
     var isComplete: Bool {
-        !name.isEmpty && !email.isEmpty
+        !name.isEmpty
     }
     
     var formattedAddress: String {
