@@ -384,27 +384,25 @@ jobs:
           fi
           ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
 
-          cat > appcast.xml << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <channel>
-        <title>Mira Updates</title>
-        <link>https://github.com/Snupai/Mira-SwiftUI</link>
-        <description>Updates for Mira Invoice App</description>
-        <language>en</language>
-        <item>
-            <title>Mira ${VERSION}</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>
-            <sparkle:version>${VERSION}</sparkle:version>
-            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-            <description><![CDATA[${RELEASE_NOTES}]]></description>
-            <pubDate>${PUB_DATE}</pubDate>
-            <enclosure ${ENCLOSURE_ATTRS}/>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-        </item>
-    </channel>
-</rss>
-EOF
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> appcast.xml
+          printf '%s\n' '    <channel>' >> appcast.xml
+          printf '%s\n' '        <title>Mira Updates</title>' >> appcast.xml
+          printf '%s\n' '        <link>https://github.com/Snupai/Mira-SwiftUI</link>' >> appcast.xml
+          printf '%s\n' '        <description>Updates for Mira Invoice App</description>' >> appcast.xml
+          printf '%s\n' '        <language>en</language>' >> appcast.xml
+          printf '%s\n' '        <item>' >> appcast.xml
+          printf '%s\n' "            <title>Mira ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v${VERSION}</link>" >> appcast.xml
+          printf '%s\n' "            <sparkle:version>${VERSION}</sparkle:version>" >> appcast.xml
+          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
+          printf '%s\n' "            <description><![CDATA[${RELEASE_NOTES}]]></description>" >> appcast.xml
+          printf '%s\n' "            <pubDate>${PUB_DATE}</pubDate>" >> appcast.xml
+          printf '%s\n' "            <enclosure ${ENCLOSURE_ATTRS}/>" >> appcast.xml
+          printf '%s\n' '            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' >> appcast.xml
+          printf '%s\n' '        </item>' >> appcast.xml
+          printf '%s\n' '    </channel>' >> appcast.xml
+          printf '%s\n' '</rss>' >> appcast.xml
 
           echo "✅ Generated appcast.xml"
 
