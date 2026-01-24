@@ -148,7 +148,8 @@ jobs:
             if [ -d "Mira.app/Contents/Frameworks/Sparkle.framework" ]; then
               echo "   Signing Sparkle.framework components..."
               
-              # Sign XPC services first (deepest)
+              # Find ALL Mach-O binaries and sign them (inside-out order)
+              # Sign XPC services first (deepest nested bundles)
               find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.xpc" -type d | while read xpc; do
                 echo "   → Signing XPC: $(basename "$xpc")"
                 codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$xpc"
@@ -158,6 +159,15 @@ jobs:
               find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.app" -type d | while read app; do
                 echo "   → Signing helper: $(basename "$app")"
                 codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$app"
+              done
+              
+              # Sign ALL executables (Autoupdate, Updater, etc.) - these are Mach-O binaries without extensions
+              find Mira.app/Contents/Frameworks/Sparkle.framework/Versions -type f -perm +111 ! -name "*.dylib" ! -name ".*" | while read binary; do
+                # Check if it's a Mach-O binary
+                if file "$binary" | grep -q "Mach-O"; then
+                  echo "   → Signing executable: $(basename "$binary")"
+                  codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$binary"
+                fi
               done
               
               # Sign dylibs
