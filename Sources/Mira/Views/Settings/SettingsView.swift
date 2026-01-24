@@ -157,14 +157,20 @@ struct SettingsView: View {
     
     private var storageStatusText: String {
         if MigrationService.shared.migrationStatus == .completed {
-            let profileCount = sdProfiles.count
-            return "SwiftData • \(profileCount > 0 ? "Profile loaded" : "No profile") • CloudKit enabled"
+            let profileCount = (try? sdProfiles.count) ?? 0
+            let syncStatus = cloudKitStatus == .available ? "CloudKit enabled" : "Local storage"
+            return "SwiftData • \(profileCount > 0 ? "Profile loaded" : "No profile") • \(syncStatus)"
         }
         return "Legacy JSON storage • Migration available"
     }
     
     private func checkCloudKitStatus() async {
-        cloudKitStatus = await DataContainer.checkCloudKitStatus()
+        do {
+            cloudKitStatus = await DataContainer.checkCloudKitStatus()
+        } catch {
+            print("⚠️ CloudKit status check error: \(error)")
+            cloudKitStatus = .couldNotDetermine
+        }
         isCheckingCloudKit = false
     }
 
