@@ -78,6 +78,9 @@ cat > "${APP_NAME}.app/Contents/Info.plist" << EOF
     <true/>
     <key>SUAllowsAutomaticUpdates</key>
     <true/>
+    <!-- Required for sandboxed apps to use Sparkle's installer XPC service -->
+    <key>SUEnableInstallerLauncherService</key>
+    <true/>
 
     <!-- iCloud / CloudKit Configuration -->
     <key>NSUbiquitousContainers</key>
