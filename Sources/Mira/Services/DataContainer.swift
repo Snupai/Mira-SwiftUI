@@ -101,10 +101,22 @@ extension DataContainer {
     /// Check CloudKit availability
     static func checkCloudKitStatus() async -> CKAccountStatus {
         do {
-            return try await CKContainer(identifier: cloudKitContainerID).accountStatus()
+            // Use default container - it should match our entitlements
+            let container = CKContainer.default()
+            let status = try await container.accountStatus()
+            print("✅ CloudKit status: \(status.rawValue) for container: \(container.containerIdentifier ?? "default")")
+            return status
         } catch {
-            print("⚠️ CloudKit status check failed: \(error)")
-            return .couldNotDetermine
+            print("⚠️ CloudKit status check failed: \(error.localizedDescription)")
+            // Try with explicit identifier as fallback
+            do {
+                let status = try await CKContainer(identifier: cloudKitContainerID).accountStatus()
+                print("✅ CloudKit status (explicit): \(status.rawValue)")
+                return status
+            } catch {
+                print("❌ CloudKit explicit check also failed: \(error.localizedDescription)")
+                return .couldNotDetermine
+            }
         }
     }
     
