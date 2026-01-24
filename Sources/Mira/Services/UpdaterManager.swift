@@ -47,12 +47,12 @@ final class UpdaterManager: ObservableObject {
         }
     }
     
-    /// Check for updates on app startup - shows prompt if update available
+    /// Check for updates on app startup - only shows UI if update is available
     private func checkForUpdatesOnStartup() {
         guard let updater = updaterController?.updater, updater.canCheckForUpdates else { return }
         
-        // Use checkForUpdates which will show UI if update is available
-        updaterController?.checkForUpdates(nil)
+        // Use checkForUpdatesInBackground which silently checks and only shows UI if update found
+        updater.checkForUpdatesInBackground()
     }
     
     /// Manually check for updates
