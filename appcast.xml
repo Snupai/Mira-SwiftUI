@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.46</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.46</link>
-            <sparkle:version>0.2.46</sparkle:version>
-            <sparkle:shortVersionString>0.2.46</sparkle:shortVersionString>
-            <description><![CDATA[<h2>Test async notarization with webhook</h2><p><strong>Note:</strong> Notarization pending. Auto-update will use this version once verified.</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 13:41:30 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.46/Mira-0.2.46-macOS.dmg" sparkle:version="0.2.46" sparkle:shortVersionString="0.2.46" sparkle:edSignature="vtKEtG9ULssMhyTLbK3hfvKxmBy/YaG4X0uza3A3md0LxwkZVCWGnlXbnlfWMDMLoEoWT/yifk6sf8rKU5mTDQ==" length="5253824" type="application/octet-stream"/>
+            <title>Mira 0.2.48</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.48</link>
+            <sparkle:version>0.2.48</sparkle:version>
+            <sparkle:shortVersionString>0.2.48</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Fix YAML heredoc syntax</h2><p class="version">Version 0.2.48</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 14:07:10 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.48/Mira-0.2.48-macOS.dmg" sparkle:version="0.2.48" sparkle:shortVersionString="0.2.48" sparkle:edSignature="bqVMOas5oenf97inQN8lsIiEGbC9jhr5qsdWGl8KeCZYQKuG7pt/URExXpTVypCtmcayM/FOjvDxJ1M0yU+4BQ==" length="5255791" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
