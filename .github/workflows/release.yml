@@ -144,64 +144,94 @@ jobs:
           else
             echo "🔐 Signing with Developer ID (inside-out, proper method)..."
             
-            # 1. Sign Sparkle framework components (inside-out)
+            # Helper function to sign a Mach-O binary
+            sign_binary() {
+              local binary="$1"
+              local name=$(basename "$binary")
+              echo "   → Signing binary: $name"
+              codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$binary"
+            }
+            
+            # Helper function to sign a bundle
+            sign_bundle() {
+              local bundle="$1"
+              local name=$(basename "$bundle")
+              echo "   → Signing bundle: $name"
+              codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$bundle"
+            }
+            
+            # 1. Sign Sparkle framework components (inside-out, deepest first)
             if [ -d "Mira.app/Contents/Frameworks/Sparkle.framework" ]; then
-              echo "   Signing Sparkle.framework components..."
+              echo "📦 Signing Sparkle.framework components (inside-out)..."
+              SPARKLE="Mira.app/Contents/Frameworks/Sparkle.framework"
               
-              # Find ALL Mach-O binaries and sign them (inside-out order)
-              # Sign XPC services first (deepest nested bundles)
-              find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.xpc" -type d | while read xpc; do
-                echo "   → Signing XPC: $(basename "$xpc")"
-                codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$xpc"
-              done
-              
-              # Sign helper apps
-              find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.app" -type d | while read app; do
-                echo "   → Signing helper: $(basename "$app")"
-                codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$app"
-              done
-              
-              # Sign ALL executables (Autoupdate, Updater, etc.) - these are Mach-O binaries without extensions
-              find Mira.app/Contents/Frameworks/Sparkle.framework/Versions -type f -perm +111 ! -name "*.dylib" ! -name ".*" | while read binary; do
-                # Check if it's a Mach-O binary
-                if file "$binary" | grep -q "Mach-O"; then
-                  echo "   → Signing executable: $(basename "$binary")"
-                  codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$binary"
+              # 1a. Find and sign ALL Mach-O binaries first (before bundles)
+              echo "   Finding all Mach-O binaries..."
+              find "$SPARKLE" -type f ! -name ".*" ! -name "*.plist" ! -name "*.strings" ! -name "*.nib" ! -name "*.png" ! -name "*.icns" ! -name "*.car" ! -name "CodeResources" ! -name "_CodeSignature" -print0 2>/dev/null | while IFS= read -r -d '' file; do
+                # Check if it's a Mach-O binary using file command
+                if file "$file" | grep -qE "Mach-O|bundle"; then
+                  sign_binary "$file"
                 fi
               done
               
-              # Sign dylibs
-              find Mira.app/Contents/Frameworks/Sparkle.framework -name "*.dylib" -type f | while read dylib; do
-                echo "   → Signing dylib: $(basename "$dylib")"
-                codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$dylib"
+              # 1b. Sign XPC services (bundles, inside-out)
+              echo "   Signing XPC services..."
+              find "$SPARKLE" -name "*.xpc" -type d -print0 2>/dev/null | while IFS= read -r -d '' xpc; do
+                sign_bundle "$xpc"
               done
               
-              # Sign the framework bundle itself
-              echo "   → Signing Sparkle.framework"
-              codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "Mira.app/Contents/Frameworks/Sparkle.framework"
+              # 1c. Sign helper apps
+              echo "   Signing helper apps..."
+              find "$SPARKLE" -name "*.app" -type d -print0 2>/dev/null | while IFS= read -r -d '' app; do
+                sign_bundle "$app"
+              done
+              
+              # 1d. Sign the framework bundle itself (outermost)
+              echo "   Signing Sparkle.framework bundle..."
+              sign_bundle "$SPARKLE"
             fi
             
-            # 2. Sign any other frameworks
-            find Mira.app/Contents/Frameworks -maxdepth 1 -name "*.framework" -type d ! -name "Sparkle.framework" | while read fw; do
-              echo "   → Signing framework: $(basename "$fw")"
-              codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$fw"
+            # 2. Sign any other frameworks in the app
+            echo "📦 Signing other frameworks..."
+            find Mira.app/Contents/Frameworks -maxdepth 1 -name "*.framework" -type d ! -name "Sparkle.framework" -print0 2>/dev/null | while IFS= read -r -d '' fw; do
+              sign_bundle "$fw"
             done
             
-            # 3. Sign the main executable
-            echo "   → Signing main executable"
+            # 3. Sign any dylibs directly in Frameworks folder
+            echo "📦 Signing loose dylibs..."
+            find Mira.app/Contents/Frameworks -maxdepth 1 -name "*.dylib" -type f -print0 2>/dev/null | while IFS= read -r -d '' dylib; do
+              sign_binary "$dylib"
+            done
+            
+            # 4. Sign the main executable (with entitlements)
+            echo "📦 Signing main executable..."
             codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" $ENTITLEMENTS_ARG "Mira.app/Contents/MacOS/Mira"
             
-            # 4. Sign the entire app bundle
-            echo "   → Signing app bundle"
+            # 5. Sign the entire app bundle (outermost, with entitlements)
+            echo "📦 Signing app bundle..."
             codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" $ENTITLEMENTS_ARG Mira.app
           fi
           
+          # Verify the signature thoroughly
+          echo ""
           echo "📋 Verifying signature..."
-          codesign --verify --verbose=2 Mira.app
+          codesign --verify --deep --strict --verbose=2 Mira.app
           
+          echo ""
+          echo "📋 Checking all binaries are properly signed..."
+          find Mira.app -type f -print0 2>/dev/null | while IFS= read -r -d '' file; do
+            if file "$file" | grep -qE "Mach-O"; then
+              if ! codesign --verify --strict "$file" 2>/dev/null; then
+                echo "   ❌ UNSIGNED: $file"
+              fi
+            fi
+          done
+          
+          echo ""
           echo "📋 Checking entitlements..."
           codesign -d --entitlements - Mira.app 2>/dev/null | head -20 || true
           
+          echo ""
           echo "✅ App signed properly (inside-out, with timestamp)"
 
       - name: Install create-dmg
