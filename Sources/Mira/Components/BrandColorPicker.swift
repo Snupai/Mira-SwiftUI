@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 struct BrandColorPicker: View {
     @Binding var selectedColorHex: String
@@ -84,7 +87,6 @@ struct ColorSwatch: View {
 
 struct LogoPicker: View {
     @Binding var logoData: Data?
-    @State private var showingImagePicker = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -124,7 +126,7 @@ struct LogoPicker: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Button(action: { showingImagePicker = true }) {
+                    Button(action: { chooseImage() }) {
                         Label("Choose Image", systemImage: "photo.badge.plus")
                     }
                     .buttonStyle(.bordered)
@@ -143,31 +145,32 @@ struct LogoPicker: View {
                 }
             }
         }
-        .fileImporter(
-            isPresented: $showingImagePicker,
-            allowedContentTypes: [.png, .jpeg],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    loadImage(from: url)
-                }
-            case .failure(let error):
-                print("Error selecting image: \(error)")
-            }
+    }
+    
+    private func chooseImage() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.png, .jpeg]
+        panel.message = "Choose a logo image (PNG or JPG, max 1MB)"
+        panel.prompt = "Select"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            loadImage(from: url)
         }
+        #endif
     }
     
     private func loadImage(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
-        
         do {
             let data = try Data(contentsOf: url)
             // Limit to 1MB
             if data.count <= 1_000_000 {
                 logoData = data
+            } else {
+                print("Image too large: \(data.count) bytes")
             }
         } catch {
             print("Error loading image: \(error)")
