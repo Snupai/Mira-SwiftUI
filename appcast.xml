@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.57</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.57</link>
-            <sparkle:version>0.2.57</sparkle:version>
-            <sparkle:shortVersionString>0.2.57</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Add SUEnableInstallerLauncherService for sandboxed Sparkle updates</h2><p class="version">Version 0.2.57</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 16:05:59 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.57/Mira-0.2.57-macOS.dmg" sparkle:version="0.2.57" sparkle:shortVersionString="0.2.57" sparkle:edSignature="XFG4TFvJYzj3jdzb8V+tPNJ/EvHaKUuf80rL2qemiMTV2cqufB5LV6JtxQvoJ5xohqPRJxCrcgBC0PV60Th+BQ==" length="9650828" type="application/octet-stream"/>
+            <title>Mira 0.2.58</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.58</link>
+            <sparkle:version>0.2.58</sparkle:version>
+            <sparkle:shortVersionString>0.2.58</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Test Sparkle update from 0.2.57 with all sandbox fixes</h2><p class="version">Version 0.2.58</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 16:09:14 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.58/Mira-0.2.58-macOS.dmg" sparkle:version="0.2.58" sparkle:shortVersionString="0.2.58" sparkle:edSignature="/dMBRGeXSyTwabUK+0+GkxaDhUj6sLPDKTeMTNi+e+HVqXrUwMalMPX/bKLhZEHbKHFs2QIpffSaDr+ehYJoAA==" length="9650884" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
