@@ -6,13 +6,13 @@
         <description>Updates for Mira Invoice App</description>
         <language>en</language>
         <item>
-            <title>Mira 0.2.55</title>
-            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.55</link>
-            <sparkle:version>0.2.55</sparkle:version>
-            <sparkle:shortVersionString>0.2.55</sparkle:shortVersionString>
-            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Add mach-lookup exceptions for Sparkle XPC services in sandbox</h2><p class="version">Version 0.2.55</p>]]></description>
-            <pubDate>Sat, 24 Jan 2026 15:55:40 +0000</pubDate>
-            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.55/Mira-0.2.55-macOS.dmg" sparkle:version="0.2.55" sparkle:shortVersionString="0.2.55" sparkle:edSignature="l1oFQ01PtFQXBz7MJTDyvlhhasYJsTupbrxHrtWIobiN24ikHg1cUKpzUWGGfW40RFrK3VtLvKp/TbH0S4kNAg==" length="9650778" type="application/octet-stream"/>
+            <title>Mira 0.2.56</title>
+            <link>https://github.com/Snupai/Mira-SwiftUI/releases/tag/v0.2.56</link>
+            <sparkle:version>0.2.56</sparkle:version>
+            <sparkle:shortVersionString>0.2.56</sparkle:shortVersionString>
+            <description><![CDATA[<style>body{font-family:-apple-system,sans-serif;font-size:13px}</style><h2>🎉 Test Sparkle auto-update from 0.2.55 with mach-lookup entitlements</h2><p class="version">Version 0.2.56</p>]]></description>
+            <pubDate>Sat, 24 Jan 2026 16:01:29 +0000</pubDate>
+            <enclosure url="https://github.com/Snupai/Mira-SwiftUI/releases/download/v0.2.56/Mira-0.2.56-macOS.dmg" sparkle:version="0.2.56" sparkle:shortVersionString="0.2.56" sparkle:edSignature="fjYeSAzEQia0Nkjkt3j0OnYq67qNzRB6oS7qg0Rq5OL9KM5s+MD766O0SuT2t5kGbONLBWDJmeBSYTKsO72XBQ==" length="9650779" type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>
