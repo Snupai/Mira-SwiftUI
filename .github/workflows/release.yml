@@ -170,14 +170,25 @@ jobs:
               echo "📦 Signing Sparkle.framework..."
               SPARKLE="Mira.app/Contents/Frameworks/Sparkle.framework"
               
+              # Sign Mach-O binaries (excluding XPC bundles which we handle separately)
               find "$SPARKLE" -type f ! -name ".*" ! -name "*.plist" ! -name "*.strings" ! -name "*.nib" ! -name "*.png" ! -name "*.icns" ! -name "*.car" ! -name "CodeResources" ! -name "_CodeSignature" -print0 2>/dev/null | while IFS= read -r -d '' file; do
                 if file "$file" | grep -qE "Mach-O|bundle"; then
                   sign_binary "$file"
                 fi
               done
               
-              find "$SPARKLE" -name "*.xpc" -type d -print0 2>/dev/null | while IFS= read -r -d '' xpc; do
-                sign_bundle "$xpc"
+              # Sign XPC services with appropriate entitlements
+              for xpc in "$SPARKLE"/Versions/Current/XPCServices/*.xpc; do
+                [ -d "$xpc" ] || continue
+                xpc_name=$(basename "$xpc")
+                echo "   → Signing XPC: $xpc_name"
+                if [ "$xpc_name" = "Downloader.xpc" ] && [ -f "Sparkle-Downloader.entitlements" ]; then
+                  # Downloader needs sandbox + network entitlements
+                  codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" --entitlements Sparkle-Downloader.entitlements "$xpc"
+                else
+                  # Installer.xpc should NOT be sandboxed (needs to write to disk)
+                  codesign $SIGN_FLAGS --sign "$SIGN_IDENTITY" "$xpc"
+                fi
               done
               
               find "$SPARKLE" -name "*.app" -type d -print0 2>/dev/null | while IFS= read -r -d '' app; do
