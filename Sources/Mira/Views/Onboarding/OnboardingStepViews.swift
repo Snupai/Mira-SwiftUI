@@ -449,7 +449,7 @@ struct OnboardingBankView: View {
 
                 FocusableFormField(label: "Account Holder", placeholder: "Acme GmbH", text: $profile.accountHolder, focusedField: $focusedField, field: .accountHolder) { focusedField = .iban }
                 FocusableFormField(label: "IBAN", placeholder: "DE89 3704 0044 0532 0130 00", text: $profile.iban, required: true, focusedField: $focusedField, field: .iban) { focusedField = .bic }
-                FocusableFormField(label: "BIC", placeholder: "COBADEFFXXX", text: $profile.bic, focusedField: $focusedField, field: .bic) { focusedField = .bankName }
+                FocusableFormField(label: "BIC", placeholder: SampleData.placeholderBIC, text: $profile.bic, focusedField: $focusedField, field: .bic) { focusedField = .bankName }
                 FocusableFormField(label: "Bank Name", placeholder: "Commerzbank", text: $profile.bankName, focusedField: $focusedField, field: .bankName) { if canContinue { onContinue() } }
             }
         }
@@ -666,7 +666,7 @@ struct EmailTemplateEditor<F: Hashable>: View {
                             .font(.system(size: 11, weight: .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(colors.accent.opacity(0.15))
+                            .background(colors.accent.opacity(Opacity.subtle))
                             .foregroundColor(colors.accent)
                             .clipShape(Capsule())
                             .onTapGesture {

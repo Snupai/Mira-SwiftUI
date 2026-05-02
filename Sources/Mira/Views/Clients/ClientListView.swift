@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 struct ClientListView: View {
     @EnvironmentObject var appState: AppState
@@ -340,9 +341,9 @@ struct ClientEditorView: View {
         
         do {
             try modelContext.save()
-            print("✅ Saved client to SwiftData")
+            Log.data.info("Saved client to SwiftData")
         } catch {
-            print("⚠️ SwiftData save failed: \(error)")
+            Log.data.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

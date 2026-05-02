@@ -31,18 +31,18 @@ extension Color {
     // For input fields - subtle background
     static var inputBackground: Color {
         #if os(macOS)
-        Color(nsColor: .controlBackgroundColor).opacity(0.5)
+        Color(nsColor: .controlBackgroundColor).opacity(Opacity.muted)
         #else
         Color(uiColor: .secondarySystemBackground)
         #endif
     }
-    
+
     // For cards/sections
     static var cardBackground: Color {
         #if os(macOS)
         Color(nsColor: .controlBackgroundColor).opacity(0.3)
         #else
-        Color(uiColor: .secondarySystemBackground).opacity(0.5)
+        Color(uiColor: .secondarySystemBackground).opacity(Opacity.muted)
         #endif
     }
     

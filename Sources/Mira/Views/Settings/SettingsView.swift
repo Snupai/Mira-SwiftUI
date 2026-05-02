@@ -1,19 +1,21 @@
 import SwiftUI
 import SwiftData
 import CloudKit
+import os
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var appearance = AppAppearance.shared
     @Environment(\.themeColors) var colors
     @Environment(\.modelContext) private var modelContext
-    
+
     @Query private var sdProfiles: [SDCompanyProfile]
-    
+
     @State private var showingColorPicker = false
     @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
     @State private var isCheckingCloudKit = true
     @State private var hasLoadedFromSwiftData = false
+    @State private var alertContext: AlertContext?
 
     var body: some View {
         ScrollView {
@@ -36,6 +38,9 @@ struct SettingsView: View {
             .padding(32)
         }
         .background(colors.base)
+        .alert(item: $alertContext) { context in
+            context.alert
+        }
         .task {
             await checkCloudKitStatus()
         }
@@ -84,7 +89,7 @@ struct SettingsView: View {
                     Spacer()
                     if isCheckingCloudKit {
                         ProgressView()
-                            .scaleEffect(0.7)
+                            .scaleEffect(Sizing.smallControlScale)
                     }
                 }
                 
@@ -623,7 +628,15 @@ struct SettingsView: View {
         if usesSwiftData, let profile = appState.companyProfile {
             if let sdProfile = sdProfiles.first {
                 updateSDProfile(sdProfile, from: profile)
-                try? modelContext.save()
+                do {
+                    try modelContext.save()
+                } catch {
+                    Log.data.error("Failed to save company profile: \(error.localizedDescription, privacy: .public)")
+                    alertContext = AlertContext(
+                        title: "Couldn't Save Settings",
+                        message: "Mira couldn't save your changes: \(error.localizedDescription)\n\nYour edits are still in memory but may be lost when the app quits. Try again or check available disk space."
+                    )
+                }
             }
         }
         // Save to legacy only when migrating old data
@@ -800,7 +813,7 @@ struct PDFTemplateEditorExpanded: View {
                             .font(.system(size: 10, weight: .medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(colors.accent.opacity(0.15))
+                            .background(colors.accent.opacity(Opacity.subtle))
                             .foregroundColor(colors.accent)
                             .clipShape(Capsule())
                     }
@@ -866,7 +879,7 @@ struct SimpleEmailTemplateEditor: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(colors.accent.opacity(0.15))
+                                .background(colors.accent.opacity(Opacity.subtle))
                                 .foregroundColor(colors.accent)
                                 .clipShape(Capsule())
                         }
@@ -891,7 +904,7 @@ struct ResizeHandle: View {
         Image(systemName: "line.3.horizontal")
             .font(.system(size: 10))
             .rotationEffect(.degrees(-45))
-            .foregroundColor(isDragging ? colors.accent : colors.subtext.opacity(0.5))
+            .foregroundColor(isDragging ? colors.accent : colors.subtext.opacity(Opacity.muted))
             .frame(width: 20, height: 20)
             .contentShape(Rectangle())
             .gesture(

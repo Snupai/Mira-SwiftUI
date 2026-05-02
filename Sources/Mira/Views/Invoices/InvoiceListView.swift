@@ -332,7 +332,7 @@ struct InvoiceRow: View {
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(statusColor.opacity(0.15))
+                .background(statusColor.opacity(Opacity.subtle))
                 .foregroundColor(statusColor)
                 .clipShape(Capsule())
                 .frame(width: 80)

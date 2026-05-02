@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
@@ -87,36 +88,36 @@ struct OnboardingContainerView: View {
     }
     
     func finishOnboarding() {
-        print("🚀 finishOnboarding called")
-        
+        Log.onboarding.notice("finishOnboarding called")
+
         // Save to legacy only if migrating existing data
         if MigrationService.shared.needsMigration {
             appState.companyProfile = companyProfile
             appState.saveCompanyProfile()
-            print("✅ Saved to legacy JSON")
+            Log.onboarding.info("Saved to legacy JSON")
         }
-        
+
         // Save to SwiftData (new system)
         do {
             if let existingProfile = sdProfiles.first {
                 // Update existing profile
                 updateSDProfile(existingProfile, from: companyProfile)
-                print("📝 Updated existing SwiftData profile")
+                Log.onboarding.info("Updated existing SwiftData profile")
             } else {
                 // Create new profile
                 let sdProfile = SDCompanyProfile(from: companyProfile)
                 modelContext.insert(sdProfile)
-                print("📝 Created new SwiftData profile")
+                Log.onboarding.info("Created new SwiftData profile")
             }
-            
+
             try modelContext.save()
-            print("✅ Saved to SwiftData")
+            Log.onboarding.notice("Saved to SwiftData")
         } catch {
-            print("⚠️ SwiftData save failed: \(error)")
+            Log.onboarding.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
-        
+
         appState.hasCompletedOnboarding = true
-        print("✅ Onboarding complete!")
+        Log.onboarding.notice("Onboarding complete")
     }
     
     private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {

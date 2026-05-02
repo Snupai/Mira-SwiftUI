@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Security
+import os
 
 /// Service for encrypting/decrypting sensitive fields using AES-GCM
 /// Key is stored securely in the macOS Keychain
@@ -252,7 +253,7 @@ struct Encrypted: Codable {
             do {
                 return try EncryptionService.shared.decrypt(encryptedValue)
             } catch {
-                print("⚠️ Decryption failed: \(error)")
+                Log.encryption.error("Decryption failed: \(error.localizedDescription, privacy: .public)")
                 return ""
             }
         }
@@ -264,7 +265,7 @@ struct Encrypted: Codable {
             do {
                 encryptedValue = try EncryptionService.shared.encrypt(newValue)
             } catch {
-                print("⚠️ Encryption failed: \(error)")
+                Log.encryption.error("Encryption failed: \(error.localizedDescription, privacy: .public)")
                 encryptedValue = ""
             }
         }
