@@ -1,0 +1,44 @@
+# SwiftFormat configuration for Mira
+# Run with: swiftformat .
+# Install: brew install swiftformat
+
+# Indentation
+--indent 4
+--tabwidth 4
+--smarttabs enabled
+
+# Line breaks
+--linebreaks lf
+--maxwidth none
+
+# Wrapping
+--wraparguments preserve
+--wrapparameters preserve
+--wrapcollections preserve
+--closingparen balanced
+
+# Spacing
+--commas inline
+--trimwhitespace always
+--insertlines disabled
+--removelines enabled
+
+# Self
+--self remove
+--selfrequired
+--patternlet hoist
+
+# Imports
+--importgrouping testable-bottom
+
+# Empty braces
+--emptybraces no-space
+
+# Hoist
+--hoistpatternlet hoist
+
+# Header (do not modify file headers automatically)
+--header ignore
+
+# Exclude
+--exclude .build,installer,Mira.xcodeproj,Package.resolved

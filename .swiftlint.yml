@@ -1,0 +1,74 @@
+## SwiftLint configuration for Mira
+##
+## Philosophy: warn, don't block. Rules surface issues during code review without
+## halting the build. Tighten gradually as the codebase improves.
+## Run locally with `swiftlint` (install via `brew install swiftlint`).
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - Mira.xcodeproj
+  - installer
+  - Package.resolved
+  - .build
+
+# Disabled to avoid noise on the initial rollout.
+# Re-enable as the codebase tightens.
+disabled_rules:
+  - line_length
+  - todo
+  - identifier_name
+  - trailing_comma
+
+opt_in_rules:
+  - closure_spacing
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unused_optional_binding
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+
+# Soft limits — warnings only, not errors.
+file_length:
+  warning: 600
+  error: 1500
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 60
+  error: 200
+
+type_body_length:
+  warning: 400
+  error: 800
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+# Force-* rules: warn during transition, never error.
+force_unwrapping:
+  severity: warning
+force_try:
+  severity: warning
+force_cast:
+  severity: warning
+
+custom_rules:
+  no_print:
+    name: "Avoid print() in production code"
+    regex: '(?<!\w)print\s*\('
+    match_kinds:
+      - identifier
+    message: "Use Log.<area>.notice/info/error instead of print()."
+    severity: warning
+    excluded:
+      - "Sources/Mira/Utils/Log.swift"
+      - "Tests"
