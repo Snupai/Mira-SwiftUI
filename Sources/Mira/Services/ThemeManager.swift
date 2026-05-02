@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import os
 
 // MARK: - JSON Theme Models
 
@@ -59,7 +60,11 @@ class ThemeManager: ObservableObject {
     private var customThemesDirectory: URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let themesDir = appSupport.appendingPathComponent("Mira/Themes", isDirectory: true)
-        try? fileManager.createDirectory(at: themesDir, withIntermediateDirectories: true)
+        do {
+            try fileManager.createDirectory(at: themesDir, withIntermediateDirectories: true)
+        } catch {
+            Log.theme.error("Failed to create themes directory: \(error.localizedDescription, privacy: .public)")
+        }
         return themesDir
     }
 
@@ -73,8 +78,7 @@ class ThemeManager: ObservableObject {
 
     /// Copy bundled themes to custom folder so users have examples
     private func copyBundledThemesToCustomFolder() {
-        // Ensure folder exists
-        try? fileManager.createDirectory(at: customThemesDirectory, withIntermediateDirectories: true)
+        // (customThemesDirectory accessor already creates the folder + logs failures.)
 
         // Find bundled themes in SPM resource bundle
         guard let resourceBundle = Bundle.main.url(forResource: "Mira_Mira", withExtension: "bundle"),
@@ -82,21 +86,30 @@ class ThemeManager: ObservableObject {
               let bundlePath = bundle.resourcePath else { return }
 
         let bundleURL = URL(fileURLWithPath: bundlePath)
-        guard let files = try? fileManager.contentsOfDirectory(at: bundleURL, includingPropertiesForKeys: nil) else { return }
+        let files: [URL]
+        do {
+            files = try fileManager.contentsOfDirectory(at: bundleURL, includingPropertiesForKeys: nil)
+        } catch {
+            Log.theme.error("Failed to enumerate bundled themes: \(error.localizedDescription, privacy: .public)")
+            return
+        }
 
         for file in files where file.pathExtension == "json" {
             let destURL = customThemesDirectory.appendingPathComponent(file.lastPathComponent)
             // Only copy if doesn't exist (don't overwrite user edits)
             if !fileManager.fileExists(atPath: destURL.path) {
-                try? fileManager.copyItem(at: file, to: destURL)
+                do {
+                    try fileManager.copyItem(at: file, to: destURL)
+                } catch {
+                    Log.theme.error("Failed to copy bundled theme \(file.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
 
     /// Opens the custom themes folder in Finder
     func openThemesFolder() {
-        // Ensure folder exists
-        try? fileManager.createDirectory(at: customThemesDirectory, withIntermediateDirectories: true)
+        // (customThemesDirectory accessor already creates the folder + logs failures.)
         NSWorkspace.shared.open(customThemesDirectory)
     }
 
@@ -158,7 +171,15 @@ class ThemeManager: ObservableObject {
     private func loadThemesFrom(directory: URL) -> [ThemeFile] {
         var themes: [ThemeFile] = []
 
-        guard let files = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+        // Missing directory is normal (e.g. user has no custom themes); only log
+        // when we actually fail to read an existing directory.
+        let files: [URL]
+        do {
+            files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        } catch {
+            if fileManager.fileExists(atPath: directory.path) {
+                Log.theme.error("Failed to enumerate themes in \(directory.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
             return themes
         }
 
@@ -172,8 +193,13 @@ class ThemeManager: ObservableObject {
     }
 
     private func loadTheme(from url: URL) -> ThemeFile? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(ThemeFile.self, from: data)
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode(ThemeFile.self, from: data)
+        } catch {
+            Log.theme.error("Failed to load theme \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private func createDefaultCatppuccin() -> ThemeFile {
@@ -282,14 +308,18 @@ class ThemeManager: ObservableObject {
             loadThemes()
             return true
         } catch {
-            print("Failed to import theme: \(error)")
+            Log.theme.error("Failed to import theme: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
 
     func deleteCustomTheme(_ theme: ThemeFile) {
         let path = customThemesDirectory.appendingPathComponent("\(theme.name).json")
-        try? fileManager.removeItem(at: path)
+        do {
+            try fileManager.removeItem(at: path)
+        } catch {
+            Log.theme.error("Failed to delete custom theme \(theme.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
         loadThemes()
     }
 

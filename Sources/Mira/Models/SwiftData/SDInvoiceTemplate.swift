@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Combine
+import os
 
 /// SwiftData model for invoice templates
 @Model
@@ -36,7 +37,7 @@ final class SDInvoiceTemplate {
             do {
                 return try JSONDecoder().decode([SDLineItem].self, from: data)
             } catch {
-                print("⚠️ Failed to decode line items: \(error)")
+                Log.data.error("Failed to decode line items: \(error.localizedDescription, privacy: .public)")
                 return []
             }
         }
@@ -44,7 +45,7 @@ final class SDInvoiceTemplate {
             do {
                 lineItemsData = try JSONEncoder().encode(newValue)
             } catch {
-                print("⚠️ Failed to encode line items: \(error)")
+                Log.data.error("Failed to encode line items: \(error.localizedDescription, privacy: .public)")
                 lineItemsData = nil
             }
         }

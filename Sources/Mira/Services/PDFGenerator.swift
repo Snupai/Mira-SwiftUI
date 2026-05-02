@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 #if os(macOS)
 import AppKit
 import PDFKit
@@ -434,7 +435,7 @@ class PDFGenerator {
             try data.write(to: url)
             return true
         } catch {
-            print("Error saving PDF: \(error)")
+            Log.pdf.error("Error saving PDF: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

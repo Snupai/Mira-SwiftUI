@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import os
 #if os(macOS)
 import AppKit
 #endif
@@ -587,7 +588,7 @@ struct ExchangeRateDialog: View {
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
-                .background(Color.secondary.opacity(0.15))
+                .background(Color.secondary.opacity(Opacity.subtle))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 Button(action: {
@@ -633,7 +634,7 @@ struct ExchangeRateDialog: View {
                 
                 if let error = error {
                     fetchError = "No internet connection"
-                    print("Exchange rate fetch error: \(error.localizedDescription)")
+                    Log.app.error("Exchange rate fetch error: \(error.localizedDescription, privacy: .public)")
                     return
                 }
                 

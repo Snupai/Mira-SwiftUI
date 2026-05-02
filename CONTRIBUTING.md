@@ -98,14 +98,44 @@ Mira/
 - Follow Apple's Swift API Design Guidelines
 - Keep views small and composable
 - Use `@Query` for SwiftData fetches
-- Handle errors gracefully
+- Handle errors gracefully — log via `Log.<area>` (see `Sources/Mira/Utils/Log.swift`) instead of `print()`
+
+### Tooling
+
+Install the toolchain locally (one-time):
+
+```bash
+brew install swiftlint swiftformat
+```
+
+Then before committing:
+
+```bash
+swiftformat .
+swiftlint
+```
+
+Both run as warnings — they won't block your build, but they're enforced in CI.
+
+### Pre-commit hook (optional)
+
+To run `swiftformat --lint` and `swiftlint` automatically on staged files:
+
+```bash
+ln -s ../../installer/git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
 
 ## Testing
 
 Run tests with:
+
 ```bash
 swift test
 ```
+
+Tests live in `Tests/MiraTests/`. Highest-payoff areas (where bugs are silent and
+expensive) are covered first: migration, encryption, PDF generation, invoice math.
 
 ## Questions?
 

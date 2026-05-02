@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import os
 
 /// SwiftData model for company profile with encrypted sensitive fields
 @Model
@@ -146,18 +147,18 @@ final class SDCompanyProfile {
         do {
             return try EncryptionService.shared.encrypt(Data(value.utf8))
         } catch {
-            print("⚠️ Encryption failed: \(error)")
+            Log.encryption.error("Encryption failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
-    
+
     private func decryptString(_ data: Data?) -> String {
         guard let data = data, !data.isEmpty else { return "" }
         do {
             let decrypted = try EncryptionService.shared.decrypt(data)
             return String(data: decrypted, encoding: .utf8) ?? ""
         } catch {
-            print("⚠️ Decryption failed: \(error)")
+            Log.encryption.error("Decryption failed: \(error.localizedDescription, privacy: .public)")
             return ""
         }
     }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import CloudKit
+import os
 
 /// SwiftData container configuration with CloudKit sync
 enum DataContainer {
@@ -70,29 +71,77 @@ enum DataContainer {
         )
     }
     
-    /// Shared container instance
-    /// Uses CloudKit if available, falls back to local
+    /// Shared container instance.
+    ///
+    /// Tries CloudKit first, falls back to local, and as an emergency last resort
+    /// returns an in-memory container so the app can still surface an error to the
+    /// user instead of crashing on launch. Real-app initialization in `MiraApp`
+    /// uses `createWithFallback()` which also reports the underlying error.
     @MainActor
     static var shared: ModelContainer = {
+        let result = createWithFallback()
+        if let error = result.error {
+            Log.data.fault("Persistent storage unavailable, using in-memory emergency container: \(error.localizedDescription, privacy: .public)")
+        }
+        return result.container
+    }()
+
+    /// Wrapper around the cascading-fallback container creation that also reports
+    /// the underlying error to callers (so they can surface it in UI).
+    @MainActor
+    static func createWithFallback() -> (container: ModelContainer, error: DataContainerError?) {
+        // Try CloudKit first.
         do {
-            // Try CloudKit first
             let container = try createCloudKitContainer()
-            print("✅ SwiftData container created with CloudKit sync")
-            return container
-        } catch {
-            print("⚠️ CloudKit container failed: \(error)")
-            print("⚠️ Falling back to local-only storage")
-            
-            // Fallback to local
+            Log.data.notice("SwiftData container created with CloudKit sync")
+            return (container, nil)
+        } catch let cloudKitError {
+            Log.cloudKit.error("CloudKit container failed: \(cloudKitError.localizedDescription, privacy: .public)")
+            Log.data.notice("Falling back to local-only storage")
+        }
+
+        // Fallback to local-only.
+        do {
+            let container = try createLocalContainer()
+            Log.data.notice("SwiftData container created (local-only)")
+            return (container, nil)
+        } catch let localError {
+            Log.data.fault("Failed to create local persistent container: \(localError.localizedDescription, privacy: .public)")
+
+            // Emergency: in-memory container. Lets the app still launch and show error UI.
             do {
-                let container = try createLocalContainer()
-                print("✅ SwiftData container created (local-only)")
-                return container
+                let container = try createPreviewContainer()
+                Log.data.fault("Using in-memory emergency container — data will NOT persist!")
+                return (container, .unavailable(underlying: localError))
             } catch {
-                fatalError("❌ Failed to create any ModelContainer: \(error)")
+                // SwiftData itself is broken in this process — nothing more we can do.
+                fatalError("Unable to create even an in-memory ModelContainer: \(error)")
             }
         }
-    }()
+    }
+}
+
+// MARK: - Errors
+
+/// Errors raised by `DataContainer` when persistent storage is unavailable.
+enum DataContainerError: LocalizedError {
+    /// Persistent storage (CloudKit and local-only) both failed; the app is
+    /// running on a non-persistent emergency container.
+    case unavailable(underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(let underlying):
+            return "Mira can't open its persistent storage. Your changes will not be saved.\n\n\(underlying.localizedDescription)"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .unavailable:
+            return "Quit Mira and try again. If the problem persists, check Console.app for details (filter by subsystem com.snupai.Mira)."
+        }
+    }
 }
 
 // MARK: - CloudKit Status
@@ -104,17 +153,17 @@ extension DataContainer {
             // Use default container - it should match our entitlements
             let container = CKContainer.default()
             let status = try await container.accountStatus()
-            print("✅ CloudKit status: \(status.rawValue) for container: \(container.containerIdentifier ?? "default")")
+            Log.cloudKit.notice("CloudKit status: \(status.rawValue) for container: \(container.containerIdentifier ?? "default", privacy: .public)")
             return status
         } catch {
-            print("⚠️ CloudKit status check failed: \(error.localizedDescription)")
+            Log.cloudKit.error("CloudKit status check failed: \(error.localizedDescription, privacy: .public)")
             // Try with explicit identifier as fallback
             do {
                 let status = try await CKContainer(identifier: cloudKitContainerID).accountStatus()
-                print("✅ CloudKit status (explicit): \(status.rawValue)")
+                Log.cloudKit.notice("CloudKit status (explicit): \(status.rawValue)")
                 return status
             } catch {
-                print("❌ CloudKit explicit check also failed: \(error.localizedDescription)")
+                Log.cloudKit.error("CloudKit explicit check also failed: \(error.localizedDescription, privacy: .public)")
                 return .couldNotDetermine
             }
         }
@@ -154,8 +203,8 @@ extension DataContainer {
             profile.companyName = "Snupai Studios"
             profile.ownerName = "Snupai"
             profile.email = "hello@snupai.dev"
-            profile.iban = "DE89370400440532013000"
-            profile.bic = "COBADEFFXXX"
+            profile.iban = SampleData.placeholderIBAN
+            profile.bic = SampleData.placeholderBIC
             context.insert(profile)
             
             // Add sample client

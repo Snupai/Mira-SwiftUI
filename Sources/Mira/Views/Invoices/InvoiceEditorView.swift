@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 
 struct InvoiceEditorView: View {
     @EnvironmentObject var appState: AppState
@@ -415,9 +416,9 @@ struct InvoiceEditorView: View {
         
         do {
             try modelContext.save()
-            print("✅ Saved invoice to SwiftData")
+            Log.data.info("Saved invoice to SwiftData")
         } catch {
-            print("⚠️ SwiftData save failed: \(error)")
+            Log.data.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
     

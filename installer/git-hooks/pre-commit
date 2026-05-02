@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Mira pre-commit hook.
+#
+# Install (one-time, opt-in):
+#   ln -s ../../installer/git-hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Runs swiftformat --lint and swiftlint on staged Swift files.
+# Bypass for a single commit with: git commit --no-verify
+
+set -euo pipefail
+
+# Collect staged Swift files (added/copied/modified, not deleted).
+STAGED_SWIFT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.swift$' || true)
+
+if [ -z "$STAGED_SWIFT" ]; then
+    exit 0
+fi
+
+EXIT=0
+
+if command -v swiftformat >/dev/null 2>&1; then
+    echo "[pre-commit] swiftformat --lint…"
+    if ! echo "$STAGED_SWIFT" | xargs swiftformat --lint --quiet; then
+        echo "[pre-commit] swiftformat reported diffs. Run 'swiftformat .' to auto-fix."
+        EXIT=1
+    fi
+else
+    echo "[pre-commit] swiftformat not installed — skipping. (brew install swiftformat)"
+fi
+
+if command -v swiftlint >/dev/null 2>&1; then
+    echo "[pre-commit] swiftlint…"
+    # SwiftLint reads .swiftlint.yml from repo root; pass files via --use-script-input-files isn't
+    # supported in plain mode, so we just lint the whole project (fast on small codebases).
+    if ! swiftlint --quiet; then
+        EXIT=1
+    fi
+else
+    echo "[pre-commit] swiftlint not installed — skipping. (brew install swiftlint)"
+fi
+
+exit $EXIT
