@@ -9,15 +9,10 @@ struct ContentView: View {
     
     /// Check if setup is complete (works with both old and new data)
     private var isSetupComplete: Bool {
-        // Check SwiftData first (new system)
-        if let profile = profiles.first, profile.isComplete {
-            return appState.hasCompletedOnboarding
+        if MigrationService.shared.useSwiftData {
+            return profiles.first != nil && appState.hasCompletedOnboarding
         }
-        // Fallback to legacy (during transition)
-        if let profile = appState.companyProfile, profile.isComplete {
-            return appState.hasCompletedOnboarding
-        }
-        return false
+        return appState.companyProfile != nil && appState.hasCompletedOnboarding
     }
     
     var body: some View {
@@ -147,7 +142,18 @@ struct MainView: View {
     @ViewBuilder
     func content(for tab: Tab) -> some View {
         switch tab {
-        case .dashboard: DashboardView()
+        case .dashboard:
+            DashboardView { filter in
+                invoiceBrowsingState.searchText = ""
+                switch filter {
+                case .all, .outstanding: invoiceBrowsingState.selectedStatus = nil
+                case .collectedMonth, .collectedYear: invoiceBrowsingState.selectedStatus = .paid
+                case .overdue: invoiceBrowsingState.selectedStatus = .overdue
+                }
+                invoiceBrowsingState.onlyOutstanding = filter == .outstanding
+                invoiceBrowsingState.paidPeriod = filter == .collectedMonth ? .month : filter == .collectedYear ? .year : nil
+                selectedTab = .invoices
+            }
         case .invoices: InvoiceListView(browsingState: $invoiceBrowsingState)
         case .clients: ClientListView(searchText: $clientSearchText)
         case .settings: SettingsView()

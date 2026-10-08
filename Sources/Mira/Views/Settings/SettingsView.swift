@@ -13,53 +13,78 @@ struct SettingsView: View {
     @State private var showingColorPicker = false
     @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
     @State private var isCheckingCloudKit = true
-    @State private var hasLoadedFromSwiftData = false
+    @State private var profile: CompanyProfile?
+    @State private var selectedCategory: SettingsCategory = .company
+    @State private var saveError: String?
+    @State private var showSaveError = false
+    @State private var showAdvanced = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                syncStatusSection
-                appearanceSection
-                companySection
-                addressSection
-                taxSection
-                bankSection
-                pdfTemplatesSection
-                invoiceDefaultsSection
-                exportSection
-                otherSection
+        VStack(spacing: 0) {
+            Picker("Settings category", selection: $selectedCategory) {
+                ForEach(SettingsCategory.allCases) { category in
+                    Text(category.rawValue).tag(category)
+                }
             }
-            .padding(32)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(20)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    switch selectedCategory {
+                    case .company:
+                        companySection
+                        addressSection
+                        taxSection
+                        bankSection
+                    case .invoices: invoiceDefaultsSection
+                    case .pdf:
+                        pdfTemplatesSection
+                        exportSection
+                    case .appearance: appearanceSection
+                    case .sync:
+                        syncStatusSection
+                        DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                            VStack(alignment: .leading, spacing: 20) {
+                                Toggle("Delete legacy JSON after migration", isOn: Binding(
+                                    get: { UserDefaults.standard.bool(forKey: "mira.deleteLegacyAfterMigration") },
+                                    set: { UserDefaults.standard.set($0, forKey: "mira.deleteLegacyAfterMigration") }
+                                ))
+                                Text("Removes old JSON files after successful migration. Migration backups are retained.")
+                                    .font(.caption).foregroundStyle(colors.subtext)
+                                otherSection
+                            }
+                            .padding(.top, 12)
+                        }
+                    }
+                }
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(24)
+            }
         }
+        .background(colors.base)
         .navigationTitle("Settings")
-        .task {
-            await checkCloudKitStatus()
-        }
-        .onAppear {
-            loadProfileFromSwiftData()
+        .frame(minWidth: 540, minHeight: 500)
+        .task { await checkCloudKitStatus() }
+        .onAppear { loadProfile() }
+        .onChange(of: sdProfiles.first?.updatedAt) { _, _ in
+            if saveError == nil { loadProfile() }
         }
         .onChange(of: sdProfiles.count) { _, _ in
-            // Reload when SwiftData profile becomes available (initial load)
-            loadProfileFromSwiftData()
+            if profile == nil { loadProfile() }
         }
-        .onChange(of: sdProfiles.first?.updatedAt) { _, _ in
-            // Reload when SwiftData profile changes (e.g., from CloudKit sync)
-            if usesSwiftData, let sdProfile = sdProfiles.first {
-                appState.companyProfile = sdProfile.toLegacy()
-            }
-        }
+        .alert("Settings could not be saved", isPresented: $showSaveError) {
+            Button("Retry") { saveCompanyProfile() }
+            Button("Keep Editing", role: .cancel) { }
+        } message: { Text(saveError ?? "Please try again.") }
     }
-    
-    private func loadProfileFromSwiftData() {
-        // Load SwiftData profile into appState for editing
-        guard usesSwiftData else { return }
-        guard !hasLoadedFromSwiftData || appState.companyProfile == nil else { return }
-        if let sdProfile = sdProfiles.first {
-            appState.companyProfile = sdProfile.toLegacy()
-            hasLoadedFromSwiftData = true
-        }
+
+    private func loadProfile() {
+        profile = CompanyProfileStore.resolve(sdProfiles, legacy: appState.companyProfile)
     }
-    
+
     // MARK: - Sync Status Section
     private var syncStatusSection: some View {
         SettingsSection(title: "Sync & Security", colors: colors) {
@@ -120,23 +145,6 @@ struct SettingsView: View {
                     Spacer()
                 }
                 
-                Divider().background(colors.surface1)
-                
-                // Delete legacy JSON after migration
-                Toggle(isOn: Binding(
-                    get: { UserDefaults.standard.bool(forKey: "mira.deleteLegacyAfterMigration") },
-                    set: { UserDefaults.standard.set($0, forKey: "mira.deleteLegacyAfterMigration") }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Delete Legacy JSON After Migration")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.text)
-                        Text("Removes old JSON files after successful migration")
-                            .font(.system(size: 11))
-                            .foregroundColor(colors.subtext)
-                    }
-                }
-                .toggleStyle(.switch)
             }
         }
     }
@@ -212,9 +220,9 @@ struct SettingsView: View {
                 
                 // Brand Logo
                 LogoPicker(logoData: Binding(
-                    get: { appState.companyProfile?.logoData },
+                    get: { profile?.logoData },
                     set: { newValue in
-                        appState.companyProfile?.logoData = newValue
+                        profile?.logoData = newValue
                         saveCompanyProfile()
                     }
                 ))
@@ -227,24 +235,28 @@ struct SettingsView: View {
                     
                     HStack(spacing: 10) {
                         ForEach(BrandColors.presets.prefix(6), id: \.hex) { preset in
-                            Circle()
-                                .fill(Color(hex: preset.hex) ?? .blue)
-                                .frame(width: 28, height: 28)
-                                .overlay(
-                                    Circle()
-                                        .stroke(colors.text, lineWidth: appState.companyProfile?.brandColorHex == preset.hex ? 2 : 0)
-                                        .padding(-3)
-                                )
-                                .onTapGesture {
-                                    appState.companyProfile?.brandColorHex = preset.hex
-                                    saveCompanyProfile()
-                                }
+                            Button {
+                                profile?.brandColorHex = preset.hex
+                                saveCompanyProfile()
+                            } label: {
+                                Circle()
+                                    .fill(Color(hex: preset.hex) ?? .blue)
+                                    .frame(width: 28, height: 28)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(colors.text, lineWidth: profile?.brandColorHex == preset.hex ? 2 : 0)
+                                            .padding(-3)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Brand color: \(preset.name)")
+                            .help(preset.name)
                         }
                         
-                        ColorPicker("", selection: Binding(
-                            get: { Color(hex: appState.companyProfile?.brandColorHex ?? "#0066CC") ?? .blue },
+                        ColorPicker("Custom brand color", selection: Binding(
+                            get: { Color(hex: profile?.brandColorHex ?? "#0066CC") ?? .blue },
                             set: {
-                                appState.companyProfile?.brandColorHex = $0.toHex()
+                                profile?.brandColorHex = $0.toHex()
                                 saveCompanyProfile()
                             }
                         ))
@@ -276,7 +288,7 @@ struct SettingsView: View {
         SettingsSection(title: "Tax Information", colors: colors) {
             VStack(spacing: 16) {
                 vatExemptionToggle
-                if !(appState.companyProfile?.isVatExempt ?? false) {
+                if !(profile?.isVatExempt ?? false) {
                     SettingsTextField(label: "VAT ID (USt-IdNr.)", text: binding(\.vatId), colors: colors)
                 }
                 SettingsTextField(label: "Tax Number", text: binding(\.taxNumber), colors: colors)
@@ -296,14 +308,15 @@ struct SettingsView: View {
             }
             Spacer()
             Toggle("", isOn: Binding(
-                get: { appState.companyProfile?.isVatExempt ?? false },
+                get: { profile?.isVatExempt ?? false },
                 set: {
-                    appState.companyProfile?.isVatExempt = $0
-                    appState.saveCompanyProfile()
+                    profile?.isVatExempt = $0
+                    saveCompanyProfile()
                 }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
+            .accessibilityLabel("Small business VAT exemption")
         }
     }
 
@@ -344,10 +357,10 @@ struct SettingsView: View {
                     .foregroundColor(colors.text)
                 Spacer()
                 Button("Reset All to Default") {
-                    appState.companyProfile?.pdfFooterTemplateGerman = PDFTemplateLanguage.german.defaultFooter
-                    appState.companyProfile?.pdfClosingTemplateGerman = PDFTemplateLanguage.german.defaultClosing
-                    appState.companyProfile?.pdfNotesTemplateGerman = ""
-                    appState.saveCompanyProfile()
+                    profile?.pdfFooterTemplateGerman = PDFTemplateLanguage.german.defaultFooter
+                    profile?.pdfClosingTemplateGerman = PDFTemplateLanguage.german.defaultClosing
+                    profile?.pdfNotesTemplateGerman = ""
+                    saveCompanyProfile()
                 }
                 .font(.system(size: 11))
                 .foregroundColor(colors.accent)
@@ -358,8 +371,8 @@ struct SettingsView: View {
                 title: "Footer",
                 description: "Shown at the bottom of every page",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfFooterTemplateGerman ?? PDFTemplateLanguage.german.defaultFooter },
-                    set: { appState.companyProfile?.pdfFooterTemplateGerman = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfFooterTemplateGerman ?? PDFTemplateLanguage.german.defaultFooter },
+                    set: { profile?.pdfFooterTemplateGerman = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -368,8 +381,8 @@ struct SettingsView: View {
                 title: "Closing Message",
                 description: "Shown after the totals section",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfClosingTemplateGerman ?? PDFTemplateLanguage.german.defaultClosing },
-                    set: { appState.companyProfile?.pdfClosingTemplateGerman = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfClosingTemplateGerman ?? PDFTemplateLanguage.german.defaultClosing },
+                    set: { profile?.pdfClosingTemplateGerman = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -378,8 +391,8 @@ struct SettingsView: View {
                 title: "Notes / Terms",
                 description: "Optional notes shown above bank details (leave empty to hide)",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfNotesTemplateGerman ?? "" },
-                    set: { appState.companyProfile?.pdfNotesTemplateGerman = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfNotesTemplateGerman ?? "" },
+                    set: { profile?.pdfNotesTemplateGerman = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -396,10 +409,10 @@ struct SettingsView: View {
                     .foregroundColor(colors.text)
                 Spacer()
                 Button("Reset All to Default") {
-                    appState.companyProfile?.pdfFooterTemplateEnglish = PDFTemplateLanguage.english.defaultFooter
-                    appState.companyProfile?.pdfClosingTemplateEnglish = PDFTemplateLanguage.english.defaultClosing
-                    appState.companyProfile?.pdfNotesTemplateEnglish = ""
-                    appState.saveCompanyProfile()
+                    profile?.pdfFooterTemplateEnglish = PDFTemplateLanguage.english.defaultFooter
+                    profile?.pdfClosingTemplateEnglish = PDFTemplateLanguage.english.defaultClosing
+                    profile?.pdfNotesTemplateEnglish = ""
+                    saveCompanyProfile()
                 }
                 .font(.system(size: 11))
                 .foregroundColor(colors.accent)
@@ -410,8 +423,8 @@ struct SettingsView: View {
                 title: "Footer",
                 description: "Shown at the bottom of every page",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfFooterTemplateEnglish ?? PDFTemplateLanguage.english.defaultFooter },
-                    set: { appState.companyProfile?.pdfFooterTemplateEnglish = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfFooterTemplateEnglish ?? PDFTemplateLanguage.english.defaultFooter },
+                    set: { profile?.pdfFooterTemplateEnglish = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -420,8 +433,8 @@ struct SettingsView: View {
                 title: "Closing Message",
                 description: "Shown after the totals section",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfClosingTemplateEnglish ?? PDFTemplateLanguage.english.defaultClosing },
-                    set: { appState.companyProfile?.pdfClosingTemplateEnglish = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfClosingTemplateEnglish ?? PDFTemplateLanguage.english.defaultClosing },
+                    set: { profile?.pdfClosingTemplateEnglish = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -430,8 +443,8 @@ struct SettingsView: View {
                 title: "Notes / Terms",
                 description: "Optional notes shown above bank details (leave empty to hide)",
                 template: Binding(
-                    get: { appState.companyProfile?.pdfNotesTemplateEnglish ?? "" },
-                    set: { appState.companyProfile?.pdfNotesTemplateEnglish = $0; appState.saveCompanyProfile() }
+                    get: { profile?.pdfNotesTemplateEnglish ?? "" },
+                    set: { profile?.pdfNotesTemplateEnglish = $0; saveCompanyProfile() }
                 ),
                 colors: colors
             )
@@ -444,6 +457,15 @@ struct SettingsView: View {
             VStack(spacing: 16) {
                 SettingsTextField(label: "Invoice Prefix", text: binding(\.invoiceNumberPrefix), colors: colors)
 
+                Picker("Default Currency", selection: binding(\.defaultCurrency)) {
+                    ForEach(Currency.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                HStack {
+                    Text("Default VAT (%)")
+                    TextField("VAT rate", value: binding(\.defaultVatRate), format: .number)
+                        .textFieldStyle(.roundedBorder).frame(width: 90)
+                        .accessibilityLabel("Default VAT percentage")
+                }
                 invoiceNumberStepper
                 paymentTermsSelector
             }
@@ -458,9 +480,9 @@ struct SettingsView: View {
             Spacer()
             HStack(spacing: 8) {
                 Button(action: {
-                    if let num = appState.companyProfile?.nextInvoiceNumber, num > 1 {
-                        appState.companyProfile?.nextInvoiceNumber = num - 1
-                        appState.saveCompanyProfile()
+                    if let num = profile?.nextInvoiceNumber, num > 1 {
+                        profile?.nextInvoiceNumber = num - 1
+                        saveCompanyProfile()
                     }
                 }) {
                     Image(systemName: "minus")
@@ -469,15 +491,16 @@ struct SettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Decrease next invoice number")
 
-                Text("\(appState.companyProfile?.nextInvoiceNumber ?? 1)")
+                Text("\(profile?.nextInvoiceNumber ?? 1)")
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(colors.text)
                     .frame(width: 50)
 
                 Button(action: {
-                    appState.companyProfile?.nextInvoiceNumber += 1
-                    appState.saveCompanyProfile()
+                    profile?.nextInvoiceNumber += 1
+                    saveCompanyProfile()
                 }) {
                     Image(systemName: "plus")
                         .frame(width: 28, height: 28)
@@ -485,6 +508,7 @@ struct SettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Increase next invoice number")
             }
         }
     }
@@ -497,17 +521,18 @@ struct SettingsView: View {
             Spacer()
             HStack(spacing: 6) {
                 ForEach([7, 14, 30, 60], id: \.self) { days in
-                    Text("\(days)d")
+                    Button("\(days) days") {
+                        profile?.defaultPaymentTermsDays = days
+                        saveCompanyProfile()
+                    }
+                        .buttonStyle(.plain)
                         .font(.system(size: 13, weight: .medium))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(appState.companyProfile?.defaultPaymentTermsDays == days ? colors.accent : colors.surface1)
-                        .foregroundColor(appState.companyProfile?.defaultPaymentTermsDays == days ? .white : colors.text)
+                        .background(profile?.defaultPaymentTermsDays == days ? colors.accent : colors.surface1)
+                        .foregroundColor(profile?.defaultPaymentTermsDays == days ? .white : colors.text)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .onTapGesture {
-                            appState.companyProfile?.defaultPaymentTermsDays = days
-                            appState.saveCompanyProfile()
-                        }
+
                 }
             }
         }
@@ -539,9 +564,9 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     
-                    if !(appState.companyProfile?.defaultExportPath.isEmpty ?? true) {
+                    if !(profile?.defaultExportPath.isEmpty ?? true) {
                         Button(action: {
-                            appState.companyProfile?.defaultExportPath = ""
+                            profile?.defaultExportPath = ""
                             saveCompanyProfile()
                         }) {
                             Image(systemName: "xmark.circle.fill")
@@ -560,7 +585,7 @@ struct SettingsView: View {
     }
     
     private var exportPathDisplay: String {
-        guard let path = appState.companyProfile?.defaultExportPath, !path.isEmpty else {
+        guard let path = profile?.defaultExportPath, !path.isEmpty else {
             return "Ask each time..."
         }
         return (path as NSString).lastPathComponent
@@ -577,7 +602,7 @@ struct SettingsView: View {
         panel.prompt = "Select Folder"
         
         if panel.runModal() == .OK, let url = panel.url {
-            appState.companyProfile?.defaultExportPath = url.path
+            profile?.defaultExportPath = url.path
             saveCompanyProfile()
         }
         #endif
@@ -606,62 +631,25 @@ struct SettingsView: View {
     
     func binding<T>(_ keyPath: WritableKeyPath<CompanyProfile, T>) -> Binding<T> where T: Equatable {
         Binding(
-            get: { appState.companyProfile?[keyPath: keyPath] ?? CompanyProfile()[keyPath: keyPath] },
+            get: { profile?[keyPath: keyPath] ?? CompanyProfile()[keyPath: keyPath] },
             set: { newValue in
-                appState.companyProfile?[keyPath: keyPath] = newValue
+                profile?[keyPath: keyPath] = newValue
                 saveCompanyProfile()
             }
         )
     }
     
     private func saveCompanyProfile() {
-        // Save to SwiftData if migrated
-        if usesSwiftData, let profile = appState.companyProfile {
-            if let sdProfile = sdProfiles.first {
-                updateSDProfile(sdProfile, from: profile)
-                try? modelContext.save()
-            }
+        guard let profile else { return }
+        do {
+            try CompanyProfileStore.save(profile, profiles: sdProfiles, context: modelContext, appState: appState)
+            saveError = nil
+        } catch {
+            saveError = error.localizedDescription
+            showSaveError = true
         }
-        // Save to legacy only when migrating old data
-        appState.saveCompanyProfile()
     }
-    
-    private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {
-        sdProfile.companyName = profile.companyName
-        sdProfile.ownerName = profile.ownerName
-        sdProfile.email = profile.email
-        sdProfile.phone = profile.phone
-        sdProfile.website = profile.website
-        sdProfile.street = profile.street
-        sdProfile.city = profile.city
-        sdProfile.postalCode = profile.postalCode
-        sdProfile.country = profile.country
-        sdProfile.vatId = profile.vatId
-        sdProfile.taxNumber = profile.taxNumber
-        sdProfile.companyRegistry = profile.companyRegistry
-        sdProfile.isVatExempt = profile.isVatExempt
-        sdProfile.bankName = profile.bankName
-        sdProfile.iban = profile.iban
-        sdProfile.bic = profile.bic
-        sdProfile.accountHolder = profile.accountHolder
-        sdProfile.logoData = profile.logoData
-        sdProfile.brandColorHex = profile.brandColorHex
-        sdProfile.defaultCurrencyRaw = profile.defaultCurrency.rawValue
-        sdProfile.defaultPaymentTermsDays = profile.defaultPaymentTermsDays
-        sdProfile.defaultVatRate = profile.defaultVatRate
-        sdProfile.invoiceNumberPrefix = profile.invoiceNumberPrefix
-        sdProfile.nextInvoiceNumber = profile.nextInvoiceNumber
-        sdProfile.emailTemplateGerman = profile.emailTemplateGerman
-        sdProfile.emailTemplateEnglish = profile.emailTemplateEnglish
-        sdProfile.pdfFooterTemplateGerman = profile.pdfFooterTemplateGerman
-        sdProfile.pdfClosingTemplateGerman = profile.pdfClosingTemplateGerman
-        sdProfile.pdfNotesTemplateGerman = profile.pdfNotesTemplateGerman
-        sdProfile.pdfFooterTemplateEnglish = profile.pdfFooterTemplateEnglish
-        sdProfile.pdfClosingTemplateEnglish = profile.pdfClosingTemplateEnglish
-        sdProfile.pdfNotesTemplateEnglish = profile.pdfNotesTemplateEnglish
-        sdProfile.defaultExportPath = profile.defaultExportPath
-        sdProfile.updatedAt = Date()
-    }
+
 }
 
 struct SettingsSection<Content: View>: View {
@@ -693,14 +681,9 @@ struct SettingsTextField: View {
             Text(label)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(colors.subtext)
-            TextField("", text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .foregroundColor(colors.text)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(colors.surface1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            TextField(label, text: $text)
+                .accessibilityLabel(label)
+                .miraInput(colors: colors)
         }
     }
 }
@@ -1007,4 +990,14 @@ struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView().environmentObject(AppState())
     }
+}
+
+
+private enum SettingsCategory: String, CaseIterable, Identifiable {
+    case company = "Company"
+    case invoices = "Invoices"
+    case pdf = "PDF & Export"
+    case appearance = "Appearance"
+    case sync = "Sync"
+    var id: String { rawValue }
 }

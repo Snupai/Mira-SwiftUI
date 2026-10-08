@@ -309,7 +309,7 @@ class PDFGenerator {
         let totalAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 12), .foregroundColor: NSColor.black]
         let totalColorAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 12), .foregroundColor: brandColor]
         strings.totalAmount.draw(at: CGPoint(x: totalsX, y: yPosition), withAttributes: totalAttrs)
-        let displayTotal = companyProfile.isVatExempt ? invoice.subtotal : invoice.total
+        let displayTotal = companyProfile.isVatExempt ? invoice.taxableAmount : invoice.total
         let totalValue = currencyFormatter.string(from: NSNumber(value: displayTotal)) ?? ""
         totalValue.draw(at: CGPoint(x: totalsX + 100, y: yPosition), withAttributes: totalColorAttrs)
         
@@ -431,7 +431,7 @@ class PDFGenerator {
             return false
         }
         do {
-            try data.write(to: url)
+            try data.write(to: url, options: .atomic)
             return true
         } catch {
             print("Error saving PDF: \(error)")
@@ -452,7 +452,7 @@ class PDFGenerator {
         
         // Invoice variables
         result = result.replacingOccurrences(of: "{invoiceNumber}", with: invoice.invoiceNumber)
-        result = result.replacingOccurrences(of: "{totalAmount}", with: currencyFormatter.string(from: NSNumber(value: invoice.total)) ?? "")
+        result = result.replacingOccurrences(of: "{totalAmount}", with: currencyFormatter.string(from: NSNumber(value: profile.isVatExempt ? invoice.taxableAmount : invoice.total)) ?? "")
         result = result.replacingOccurrences(of: "{subtotal}", with: currencyFormatter.string(from: NSNumber(value: invoice.subtotal)) ?? "")
         result = result.replacingOccurrences(of: "{issueDate}", with: dateFormatter.string(from: invoice.issueDate))
         result = result.replacingOccurrences(of: "{dueDate}", with: dateFormatter.string(from: invoice.dueDate))

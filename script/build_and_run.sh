@@ -3,12 +3,13 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 MODE="${1:-run}"
 case "$MODE" in
-  run|--verify|--debug|--logs|--telemetry) ;;
-  *) echo "usage: $0 [--verify|--debug|--logs|--telemetry]" >&2; exit 2 ;;
+  run|--verify|--debug|--logs|--telemetry|--ui-review) ;;
+  *) echo "usage: $0 [--verify|--debug|--logs|--telemetry|--ui-review]" >&2; exit 2 ;;
 esac
 pkill -x Mira >/dev/null 2>&1 || true
 ./bundle.sh
 case "$MODE" in
+  --ui-review) /usr/bin/open -n --env MIRA_UI_REVIEW=1 Mira.app ;;
   --debug) lldb -- Mira.app/Contents/MacOS/Mira ;;
   --logs|--telemetry)
     /usr/bin/open -n Mira.app

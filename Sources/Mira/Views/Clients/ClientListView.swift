@@ -1,133 +1,101 @@
 import SwiftUI
 import SwiftData
 
+private struct ClientSummary: Identifiable {
+    let id: UUID
+    let name: String
+    let email: String
+    var initials: String {
+        let words = name.split(separator: " ")
+        return words.prefix(2).map { String($0.prefix(1)) }.joined().uppercased()
+    }
+}
+
 struct ClientListView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.themeColors) var colors
-    @Environment(\.modelContext) private var modelContext
-    
-    // SwiftData queries
     @Query(sort: \SDClient.name) private var sdClients: [SDClient]
     @Query private var sdInvoices: [SDInvoice]
-    
     @Binding var searchText: String
     @State private var showingNewClient = false
     @State private var selectedClient: Client?
-    
-    // Use SwiftData if migrated or no legacy data exists
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
-    }
-    
-    private var allClients: [Client] {
-        if usesSwiftData {
-            return sdClients.map { $0.toLegacy() }
-        }
-        return appState.clients
-    }
-    
-    private var allInvoices: [Invoice] {
-        if usesSwiftData {
-            return sdInvoices.map { $0.toLegacy() }
-        }
-        return appState.invoices
-    }
-    
-    var filteredClients: [Client] {
-        let clients = allClients.sorted { $0.name < $1.name }
-        if searchText.isEmpty { return clients }
-        return clients.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.email.localizedCaseInsensitiveContains(searchText)
-        }
-    }
-    
-    private func invoiceCount(for clientId: UUID) -> Int {
-        allInvoices.filter { $0.clientId == clientId }.count
-    }
-    
+    @State private var selection: UUID?
+    @FocusState private var listFocused: Bool
+    private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
+
     var body: some View {
+        let clients = usesSwiftData ? sdClients.map { ClientSummary(id: $0.id, name: $0.name, email: $0.email) }
+            : appState.clients.map { ClientSummary(id: $0.id, name: $0.name, email: $0.email) }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        let filtered = clients.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) || $0.email.localizedCaseInsensitiveContains(searchText) }
+        let invoiceClientIds = usesSwiftData ? sdInvoices.compactMap { $0.client?.id } : appState.invoices.map(\.clientId)
+        let counts = invoiceClientIds.reduce(into: [UUID: Int]()) { $0[$1, default: 0] += 1 }
         VStack(spacing: 0) {
-            // List
-            if filteredClients.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Text(allClients.isEmpty ? "No clients" : "No matching clients")
-                        .font(.system(size: 17))
-                        .foregroundColor(colors.subtext)
-                    if allClients.isEmpty {
-                        Button("Add your first client") { showingNewClient = true }
-                            .buttonStyle(.plain)
-                            .foregroundColor(colors.accent)
-                    } else {
-                        Button("Clear search") { searchText = "" }
-                    }
-                    Spacer()
+            if filtered.isEmpty {
+                ContentUnavailableView {
+                    Label(clients.isEmpty ? "No clients yet" : "No matching clients", systemImage: clients.isEmpty ? "person.2" : "magnifyingglass")
+                } description: { Text(clients.isEmpty ? "Add a client to create your first invoice." : "Try another name or email address.") }
+                actions: {
+                    if clients.isEmpty { Button("Add your first client") { showingNewClient = true } }
+                    else { Button("Clear search") { searchText = "" } }
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredClients) { client in
-                            ClientRow(client: client, invoiceCount: invoiceCount(for: client.id), colors: colors)
-                                .contentShape(Rectangle())
-                                .onTapGesture { selectedClient = client }
-                            Divider().background(colors.surface0)
+                List(filtered, selection: $selection) { client in
+                    HStack(spacing: 16) {
+                        Text(client.initials).font(.subheadline.weight(.medium))
+                            .frame(width: 40, height: 40).background(colors.surface1, in: Circle())
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(client.name).fontWeight(.medium)
+                            Text(client.email).font(.caption).foregroundStyle(colors.subtext)
                         }
+                        Spacer()
+                        let count = counts[client.id, default: 0]
+                        Text("\(count) \(count == 1 ? "invoice" : "invoices")").foregroundStyle(colors.subtext)
                     }
-                    .padding(.horizontal, 32)
+                    .padding(.vertical, 6).tag(client.id)
+                }
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .contextMenu(forSelectionType: UUID.self) { ids in
+                    if let id = ids.first { Button("Open Client") { openClient(id) } }
+                } primaryAction: { ids in
+                    if let id = ids.first { openClient(id) }
+                }
+                .focusable()
+                .focused($listFocused)
+                .onChange(of: selection) { _, value in if value != nil { listFocused = true } }
+                .onKeyPress(.return) {
+                    guard let selection else { return .ignored }
+                    openClient(selection)
+                    return .handled
+                }
+                .onChange(of: filtered.map(\.id)) { _, ids in
+                    if let selection, !ids.contains(selection) { self.selection = nil }
                 }
             }
         }
         .background(colors.base)
         .navigationTitle("Clients")
-        .searchable(text: $searchText, prompt: "Search clients...")
+        .searchable(text: $searchText, prompt: "Search clients…")
         .toolbar {
             ToolbarItem {
+                Button("Open", systemImage: "person.crop.circle") { if let selection { openClient(selection) } }
+                    .disabled(selection == nil).help("Open selected client (Return)")
+            }
+            ToolbarItem {
                 Button("New Client", systemImage: "plus") { showingNewClient = true }
-                    .miraPrimaryAction()
-                    .help("New Client (⇧⌘N)")
+                    .miraPrimaryAction().help("New Client (⇧⌘N)")
             }
         }
         .sheet(isPresented: $showingNewClient) {
-            ClientEditorView(client: nil).environmentObject(appState)
+            ClientEditorView(client: nil).environmentObject(appState).environment(\.themeColors, colors)
         }
         .sheet(item: $selectedClient) { client in
-            ClientDetailView(client: client).environmentObject(appState)
+            ClientDetailView(client: client).environmentObject(appState).environment(\.themeColors, colors)
         }
     }
-}
 
-struct ClientRow: View {
-    let client: Client
-    let invoiceCount: Int
-    let colors: ThemeColors
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Avatar
-            Text(client.initials)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(colors.text)
-                .frame(width: 40, height: 40)
-                .background(colors.surface1)
-                .clipShape(Circle())
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(client.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(colors.text)
-                Text(client.email)
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.subtext)
-            }
-            
-            Spacer()
-            
-            Text("\(invoiceCount) invoices")
-                .font(.system(size: 13))
-                .foregroundColor(colors.subtext)
-        }
-        .padding(.vertical, 12)
+    private func openClient(_ id: UUID) {
+        selectedClient = usesSwiftData ? sdClients.first { $0.id == id }?.toLegacy() : appState.clients.first { $0.id == id }
     }
 }
 
@@ -159,6 +127,8 @@ struct ClientEditorView: View {
     @Query private var sdClients: [SDClient]
     
     @State private var client: Client
+    @State private var saveError: String?
+    @State private var showingSaveError = false
     let isEditing: Bool
     
     private var usesSwiftData: Bool {
@@ -175,7 +145,7 @@ struct ClientEditorView: View {
         }
     }
     
-    var canSave: Bool { !client.name.isEmpty }
+    var canSave: Bool { !client.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     
     var body: some View {
         NavigationStack {
@@ -216,6 +186,7 @@ struct ClientEditorView: View {
                     FormSection(title: "Notes", colors: colors) {
                         VStack(alignment: .leading, spacing: 6) {
                             TextEditor(text: $client.notes)
+                                .accessibilityLabel("Client notes")
                                 .font(.system(size: 14))
                                 .foregroundColor(colors.text)
                                 .scrollContentBackground(.hidden)
@@ -240,32 +211,41 @@ struct ClientEditorView: View {
                 }
             }
         }
-        .frame(width: 500, height: 600)
+        .frame(width: 520, height: 680)
+        .background(colors.base)
+        .alert("Client could not be saved", isPresented: $showingSaveError) {
+            Button("Keep Editing", role: .cancel) { }
+        } message: { Text(saveError ?? "Please try again.") }
     }
     
     func saveClient() {
+        guard canSave else { return }
+        client.name = client.name.trimmingCharacters(in: .whitespacesAndNewlines)
         client.updatedAt = Date()
-        
-        if usesSwiftData {
-            saveClientToSwiftData()
-        } else {
-            // Legacy save
-            if isEditing {
-                if let i = appState.clients.firstIndex(where: { $0.id == client.id }) {
-                    appState.clients[i] = client
-                }
+        do {
+            if usesSwiftData {
+                try saveClientToSwiftData()
             } else {
-                appState.clients.append(client)
+                var clients = appState.clients
+                if isEditing {
+                    guard let index = clients.firstIndex(where: { $0.id == client.id }) else { throw MiraPersistenceError.missingRecord }
+                    clients[index] = client
+                } else { clients.append(client) }
+                try appState.persistClients(clients)
+                appState.clients = clients
             }
-            appState.saveClients()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+            showingSaveError = true
         }
-        dismiss()
     }
-    
-    private func saveClientToSwiftData() {
+
+    private func saveClientToSwiftData() throws {
         if isEditing {
             // Update existing client
-            if let existing = sdClients.first(where: { $0.id == client.id }) {
+            guard let existing = sdClients.first(where: { $0.id == client.id }) else { throw MiraPersistenceError.missingRecord }
+            do {
                 existing.name = client.name
                 existing.contactPerson = client.contactPerson
                 existing.email = client.email
@@ -289,12 +269,8 @@ struct ClientEditorView: View {
             modelContext.insert(sdClient)
         }
         
-        do {
-            try modelContext.save()
-            print("✅ Saved client to SwiftData")
-        } catch {
-            print("⚠️ SwiftData save failed: \(error)")
-        }
+        do { try modelContext.save() }
+        catch { modelContext.rollback(); throw error }
     }
 }
 
@@ -338,14 +314,9 @@ struct FormField: View {
                 }
             }
             
-            TextField("", text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .foregroundColor(colors.text)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(colors.surface1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            TextField(label, text: $text)
+                .accessibilityLabel(label)
+                .miraInput(colors: colors)
         }
     }
 }
@@ -357,11 +328,27 @@ struct ClientDetailView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var colors
     
+    @Query private var sdClients: [SDClient]
+    @Query private var sdInvoices: [SDInvoice]
+    @Query private var sdProfiles: [SDCompanyProfile]
+    @State private var selectedInvoice: Invoice?
     let client: Client
     @State private var showingEdit = false
     
-    var currentClient: Client { appState.clients.first { $0.id == client.id } ?? client }
-    var clientInvoices: [Invoice] { appState.invoices.filter { $0.clientId == client.id } }
+    var currentClient: Client {
+        if MigrationService.shared.useSwiftData { return sdClients.first { $0.id == client.id }?.toLegacy() ?? client }
+        return appState.clients.first { $0.id == client.id } ?? client
+    }
+    var clientInvoices: [InvoiceSummary] {
+        let exempt = MigrationService.shared.useSwiftData ? sdProfiles.first?.isVatExempt ?? false : appState.companyProfile?.isVatExempt ?? false
+        if MigrationService.shared.useSwiftData {
+            return sdInvoices.filter { $0.client?.id == client.id }.map { InvoiceSummary($0, isVatExempt: exempt) }.sorted { $0.issueDate > $1.issueDate }
+        }
+        return appState.invoices.filter { $0.clientId == client.id }.map { InvoiceSummary($0, client: currentClient, isVatExempt: exempt) }.sorted { $0.issueDate > $1.issueDate }
+    }
+    private func openInvoice(_ id: UUID) {
+        selectedInvoice = MigrationService.shared.useSwiftData ? sdInvoices.first { $0.id == id }?.toLegacy() : appState.invoices.first { $0.id == id }
+    }
     
     var body: some View {
         NavigationStack {
@@ -398,16 +385,19 @@ struct ClientDetailView: View {
                                 .foregroundColor(colors.subtext)
                             
                             ForEach(clientInvoices) { invoice in
+                                Button { openInvoice(invoice.id) } label: {
                                 HStack {
                                     Text(invoice.invoiceNumber)
                                         .font(.system(size: 14))
                                         .foregroundColor(colors.text)
                                     Spacer()
-                                    Text(formatCurrency(invoice.total, currency: invoice.currency))
+                                    Text(MiraFormat.currency(invoice.amount, invoice.currency))
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(colors.text)
                                 }
                                 .padding(.vertical, 8)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -424,18 +414,16 @@ struct ClientDetailView: View {
                     Button("Edit") { showingEdit = true }
                 }
             }
+            .sheet(item: $selectedInvoice) { invoice in
+                InvoiceDetailView(invoice: invoice).environmentObject(appState).environment(\.themeColors, colors)
+            }
             .sheet(isPresented: $showingEdit) {
                 ClientEditorView(client: currentClient).environmentObject(appState)
             }
         }
     }
     
-    func formatCurrency(_ value: Double, currency: Currency) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
-    }
+
 }
 
 struct ClientListView_Previews: PreviewProvider {

@@ -22,6 +22,7 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
-        )
+        ),
+        .testTarget(name: "MiraTests", dependencies: ["Mira"], path: "Tests/MiraTests")
     ]
 )

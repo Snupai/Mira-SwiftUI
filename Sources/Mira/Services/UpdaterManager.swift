@@ -24,6 +24,7 @@ final class UpdaterManager: ObservableObject {
     }
     
     private func setupSparkle() {
+        guard ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1" else { return }
         // Create the updater controller
         // The updater will use the SUFeedURL from Info.plist
         updaterController = SPUStandardUpdaterController(

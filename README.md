@@ -42,6 +42,17 @@ swift build -c release
 | `⌘1/2/3` | Dashboard / Invoices / Clients |
 | `⌘,` | Settings |
 
+## Development checks
+
+```bash
+swift test
+./script/build_and_run.sh --ui-review
+```
+
+The UI review mode opens an isolated, in-memory sample store with invoices in multiple currencies. It does not open the saved invoice database, run migration, or check for updates. Changes to demo invoices and company settings are discarded when the app quits. Appearance preferences still use the normal app preferences.
+
+Invoice and client lists support selection, double-click or Return to open, and contextual actions. Invoice columns can be sorted by clicking their headers. Dashboard cards open the corresponding invoice filters; collected revenue uses payment dates and lists amounts that cannot be converted separately.
+
 ## Documentation
 
 📚 **[Visit the Wiki](../../wiki)** for full documentation, including:

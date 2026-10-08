@@ -44,6 +44,8 @@
 		74A1E5B42F23D241007D97FB /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5632F23D241007D97FB /* ThemePicker.swift */; };
 		74A1E5B52F23D241007D97FB /* BrandColorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5622F23D241007D97FB /* BrandColorPicker.swift */; };
 		74C5059A2F23D4CF00989BB4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 74C505992F23D4CF00989BB4 /* Sparkle */; };
+		B68F73CE36EF4991A495E23E /* InvoiceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D95160D01B344BB895A4359 /* InvoiceSupport.swift */; };
+		FCABF81D858D4A8B86F63C4C /* MiraInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CB483610DB41859FEA7378 /* MiraInput.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +86,8 @@
 		74A1E58C2F23D241007D97FB /* OnboardingWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWelcomeView.swift; sourceTree = "<group>"; };
 		74A1E58E2F23D241007D97FB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		74A1E5902F23D241007D97FB /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		9D95160D01B344BB895A4359 /* InvoiceSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Mira/Support/InvoiceSupport.swift"; sourceTree = SOURCE_ROOT; };
+		C8CB483610DB41859FEA7378 /* MiraInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Mira/Components/MiraInput.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +138,7 @@
 		74A1E5642F23D241007D97FB /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				C8CB483610DB41859FEA7378 /* MiraInput.swift */,
 				74A1E5622F23D241007D97FB /* BrandColorPicker.swift */,
 				74A1E5632F23D241007D97FB /* ThemePicker.swift */,
 			);
@@ -190,6 +195,7 @@
 		74A1E57D2F23D241007D97FB /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				9D95160D01B344BB895A4359 /* InvoiceSupport.swift */,
 				74A1E5772F23D241007D97FB /* DataContainer.swift */,
 				74A1E5782F23D241007D97FB /* EncryptionService.swift */,
 				74A1E5792F23D241007D97FB /* MigrationService.swift */,
@@ -357,6 +363,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FCABF81D858D4A8B86F63C4C /* MiraInput.swift in Sources */,
+				B68F73CE36EF4991A495E23E /* InvoiceSupport.swift in Sources */,
 				74A1E5972F23D241007D97FB /* AppTheme.swift in Sources */,
 				74A1E5982F23D241007D97FB /* SDInvoice.swift in Sources */,
 				74A1E5992F23D241007D97FB /* ColorExtensions.swift in Sources */,

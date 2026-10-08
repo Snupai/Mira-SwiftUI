@@ -70,6 +70,52 @@ enum DataContainer {
         )
     }
     
+    /// Isolated sample store for UI verification; never opens the user's database.
+    @MainActor
+    static func createReviewContainer() throws -> ModelContainer {
+        let configuration = ModelConfiguration("Mira-Review", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let profile = SDCompanyProfile()
+        profile.companyName = "Mira Studio"
+        profile.ownerName = "Alex Example"
+        profile.email = "alex@example.com"
+        profile.street = "Example Street 1"
+        profile.city = "Berlin"
+        profile.postalCode = "10115"
+        profile.defaultCurrency = .gbp
+        profile.isVatExempt = true
+        profile.defaultVatRate = 0
+        profile.defaultPaymentTermsDays = 30
+        profile.nextInvoiceNumber = 31
+        context.insert(profile)
+        let clients = ["Acme Studio", "Northwind", "Orbit Design"].map { name in
+            let client = SDClient()
+            client.name = name
+            client.email = name.lowercased().replacingOccurrences(of: " ", with: ".") + "@example.com"
+            context.insert(client)
+            return client
+        }
+        for index in 0..<30 {
+            let invoice = SDInvoice()
+            invoice.invoiceNumber = "INV-2026-" + String(format: "%04d", index + 1)
+            invoice.client = clients[index % clients.count]
+            invoice.currency = index % 4 == 0 ? .eur : .gbp
+            invoice.lineItems = [SDLineItem(itemDescription: "Design services", quantity: 4, unit: "hours", unitPrice: Double(100 + index * 5), vatRate: 0)]
+            invoice.issueDate = Calendar.current.date(byAdding: .day, value: -index * 5, to: Date()) ?? Date()
+            invoice.dueDate = Calendar.current.date(byAdding: .day, value: index % 2 == 0 ? -3 : 10, to: Date()) ?? Date()
+            invoice.createdAt = invoice.issueDate
+            invoice.status = index % 3 == 0 ? .draft : index % 3 == 1 ? .sent : .paid
+            if invoice.status == .paid {
+                invoice.paidAt = Calendar.current.date(byAdding: .day, value: -index * 3, to: Date())
+                if invoice.currency != .gbp { invoice.paidAmountInBaseCurrency = invoice.subtotal * 0.85 }
+            }
+            context.insert(invoice)
+        }
+        try context.save()
+        return container
+    }
+
     /// Shared container instance
     /// Uses CloudKit if available, falls back to local
     @MainActor

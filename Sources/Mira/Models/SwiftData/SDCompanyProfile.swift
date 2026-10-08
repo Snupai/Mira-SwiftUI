@@ -209,51 +209,49 @@ extension SDCompanyProfile {
         self.init()
         
         self.id = legacy.id
-        self.companyName = legacy.companyName
-        self.ownerName = legacy.ownerName
-        self.email = legacy.email
-        self.phone = legacy.phone
-        self.website = legacy.website
-        
-        self.street = legacy.street
-        self.city = legacy.city
-        self.postalCode = legacy.postalCode
-        self.country = legacy.country
-        
-        // These will be encrypted via computed properties
-        self.vatId = legacy.vatId
-        self.taxNumber = legacy.taxNumber
-        self.companyRegistry = legacy.companyRegistry
-        self.isVatExempt = legacy.isVatExempt
-        
-        self.bankName = legacy.bankName
-        self.iban = legacy.iban
-        self.bic = legacy.bic
-        self.accountHolder = legacy.accountHolder
-        
-        self.logoData = legacy.logoData
-        self.brandColorHex = legacy.brandColorHex
-        
-        self.defaultCurrencyRaw = legacy.defaultCurrency.rawValue
-        self.defaultPaymentTermsDays = legacy.defaultPaymentTermsDays
-        self.defaultVatRate = legacy.defaultVatRate
-        self.invoiceNumberPrefix = legacy.invoiceNumberPrefix
-        self.nextInvoiceNumber = legacy.nextInvoiceNumber
-        
-        self.locale = legacy.locale
-        self.dateFormat = legacy.dateFormat
-        
-        self.emailTemplateGerman = legacy.emailTemplateGerman
-        self.emailTemplateEnglish = legacy.emailTemplateEnglish
-        
-        self.pdfFooterTemplateGerman = legacy.pdfFooterTemplateGerman
-        self.pdfClosingTemplateGerman = legacy.pdfClosingTemplateGerman
-        self.pdfNotesTemplateGerman = legacy.pdfNotesTemplateGerman
-        self.pdfFooterTemplateEnglish = legacy.pdfFooterTemplateEnglish
-        self.pdfClosingTemplateEnglish = legacy.pdfClosingTemplateEnglish
-        self.pdfNotesTemplateEnglish = legacy.pdfNotesTemplateEnglish
+        update(from: legacy)
     }
     
+    func update(from profile: CompanyProfile) {
+        companyName = profile.companyName
+        ownerName = profile.ownerName
+        email = profile.email
+        phone = profile.phone
+        website = profile.website
+        street = profile.street
+        city = profile.city
+        postalCode = profile.postalCode
+        country = profile.country
+        companyRegistry = profile.companyRegistry
+        isVatExempt = profile.isVatExempt
+        logoData = profile.logoData
+        brandColorHex = profile.brandColorHex
+        defaultPaymentTermsDays = profile.defaultPaymentTermsDays
+        defaultVatRate = profile.defaultVatRate
+        invoiceNumberPrefix = profile.invoiceNumberPrefix
+        nextInvoiceNumber = profile.nextInvoiceNumber
+        locale = profile.locale
+        dateFormat = profile.dateFormat
+        defaultExportPath = profile.defaultExportPath
+        emailTemplateGerman = profile.emailTemplateGerman
+        emailTemplateEnglish = profile.emailTemplateEnglish
+        pdfFooterTemplateGerman = profile.pdfFooterTemplateGerman
+        pdfClosingTemplateGerman = profile.pdfClosingTemplateGerman
+        pdfNotesTemplateGerman = profile.pdfNotesTemplateGerman
+        pdfFooterTemplateEnglish = profile.pdfFooterTemplateEnglish
+        pdfClosingTemplateEnglish = profile.pdfClosingTemplateEnglish
+        pdfNotesTemplateEnglish = profile.pdfNotesTemplateEnglish
+        if vatId != profile.vatId { vatId = profile.vatId }
+        if taxNumber != profile.taxNumber { taxNumber = profile.taxNumber }
+        if bankName != profile.bankName { bankName = profile.bankName }
+        if iban != profile.iban { iban = profile.iban }
+        if bic != profile.bic { bic = profile.bic }
+        if accountHolder != profile.accountHolder { accountHolder = profile.accountHolder }
+        defaultCurrency = profile.defaultCurrency
+        pdfTemplateLanguageRaw = profile.pdfTemplateLanguage.rawValue
+        updatedAt = Date()
+    }
+
     /// Convert to legacy CompanyProfile (for compatibility during migration)
     func toLegacy() -> CompanyProfile {
         var profile = CompanyProfile()
@@ -292,6 +290,7 @@ extension SDCompanyProfile {
         profile.locale = locale
         profile.dateFormat = dateFormat
         profile.defaultExportPath = defaultExportPath
+        profile.pdfTemplateLanguage = PDFTemplateLanguage(rawValue: pdfTemplateLanguageRaw) ?? .german
         
         profile.emailTemplateGerman = emailTemplateGerman
         profile.emailTemplateEnglish = emailTemplateEnglish

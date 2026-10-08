@@ -136,8 +136,12 @@ final class SDInvoice {
         taxableAmount + totalTax
     }
     
+    var effectiveStatus: InvoiceStatus {
+        InvoiceStatus.effective(status, dueDate: dueDate)
+    }
+
     var isOverdue: Bool {
-        status == .sent && dueDate < Date()
+        effectiveStatus == .overdue
     }
     
     var daysUntilDue: Int {

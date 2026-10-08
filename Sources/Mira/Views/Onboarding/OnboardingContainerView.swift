@@ -9,6 +9,8 @@ struct OnboardingContainerView: View {
     
     @Query private var sdProfiles: [SDCompanyProfile]
     
+    @State private var saveError: String?
+    @State private var showingSaveError = false
     @State private var currentStep: OnboardingStep = .welcome
     @State private var companyProfile: CompanyProfile
     
@@ -66,9 +68,12 @@ struct OnboardingContainerView: View {
             .animation(.easeInOut(duration: 0.2), value: currentStep)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .alert("Setup could not be saved", isPresented: $showingSaveError) {
+            Button("Try Again") { finishOnboarding() }
+            Button("Keep Editing", role: .cancel) { }
+        } message: { Text(saveError ?? "Please try again.") }
         .onAppear {
-            // Pre-populate with existing data if restarting onboarding
-            if let existingProfile = appState.companyProfile {
+            if let existingProfile = CompanyProfileStore.resolve(sdProfiles, legacy: appState.companyProfile) {
                 companyProfile = existingProfile
             }
         }
@@ -91,8 +96,14 @@ struct OnboardingContainerView: View {
         
         // Save to legacy only if migrating existing data
         if MigrationService.shared.needsMigration {
-            appState.companyProfile = companyProfile
-            appState.saveCompanyProfile()
+            do {
+                try appState.persistCompanyProfile(companyProfile)
+                appState.companyProfile = companyProfile
+            } catch {
+                saveError = error.localizedDescription
+                showingSaveError = true
+                return
+            }
             print("✅ Saved to legacy JSON")
         }
         
@@ -100,7 +111,7 @@ struct OnboardingContainerView: View {
         do {
             if let existingProfile = sdProfiles.first {
                 // Update existing profile
-                updateSDProfile(existingProfile, from: companyProfile)
+                existingProfile.update(from: companyProfile)
                 print("📝 Updated existing SwiftData profile")
             } else {
                 // Create new profile
@@ -112,46 +123,17 @@ struct OnboardingContainerView: View {
             try modelContext.save()
             print("✅ Saved to SwiftData")
         } catch {
-            print("⚠️ SwiftData save failed: \(error)")
+            modelContext.rollback()
+            saveError = error.localizedDescription
+            showingSaveError = true
+            return
         }
         
         appState.hasCompletedOnboarding = true
         print("✅ Onboarding complete!")
     }
     
-    private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {
-        sdProfile.companyName = profile.companyName
-        sdProfile.ownerName = profile.ownerName
-        sdProfile.email = profile.email
-        sdProfile.phone = profile.phone
-        sdProfile.website = profile.website
-        
-        sdProfile.street = profile.street
-        sdProfile.city = profile.city
-        sdProfile.postalCode = profile.postalCode
-        sdProfile.country = profile.country
-        
-        sdProfile.vatId = profile.vatId
-        sdProfile.taxNumber = profile.taxNumber
-        sdProfile.companyRegistry = profile.companyRegistry
-        sdProfile.isVatExempt = profile.isVatExempt
-        
-        sdProfile.bankName = profile.bankName
-        sdProfile.iban = profile.iban
-        sdProfile.bic = profile.bic
-        sdProfile.accountHolder = profile.accountHolder
-        
-        sdProfile.logoData = profile.logoData
-        sdProfile.brandColorHex = profile.brandColorHex
-        
-        sdProfile.defaultCurrencyRaw = profile.defaultCurrency.rawValue
-        sdProfile.defaultPaymentTermsDays = profile.defaultPaymentTermsDays
-        sdProfile.defaultVatRate = profile.defaultVatRate
-        sdProfile.invoiceNumberPrefix = profile.invoiceNumberPrefix
-        sdProfile.nextInvoiceNumber = profile.nextInvoiceNumber
-        
-        sdProfile.updatedAt = Date()
-    }
+
 }
 
 struct OnboardingContainerView_Previews: PreviewProvider {

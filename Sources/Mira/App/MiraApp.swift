@@ -11,6 +11,11 @@ struct MiraApp: App {
     let modelContainer: ModelContainer
     
     init() {
+        if ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1" {
+            do { modelContainer = try DataContainer.createReviewContainer() }
+            catch { fatalError("Could not create review store: \(error)") }
+            return
+        }
         // Initialize SwiftData container with CloudKit sync (falls back to local if unavailable)
         do {
             modelContainer = try DataContainer.createCloudKitContainer()
@@ -136,7 +141,7 @@ struct RootView: View {
     
     @MainActor
     private func runMigration() async {
-        guard MigrationService.shared.needsMigration else { return }
+        guard ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1", MigrationService.shared.needsMigration else { return }
         
         isMigrating = true
         
@@ -193,7 +198,9 @@ extension Notification.Name {
 class AppState: ObservableObject {
     @Published var hasCompletedOnboarding: Bool {
         didSet {
-            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+            if ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1" {
+                UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+            }
         }
     }
     
@@ -218,11 +225,12 @@ class AppState: ObservableObject {
     private var templatesURL: URL { dataDirectory.appendingPathComponent("templates.json") }
     
     init() {
-        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        let isReview = ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1"
+        self.hasCompletedOnboarding = isReview || UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         
         // Only load legacy data if migration hasn't completed
         // This keeps the app working during the transition period
-        if MigrationService.shared.migrationStatus != .completed {
+        if !isReview && MigrationService.shared.migrationStatus != .completed {
             loadLegacyData()
         }
     }
@@ -253,6 +261,22 @@ class AppState: ObservableObject {
         }
     }
     
+    func persistCompanyProfile(_ profile: CompanyProfile) throws {
+        try JSONEncoder().encode(profile).write(to: profileURL, options: .atomic)
+    }
+
+    func persistClients(_ values: [Client]) throws {
+        try JSONEncoder().encode(values).write(to: clientsURL, options: .atomic)
+    }
+
+    func persistInvoices(_ values: [Invoice]) throws {
+        try JSONEncoder().encode(values).write(to: invoicesURL, options: .atomic)
+    }
+
+    func persistTemplates(_ values: [InvoiceTemplate]) throws {
+        try JSONEncoder().encode(values).write(to: templatesURL, options: .atomic)
+    }
+
     // Legacy save methods - deprecated, will be removed after full migration
     func saveCompanyProfile() {
         guard MigrationService.shared.needsMigration else { return }

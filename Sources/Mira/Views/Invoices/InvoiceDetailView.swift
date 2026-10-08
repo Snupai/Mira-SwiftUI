@@ -8,6 +8,7 @@ import AppKit
 struct InvoiceDetailView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
+    @Environment(\.themeColors) private var colors
     @Environment(\.modelContext) private var modelContext
     @Query private var sdInvoices: [SDInvoice]
     @Query private var sdClients: [SDClient]
@@ -20,6 +21,11 @@ struct InvoiceDetailView: View {
     @State private var showingExchangeRateDialog = false
     @State private var exchangeRateInput: String = ""
     @State private var showingDeleteConfirmation = false
+    @State private var resolvedInvoice: Invoice?
+    @State private var operationError: String?
+    @State private var showingOperationError = false
+    @State private var exportedURL: URL?
+    @State private var showingExportSuccess = false
     
     private var usesSwiftData: Bool {
         MigrationService.shared.useSwiftData
@@ -27,25 +33,24 @@ struct InvoiceDetailView: View {
     
     var client: Client? {
         if usesSwiftData {
-            return sdClients.first { $0.id == invoice.clientId }?.toLegacy()
+            return sdClients.first { $0.id == currentInvoice.clientId }?.toLegacy()
         }
-        return appState.clients.first { $0.id == invoice.clientId }
+        return appState.clients.first { $0.id == currentInvoice.clientId }
     }
     
-    var currentInvoice: Invoice {
-        if usesSwiftData {
-            return sdInvoices.first { $0.id == invoice.id }?.toLegacy() ?? invoice
-        }
-        return appState.invoices.first { $0.id == invoice.id } ?? invoice
+    private var storedInvoice: SDInvoice? { sdInvoices.first { $0.id == invoice.id } }
+    var currentInvoice: Invoice { resolvedInvoice ?? invoice }
+    private func refreshInvoice() {
+        resolvedInvoice = usesSwiftData ? storedInvoice?.toLegacy() : appState.invoices.first { $0.id == invoice.id }
     }
-    
+
     var isVatExempt: Bool {
         if usesSwiftData {
             return sdProfiles.first?.isVatExempt ?? false
         }
         return appState.companyProfile?.isVatExempt ?? false
     }
-    var displayTotal: Double { isVatExempt ? currentInvoice.subtotal : currentInvoice.total }
+    var displayTotal: Double { isVatExempt ? currentInvoice.taxableAmount : currentInvoice.total }
     
     // MARK: - Body Sections (split to help compiler)
     
@@ -56,13 +61,13 @@ struct InvoiceDetailView: View {
                     .font(.system(size: 24, weight: .semibold))
                 Text(client?.name ?? "—")
                     .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(colors.subtext)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text(formatCurrency(displayTotal))
                     .font(.system(size: 24, weight: .semibold))
-                StatusBadge(status: currentInvoice.status)
+                StatusBadge(status: currentInvoice.effectiveStatus)
             }
         }
     }
@@ -81,7 +86,7 @@ struct InvoiceDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Items")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(colors.subtext)
             
             VStack(spacing: 0) {
                 ForEach(currentInvoice.lineItems) { item in
@@ -89,7 +94,7 @@ struct InvoiceDetailView: View {
                 }
             }
             .padding(16)
-            .background(Color.primary.opacity(0.03))
+            .background(colors.surface0)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -102,7 +107,7 @@ struct InvoiceDetailView: View {
                 Spacer()
                 Text("\(formatQty(item.quantity)) × \(formatCurrency(item.unitPrice))")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(colors.subtext)
                 Text(formatCurrency(item.total))
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 80, alignment: .trailing)
@@ -119,7 +124,7 @@ struct InvoiceDetailView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
                 HStack(spacing: 32) {
-                    Text("Subtotal").foregroundColor(.secondary)
+                    Text("Subtotal").foregroundColor(colors.subtext)
                     Text(formatCurrency(currentInvoice.subtotal))
                 }
                 .font(.system(size: 14))
@@ -131,7 +136,7 @@ struct InvoiceDetailView: View {
                 } else {
                     ForEach(currentInvoice.taxBreakdown, id: \.rate) { breakdown in
                         HStack(spacing: 32) {
-                            Text("VAT \(Int(breakdown.rate))%").foregroundColor(.secondary)
+                            Text("VAT \(Int(breakdown.rate))%").foregroundColor(colors.subtext)
                             Text(formatCurrency(breakdown.amount))
                         }
                         .font(.system(size: 14))
@@ -167,7 +172,7 @@ struct InvoiceDetailView: View {
                                     .font(.system(size: 14, weight: .medium))
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 10)
-                                    .background(Color.blue)
+                                    .background(colors.accent)
                                     .foregroundColor(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
@@ -204,7 +209,7 @@ struct InvoiceDetailView: View {
                             .font(.system(size: 14, weight: .medium))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(Color.primary.opacity(0.08))
+                            .background(colors.surface1)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         
@@ -227,7 +232,21 @@ struct InvoiceDetailView: View {
                 }
                 .padding(32)
             }
+            .background(colors.base)
+            .foregroundStyle(colors.text)
             .navigationTitle("Invoice")
+            .onAppear { refreshInvoice() }
+            .onChange(of: storedInvoice?.updatedAt) { _, _ in refreshInvoice() }
+            .onChange(of: appState.invoices.first { $0.id == invoice.id }?.updatedAt) { _, _ in refreshInvoice() }
+            .alert("Action could not be completed", isPresented: $showingOperationError) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(operationError ?? "Please try again.") }
+            .alert("PDF saved", isPresented: $showingExportSuccess) {
+                Button("Show in Finder") {
+                    if let exportedURL { NSWorkspace.shared.activateFileViewerSelecting([exportedURL]) }
+                }
+                Button("Done", role: .cancel) { }
+            } message: { Text(exportedURL?.lastPathComponent ?? "Your PDF is ready.") }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
@@ -255,142 +274,118 @@ struct InvoiceDetailView: View {
                         : (appState.companyProfile?.defaultCurrency ?? .eur),
                     exchangeRateInput: $exchangeRateInput,
                     onConfirm: { rate, baseAmount in
-                        if usesSwiftData {
-                            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                                sdInvoice.status = .paid
-                                sdInvoice.paidAt = Date()
-                                sdInvoice.paidExchangeRate = rate
-                                sdInvoice.paidAmountInBaseCurrency = baseAmount
-                                sdInvoice.updatedAt = Date()
-                                try? modelContext.save()
-                            }
-                        } else {
-                            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                                appState.invoices[i].markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount)
-                                appState.saveInvoices()
-                            }
-                        }
+                        try recordPayment(rate: rate, baseAmount: baseAmount)
                         showingExchangeRateDialog = false
                     },
                     onCancel: {
                         showingExchangeRateDialog = false
-                    }
+                    },
+                    isVatExempt: isVatExempt
                 )
             }
         }
     }
     
+    private func report(_ error: Error) {
+        operationError = error.localizedDescription
+        showingOperationError = true
+    }
+
+    private func saveMutation(_ swiftData: (SDInvoice) -> Void, legacy: (inout Invoice) -> Void) throws {
+        if usesSwiftData {
+            guard let stored = storedInvoice else { throw MiraPersistenceError.missingRecord }
+            swiftData(stored)
+            do { try modelContext.save() } catch { modelContext.rollback(); throw error }
+        } else {
+            var invoices = appState.invoices
+            guard let index = invoices.firstIndex(where: { $0.id == invoice.id }) else { throw MiraPersistenceError.missingRecord }
+            legacy(&invoices[index])
+            try appState.persistInvoices(invoices)
+            appState.invoices = invoices
+        }
+        refreshInvoice()
+    }
+
     func markAsSent() {
-        if usesSwiftData {
-            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                sdInvoice.status = .sent
-                sdInvoice.updatedAt = Date()
-                try? modelContext.save()
-            }
-        } else {
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices[i].markAsSent()
-                appState.saveInvoices()
-            }
-        }
+        let numbers = usesSwiftData ? sdInvoices.filter { $0.id != invoice.id }.map(\.invoiceNumber) : appState.invoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
+        let issues = InvoiceValidation.issues(for: currentInvoice, hasClient: client != nil, existingNumbers: numbers)
+        guard issues.isEmpty else { operationError = issues.joined(separator: "\n"); showingOperationError = true; return }
+        do { try saveMutation({ $0.markAsSent() }, legacy: { $0.markAsSent() }) }
+        catch { report(error) }
     }
-    
+
     func deleteInvoice() {
-        if usesSwiftData {
-            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                modelContext.delete(sdInvoice)
-                try? modelContext.save()
+        do {
+            if usesSwiftData {
+                guard let stored = storedInvoice else { throw MiraPersistenceError.missingRecord }
+                modelContext.delete(stored)
+                do { try modelContext.save() } catch { modelContext.rollback(); throw error }
+            } else {
+                let invoices = appState.invoices.filter { $0.id != invoice.id }
+                try appState.persistInvoices(invoices)
+                appState.invoices = invoices
             }
-        } else {
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices.remove(at: i)
-                appState.saveInvoices()
-            }
-        }
-        dismiss()
+            dismiss()
+        } catch { report(error) }
     }
-    
+
     func markAsPaid() {
-        let baseCurrency = usesSwiftData
-            ? (sdProfiles.first?.defaultCurrency ?? .eur)
-            : (appState.companyProfile?.defaultCurrency ?? .eur)
-        
-        // If currencies differ, show exchange rate dialog
+        let baseCurrency = usesSwiftData ? sdProfiles.first?.defaultCurrency ?? .eur : appState.companyProfile?.defaultCurrency ?? .eur
         if currentInvoice.currency != baseCurrency {
             exchangeRateInput = ""
             showingExchangeRateDialog = true
         } else {
-            // Same currency, no conversion needed
-            if usesSwiftData {
-                if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                    sdInvoice.status = .paid
-                    sdInvoice.paidAt = Date()
-                    sdInvoice.updatedAt = Date()
-                    try? modelContext.save()
-                }
-            } else {
-                if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                    appState.invoices[i].markAsPaid()
-                    appState.saveInvoices()
-                }
-            }
+            do { try recordPayment(rate: nil, baseAmount: nil) }
+            catch { report(error) }
         }
     }
-    
+
+    private func recordPayment(rate: Double?, baseAmount: Double?) throws {
+        try saveMutation({ $0.markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount) },
+                         legacy: { $0.markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount) })
+    }
+
     func exportPDF() {
-        guard let client = client else { return }
-        
-        // Use SwiftData profile if available
-        let profile: CompanyProfile
-        if usesSwiftData, let sdProfile = sdProfiles.first {
-            profile = sdProfile.toLegacy()
-        } else if let legacyProfile = appState.companyProfile {
-            profile = legacyProfile
-        } else {
-            return
+        guard let client else { report(MiraPersistenceError.missingClient); return }
+        guard let profile = CompanyProfileStore.resolve(sdProfiles, legacy: appState.companyProfile) else {
+            report(MiraPersistenceError.missingRecord); return
         }
-        
-        #if os(macOS)
-        let fileName = "\(currentInvoice.invoiceNumber).pdf"
-        
-        // Check for default export path
+        let snapshot = currentInvoice
+        let fileName = snapshot.invoiceNumber.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") + ".pdf"
+        let language = exportLanguage
+        func save(to url: URL) {
+            guard PDFGenerator.saveInvoicePDF(invoice: snapshot, client: client, companyProfile: profile, to: url, language: language) else {
+                report(MiraPersistenceError.exportFailed); return
+            }
+            exportedURL = url
+            showingExportSuccess = true
+        }
         if !profile.defaultExportPath.isEmpty {
-            let folderURL = URL(fileURLWithPath: profile.defaultExportPath)
-            let fileURL = folderURL.appendingPathComponent(fileName)
-            
-            // Check if folder exists and is writable
-            if FileManager.default.isWritableFile(atPath: profile.defaultExportPath) {
-                _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: fileURL, language: exportLanguage)
-                NSWorkspace.shared.selectFile(fileURL.path, inFileViewerRootedAtPath: folderURL.path)
+            let folder = URL(fileURLWithPath: profile.defaultExportPath)
+            let destination = folder.appendingPathComponent(fileName)
+            if FileManager.default.isWritableFile(atPath: folder.path), !FileManager.default.fileExists(atPath: destination.path) {
+                save(to: destination)
                 return
             }
         }
-        
-        // Fallback to save panel
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = fileName
-        panel.begin { [exportLanguage] r in
-            if r == .OK, let url = panel.url {
-                _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: url, language: exportLanguage)
-            }
+        if !profile.defaultExportPath.isEmpty { panel.directoryURL = URL(fileURLWithPath: profile.defaultExportPath) }
+        panel.begin { response in
+            if response == .OK, let url = panel.url { save(to: url) }
         }
-        #endif
     }
-    
-    func formatCurrency(_ value: Double) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currentInvoice.currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "€0"
-    }
-    
+
+    func formatCurrency(_ value: Double) -> String { MiraFormat.currency(value, currentInvoice.currency) }
+
     func formatQty(_ q: Double) -> String {
         q.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(q)) : String(format: "%.2f", q)
     }
 }
 
 struct DateBlock: View {
+    @Environment(\.themeColors) private var colors
     let label: String
     let date: Date
     var isOverdue: Bool = false
@@ -399,30 +394,27 @@ struct DateBlock: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundColor(colors.subtext)
             Text(formatDate(date))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(isOverdue ? .red : .primary)
         }
     }
     
-    func formatDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        return f.string(from: d)
-    }
+    func formatDate(_ d: Date) -> String { MiraFormat.date(d) }
 }
 
 struct StatusBadge: View {
+    @Environment(\.themeColors) private var colors
     let status: InvoiceStatus
     
     var color: Color {
         switch status {
         case .paid: return .green
         case .overdue: return .red
-        case .sent: return .blue
+        case .sent: return colors.accent
         case .cancelled: return .orange
-        default: return .secondary
+        default: return colors.subtext
         }
     }
     
@@ -446,10 +438,11 @@ struct InvoiceDetailView_Previews: PreviewProvider {
 // MARK: - Exchange Rate Dialog
 
 struct ExchangeRateDialog: View {
+    @Environment(\.themeColors) private var colors
     let invoice: Invoice
     let baseCurrency: Currency
     @Binding var exchangeRateInput: String
-    let onConfirm: (Double, Double) -> Void
+    let onConfirm: (Double, Double) throws -> Void
     let onCancel: () -> Void
     
     var isVatExempt: Bool = false
@@ -457,9 +450,11 @@ struct ExchangeRateDialog: View {
     @State private var isLoading = true
     @State private var fetchError: String? = nil
     @State private var rateSource: String = ""
+    @State private var saveError: String?
+    @State private var showingSaveError = false
     
     var invoiceTotal: Double {
-        isVatExempt ? invoice.subtotal : invoice.total
+        isVatExempt ? invoice.taxableAmount : invoice.total
     }
     
     var exchangeRate: Double? {
@@ -467,7 +462,7 @@ struct ExchangeRateDialog: View {
     }
     
     var convertedAmount: Double? {
-        guard let rate = exchangeRate, rate > 0 else { return nil }
+        guard let rate = exchangeRate, rate.isFinite, rate > 0, (invoiceTotal * rate).isFinite else { return nil }
         return invoiceTotal * rate
     }
     
@@ -482,9 +477,9 @@ struct ExchangeRateDialog: View {
                 Text("Currency Conversion")
                     .font(.system(size: 18, weight: .semibold))
                 
-                Text(fetchError != nil ? "Enter the exchange rate manually" : "Fetching current exchange rate...")
+                Text(isLoading ? "Fetching reference exchange rate…" : "Confirm the rate used for your payment.")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(colors.subtext)
                     .multilineTextAlignment(.center)
             }
             
@@ -492,7 +487,7 @@ struct ExchangeRateDialog: View {
             VStack(spacing: 8) {
                 HStack {
                     Text("Invoice Total:")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colors.subtext)
                     Spacer()
                     Text(formatCurrency(invoiceTotal, currency: invoice.currency))
                         .font(.system(size: 15, weight: .semibold))
@@ -500,7 +495,7 @@ struct ExchangeRateDialog: View {
                 
                 HStack {
                     Text("Base Currency:")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colors.subtext)
                     Spacer()
                     Text("\(baseCurrency.symbol) \(baseCurrency.rawValue)")
                         .font(.system(size: 15, weight: .medium))
@@ -516,7 +511,7 @@ struct ExchangeRateDialog: View {
                 HStack {
                     Text("Exchange Rate")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colors.subtext)
                     
                     if isLoading {
                         ProgressView()
@@ -534,16 +529,17 @@ struct ExchangeRateDialog: View {
                 
                 HStack {
                     Text("1 \(invoice.currency.rawValue) =")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colors.subtext)
                     TextField("0.00", text: $exchangeRateInput)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16, weight: .medium))
+                        .accessibilityLabel("Exchange rate")
                         .frame(width: 100)
                         .padding(8)
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     Text(baseCurrency.rawValue)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colors.subtext)
                     
                     // Refresh button
                     Button(action: { fetchExchangeRate() }) {
@@ -553,6 +549,7 @@ struct ExchangeRateDialog: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isLoading)
+                    .accessibilityLabel("Refresh reference exchange rate")
                 }
                 
                 if let error = fetchError {
@@ -565,8 +562,8 @@ struct ExchangeRateDialog: View {
             // Converted amount preview
             if let converted = convertedAmount {
                 HStack {
-                    Text("You received:")
-                        .foregroundColor(.secondary)
+                    Text("Converted amount:")
+                        .foregroundColor(colors.subtext)
                     Spacer()
                     Text(formatCurrency(converted, currency: baseCurrency))
                         .font(.system(size: 18, weight: .bold))
@@ -592,7 +589,8 @@ struct ExchangeRateDialog: View {
                 
                 Button(action: {
                     if let rate = exchangeRate, let converted = convertedAmount {
-                        onConfirm(rate, converted)
+                        do { try onConfirm(rate, converted) }
+                        catch { saveError = error.localizedDescription; showingSaveError = true }
                     }
                 }) {
                     Text("Mark as Paid")
@@ -601,13 +599,18 @@ struct ExchangeRateDialog: View {
                         .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
-                .background(exchangeRate != nil ? Color.green : Color.gray)
+                .background(convertedAmount != nil ? Color.green : Color.gray)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .disabled(exchangeRate == nil)
+                .disabled(convertedAmount == nil)
             }
         }
         .padding(24)
-        .frame(width: 380, height: 480)
+        .frame(width: 420, height: 520)
+        .background(colors.base)
+        .foregroundStyle(colors.text)
+        .alert("Payment could not be saved", isPresented: $showingSaveError) {
+            Button("Keep Editing", role: .cancel) { }
+        } message: { Text(saveError ?? "Please try again.") }
         .onAppear {
             fetchExchangeRate()
         }
@@ -618,6 +621,7 @@ struct ExchangeRateDialog: View {
         fetchError = nil
         rateSource = ""
         
+        let inputAtRequest = exchangeRateInput
         // Using Frankfurter API (free, no API key needed)
         let from = invoice.currency.rawValue
         let to = baseCurrency.rawValue
@@ -646,8 +650,8 @@ struct ExchangeRateDialog: View {
                     if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let rates = json["rates"] as? [String: Double],
                        let rate = rates[to] {
-                        exchangeRateInput = String(format: "%.4f", rate)
-                        rateSource = "live rate"
+                        if exchangeRateInput == inputAtRequest { exchangeRateInput = String(format: "%.4f", rate) }
+                        rateSource = "reference rate"
                     } else {
                         fetchError = "Could not parse rate"
                     }
@@ -659,9 +663,6 @@ struct ExchangeRateDialog: View {
     }
     
     func formatCurrency(_ value: Double, currency: Currency) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
+        MiraFormat.currency(value, currency)
     }
 }

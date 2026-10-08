@@ -82,8 +82,12 @@ struct Invoice: Codable, Identifiable {
         taxableAmount + totalTax
     }
     
+    var effectiveStatus: InvoiceStatus {
+        InvoiceStatus.effective(status, dueDate: dueDate)
+    }
+
     var isOverdue: Bool {
-        status == .sent && dueDate < Date()
+        effectiveStatus == .overdue
     }
     
     var daysUntilDue: Int {
@@ -193,5 +197,13 @@ struct ServiceTemplate: Codable, Identifiable {
             unitPrice: unitPrice,
             vatRate: vatRate
         )
+    }
+}
+
+
+extension InvoiceStatus {
+    static func effective(_ stored: InvoiceStatus, dueDate: Date, at now: Date = Date(), calendar: Calendar = .current) -> InvoiceStatus {
+        guard stored == .sent else { return stored }
+        return calendar.startOfDay(for: dueDate) < calendar.startOfDay(for: now) ? .overdue : .sent
     }
 }

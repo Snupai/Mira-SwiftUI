@@ -46,7 +46,7 @@ final class MigrationService {
     
     /// Whether to use SwiftData (migration completed OR no legacy data exists)
     var useSwiftData: Bool {
-        migrationStatus == .completed || !needsMigration
+        ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1" || migrationStatus == .completed || !needsMigration
     }
     
     // MARK: - Backup
