@@ -18,10 +18,6 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                Text("Settings")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(colors.text)
-
                 syncStatusSection
                 appearanceSection
                 companySection
@@ -35,7 +31,7 @@ struct SettingsView: View {
             }
             .padding(32)
         }
-        .background(colors.base)
+        .navigationTitle("Settings")
         .task {
             await checkCloudKitStatus()
         }

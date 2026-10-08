@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mira — Native macOS UI and Liquid Glass Plan</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: light-dark(#f4f6fa, #111827); color: light-dark(#192334, #e5eaf3); line-height: 1.6; }
+    main { max-width: 900px; margin: auto; padding: 40px 24px 72px; }
+    h1 { line-height: 1.15; font-size: clamp(2rem, 5vw, 3rem); }
+    h2 { margin-top: 0; line-height: 1.3; }
+    section { background: light-dark(#fff, #1b2536); border: 1px solid light-dark(#dce3ec, #344155); border-radius: 16px; padding: 24px; margin: 20px 0; }
+    .meta { color: light-dark(#526178, #a8b7cc); }
+    li { margin: 8px 0; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; vertical-align: top; padding: 12px 8px; border-bottom: 1px solid light-dark(#dce3ec, #344155); }
+    a { color: light-dark(#175bcc, #8dbaff); }
+  </style>
+</head>
+<body><main>
+  <p class="meta">Implementation plan · October 8, 2026 · Status: implemented; builds and focused runtime checks passed</p>
+  <h1>Mira: native macOS UI and Liquid Glass</h1>
+  <p>Modernize navigation, toolbars, search, and sheet chrome using standard SwiftUI components. Let macOS supply its adaptive materials, preserve custom themes intentionally, and add custom glass only where an app-specific control needs it.</p>
+
+  <section>
+    <h2>Implementation result · October 8, 2026</h2>
+    <p><strong>Requested follow-up completed:</strong> Settings and onboarding now share an optional, saved Liquid Glass toggle, off by default. On macOS 26+, it styles Mira’s primary controls with native glass-prominent buttons and updates the onboarding preview live. Older systems and Reduce Transparency use standard controls. System navigation chrome remains automatic. Debug/release builds and disposable runtime checks of enable/disable and persistence passed.</p>
+    <p>Implemented native NavigationSplitView navigation, destination toolbars and titles, independent native invoice/client search, retained search/filter/sort state, native status controls, and native sheet actions. Preserved theme content surfaces and existing storage/PDF implementations. Standard system chrome supplies the material; no custom glass layer was needed.</p>
+    <p>Debug and release builds passed with macOS SDK 26.5. The signed foreground bundle retains macOS 14.0 as its minimum version. Focused runtime checks used a separate bundle and disposable in-memory records on macOS 27: navigation, sidebar collapse, search/filter/sort retention, editor save/cancel, theme contrast, and a 760-point-wide window passed.</p>
+    <p>Before/after captures and detailed evidence are retained in <code>work/ui-review/</code>; the validation report is <code>work/ui-review/validation.md</code>. The Codex Run action now uses <code>script/build_and_run.sh</code> and the existing bundle workflow.</p>
+    <p><strong>Verification limits:</strong> macOS 14 runtime, VoiceOver speech, OS accessibility appearance modes, every theme/sheet combination, and divider resizing remain unverified. CloudKit, migration, keychain, PDF, and production disk persistence were outside the disposable UI harness. A custom JSON theme was checked through the existing loader.</p>
+  </section>
+
+  <section>
+    <h2>Scope and starting point</h2>
+    <p>Mira is a SwiftPM macOS app targeting macOS 14. The inspected checkout uses a fixed-width custom sidebar in <code>Sources/Mira/App/ContentView.swift</code>, custom headers and search fields in invoice/client lists, opaque theme fills, and a hidden window title bar in <code>Sources/Mira/App/MiraApp.swift</code>.</p>
+    <p>This plan covers the main shell, invoice/client navigation controls, and material conflicts in presented editors and Settings. Keep invoice calculations, PDF rendering, persistence, encryption, CloudKit, release metadata, and roadmap features outside this UI change.</p>
+    <p>Source inspection established these targets; runtime appearance and SDK availability still require validation.</p>
+  </section>
+
+  <section>
+    <h2>1. Establish the compatibility and visual baseline</h2>
+    <ul>
+      <li>Read applicable repository instructions and the Liquid Glass skill. Use the build-run-debug skill for app launch and runtime checks.</li>
+      <li>Verify installed Xcode, Swift, SDK, and macOS versions. Explicit Liquid Glass APIs require the macOS 26 SDK; guard their use with availability checks and keep the deployment target at macOS 14.</li>
+      <li>Build and launch a foreground <code>.app</code> bundle using the repository's bundle workflow. Use disposable test data or a separate test account so UI validation cannot migrate or edit personal invoice data.</li>
+      <li>Capture baseline screenshots of all sidebar destinations, invoice/client search, editor sheets, and Settings in Default and Catppuccin themes, light and dark.</li>
+      <li>Record existing keyboard shortcuts, section selection, search/filter behavior, and sheet entry points before changing structure.</li>
+    </ul>
+    <p><strong>Done when:</strong> the current app runs as a foreground bundle and the validation environments and baseline behaviors are recorded.</p>
+  </section>
+
+  <section>
+    <h2>2. Replace the custom sidebar with native navigation</h2>
+    <p><strong>Primary files:</strong> <code>Sources/Mira/App/ContentView.swift</code> and <code>Sources/Mira/App/MiraApp.swift</code>.</p>
+    <ul>
+      <li>Replace the macOS <code>HStack</code> sidebar with <code>NavigationSplitView</code> and a selectable native sidebar <code>List</code> using <code>Label</code> rows.</li>
+      <li>Keep Dashboard, Invoices, Clients, and Settings destinations and the initial Invoices selection. Preserve notification-driven navigation, new-item commands, and existing sheets.</li>
+      <li>Let the sidebar resize/collapse using system behavior. Remove fixed-width sidebar styling, opaque sidebar fills, and custom selection/button chrome.</li>
+      <li>Assess the hidden-title-bar window style with the new toolbar; choose the native title/toolbar configuration that keeps traffic lights, title, and actions coherent.</li>
+      <li>Retain each section's search/filter state when navigating away and back. Move state ownership only where required to prevent resets.</li>
+    </ul>
+    <p><strong>Done when:</strong> all sections, keyboard navigation, sidebar toggling/resizing, and editor presentation work through the native shell.</p>
+  </section>
+
+  <section>
+    <h2>3. Move invoice and client actions into native toolbars</h2>
+    <p><strong>Primary files:</strong> <code>Sources/Mira/Views/Invoices/InvoiceListView.swift</code> and <code>Sources/Mira/Views/Clients/ClientListView.swift</code>.</p>
+    <ul>
+      <li>Replace hand-built page action headers with navigation titles and native toolbar items. Keep list content and invoice status filters in the content area unless moving them clearly improves usability.</li>
+      <li>Use standard labeled buttons for New Invoice and New Client, with accessible names and existing actions. Remove custom colored rectangles and plain-button chrome from these toolbar actions.</li>
+      <li>Keep invoice sorting in a standard Menu. Group related actions with native toolbar placement; use <code>ToolbarSpacer</code> on supported systems only when a distinct group is useful.</li>
+      <li>Use monochrome icons by default and semantic tint for primary actions/status. Apply badges or shared-background visibility only where an actual product requirement calls for them.</li>
+      <li>Confirm toolbar items do not duplicate shell commands or disappear when switching sections or narrowing the window.</li>
+    </ul>
+    <p><strong>Done when:</strong> new-item actions and sorting remain discoverable and accessible in the system toolbar, with coherent grouping on macOS 26 and usable fallback layouts on macOS 14.</p>
+  </section>
+
+  <section>
+    <h2>4. Adopt native search with explicit scope</h2>
+    <ul>
+      <li>Replace invoice/client custom search fields with <code>.searchable</code>, preserving existing matching rules, placeholder text, and independent search state.</li>
+      <li>Keep search scoped to the active invoice or client destination. Do not imply global search across Dashboard and Settings.</li>
+      <li>Attach search to the destination/container that produces the correct toolbar placement. If scope later becomes global, move it to <code>NavigationSplitView</code> and define cross-section results first.</li>
+      <li>Consider <code>searchToolbarBehavior</code> on supported systems only if compact secondary search is appropriate. Preserve search access through keyboard and pointer interaction.</li>
+      <li>Check search combined with status filtering, sorting, clearing, empty results, and section switching.</li>
+    </ul>
+    <p><strong>Done when:</strong> native search filters the same records as before and its placement and scope are clear.</p>
+  </section>
+
+  <section>
+    <h2>5. Reconcile themes, sheets, and custom surfaces</h2>
+    <p><strong>Primary files:</strong> <code>Sources/Mira/Services/ThemeManager.swift</code>, <code>Sources/Mira/Models/AppTheme.swift</code>, <code>Sources/Mira/Views/Settings/SettingsView.swift</code>, <code>Sources/Mira/Views/Invoices/InvoiceEditorView.swift</code>, and the client editor in <code>Sources/Mira/Views/Clients/ClientListView.swift</code>.</p>
+    <ul>
+      <li>Use native materials for navigation chrome in every theme. Preserve theme palettes for document/content surfaces and user-selected accents; do not rewrite imported theme JSON or alter PDF brand colors.</li>
+      <li>Remove opaque root/sidebar/toolbar and sheet fills where they obstruct system material. Audit nested backgrounds and clipping before deciding a glass effect is missing.</li>
+      <li>Keep purposeful content-card and field backgrounds where they help readability. Check Default, Catppuccin, and a custom imported theme for text contrast.</li>
+      <li>Use standard controls first. Add availability-guarded glass or glass-prominent button styles only where appropriate, with conventional native styles on older systems.</li>
+      <li>Only add <code>glassEffect</code> if a remaining app-specific floating control justifies it. Group nearby custom glass in a single <code>GlassEffectContainer</code>, use interactive glass for controls, and use stable IDs plus a local namespace if morphing is needed.</li>
+      <li>Evaluate scroll-edge treatment with system defaults first. Add availability-guarded <code>scrollEdgeEffectStyle</code> only if dense content requires tuning. Skip background extension and zoom transitions unless the design actually benefits from them.</li>
+    </ul>
+    <p><strong>Done when:</strong> system chrome renders without conflicting fills, theme content remains readable, and no unnecessary custom glass layer is introduced.</p>
+  </section>
+
+  <section>
+    <h2>6. Validate and prepare the implementation for review</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Acceptance checks</th></tr></thead>
+      <tbody>
+        <tr><td>Compatibility</td><td>Build with the macOS 26 SDK while retaining macOS 14 deployment support. Exercise the older-system fallback on macOS 14 or document unavailable runtime coverage explicitly.</td></tr>
+        <tr><td>Navigation</td><td>All destinations, sidebar collapse/resize, section state retention, narrow windows, and existing menu shortcuts work.</td></tr>
+        <tr><td>Actions and search</td><td>New Invoice/New Client work from toolbar and commands; editors save/cancel normally; invoice sorting/status filters and both search scopes preserve behavior.</td></tr>
+        <tr><td>Appearance</td><td>Inspect Default, Catppuccin, and an imported theme in light/dark; check active/inactive windows, scroll edges, sheets, readable text, and toolbar grouping.</td></tr>
+        <tr><td>Accessibility</td><td>Check keyboard focus order, VoiceOver labels, Increase Contrast, Reduce Transparency, and Reduce Motion where transitions are added.</td></tr>
+        <tr><td>Data and launch</td><td>Use a foreground app bundle with disposable data. Confirm existing editor operations still persist and no storage/PDF behavior changed.</td></tr>
+      </tbody>
+    </table>
+    <p>Run the repository's relevant build/check workflow. Add focused tests only for meaningful new state behavior; use runtime checks and screenshots for material appearance. Capture before/after images and state any verification limits in the final review summary.</p>
+    <p><strong>Done when:</strong> relevant checks pass, screenshots show coherent native chrome, and the diff is limited to the planned UI changes.</p>
+  </section>
+
+  <section>
+    <h2>Delivery sequence and handoff</h2>
+    <p>Implement in this order: baseline → native shell → toolbars → search → theme/material cleanup → validation. Keep these as small reviewable changes, building after each structural step. If the native shell provides the desired glass treatment, complete the work without introducing custom glass surfaces.</p>
+    <p><strong>Next action:</strong> review the implementation and validation evidence; run the remaining compatibility and accessibility checks on suitable systems.</p>
+    <p><strong>Plan source:</strong> <code>work/liquid-glass-plan.html</code>. Implementation authorized on October 8, 2026.</p>
+  </section>
+</main></body>
+</html>

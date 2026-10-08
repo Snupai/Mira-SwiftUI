@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+/// Owned by the shell so search, filtering, and sorting survive section changes.
+struct InvoiceBrowsingState {
+    var searchText = ""
+    var selectedStatus: InvoiceStatus?
+    var sortBy: InvoiceListView.SortOption = .dateDesc
+}
+
 struct InvoiceListView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.themeColors) var colors
@@ -11,9 +18,7 @@ struct InvoiceListView: View {
     @Query private var sdClients: [SDClient]
     @Query private var sdProfiles: [SDCompanyProfile]
     
-    @State private var searchText = ""
-    @State private var selectedStatus: InvoiceStatus? = nil
-    @State private var sortBy: SortOption = .dateDesc
+    @Binding var browsingState: InvoiceBrowsingState
     @State private var showingNewInvoice = false
     @State private var selectedInvoice: Invoice?
     @State private var selectedSDInvoice: SDInvoice?
@@ -63,15 +68,15 @@ struct InvoiceListView: View {
         var invoices = allInvoices
         
         // Status filter
-        if let status = selectedStatus {
+        if let status = browsingState.selectedStatus {
             invoices = invoices.filter { $0.status == status }
         }
         
         // Search filter
-        if !searchText.isEmpty {
+        if !browsingState.searchText.isEmpty {
             invoices = invoices.filter { inv in
                 let client = allClients.first { $0.id == inv.clientId }
-                let searchLower = searchText.lowercased()
+                let searchLower = browsingState.searchText.lowercased()
                 return inv.invoiceNumber.lowercased().contains(searchLower) ||
                        client?.name.lowercased().contains(searchLower) == true ||
                        client?.email.lowercased().contains(searchLower) == true ||
@@ -80,7 +85,7 @@ struct InvoiceListView: View {
         }
         
         // Sort
-        switch sortBy {
+        switch browsingState.sortBy {
         case .dateDesc: invoices.sort { $0.issueDate > $1.issueDate }
         case .dateAsc: invoices.sort { $0.issueDate < $1.issueDate }
         case .amountDesc: invoices.sort { $0.total > $1.total }
@@ -102,110 +107,33 @@ struct InvoiceListView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Invoices")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(colors.text)
-                
-                Text("\(appState.invoices.count)")
-                    .font(.system(size: 14, weight: .medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(colors.surface1)
-                    .foregroundColor(colors.subtext)
-                    .clipShape(Capsule())
-                
+            // Status remains scoped to invoice content; search and actions use the toolbar.
+            HStack(spacing: 6) {
+                Picker("Invoice status", selection: $browsingState.selectedStatus) {
+                    Text("All").tag(InvoiceStatus?.none)
+                    Text("Draft").tag(InvoiceStatus?.some(.draft))
+                    Text("Sent").tag(InvoiceStatus?.some(.sent))
+                    Text("Paid").tag(InvoiceStatus?.some(.paid))
+                    Text("Overdue").tag(InvoiceStatus?.some(.overdue))
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 420)
                 Spacer()
-                
-                Button(action: { showingNewInvoice = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                        Text("New Invoice")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(colors.accent)
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
+                Text("\(invoiceCount) invoices")
+                    .font(.caption)
+                    .foregroundStyle(colors.subtext)
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 32)
-            .padding(.bottom, 20)
-            
-            // Search & Filters
-            HStack(spacing: 16) {
-                // Search
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(colors.subtext)
-                    TextField("Search invoices, clients...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14))
-                        .foregroundColor(colors.text)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(colors.subtext)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(colors.surface0)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(maxWidth: 300)
-                
-                // Status Pills
-                HStack(spacing: 6) {
-                    StatusPill(title: "All", isSelected: selectedStatus == nil, colors: colors) { selectedStatus = nil }
-                    StatusPill(title: "Draft", isSelected: selectedStatus == .draft, colors: colors) { selectedStatus = .draft }
-                    StatusPill(title: "Sent", isSelected: selectedStatus == .sent, colors: colors) { selectedStatus = .sent }
-                    StatusPill(title: "Paid", isSelected: selectedStatus == .paid, colors: colors) { selectedStatus = .paid }
-                    StatusPill(title: "Overdue", isSelected: selectedStatus == .overdue, colors: colors) { selectedStatus = .overdue }
-                }
-                
-                Spacer()
-                
-                // Sort
-                Menu {
-                    ForEach(SortOption.allCases, id: \.self) { option in
-                        Button(action: { sortBy = option }) {
-                            HStack {
-                                Text(option.rawValue)
-                                if sortBy == option {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.up.arrow.down")
-                        Text(sortBy.rawValue)
-                    }
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.subtext)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(colors.surface0)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 16)
-            
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+
             Divider().background(colors.surface1)
             
             // List
             if filteredInvoices.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
-                    if appState.invoices.isEmpty {
+                    if invoiceCount == 0 {
                         Image(systemName: "doc.text")
                             .font(.system(size: 40))
                             .foregroundColor(colors.subtext)
@@ -223,8 +151,8 @@ struct InvoiceListView: View {
                             .font(.system(size: 15))
                             .foregroundColor(colors.subtext)
                         Button("Clear filters") {
-                            searchText = ""
-                            selectedStatus = nil
+                            browsingState.searchText = ""
+                            browsingState.selectedStatus = nil
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(colors.accent)
@@ -237,7 +165,7 @@ struct InvoiceListView: View {
                         ForEach(filteredInvoices) { invoice in
                             InvoiceRow(
                                 invoice: invoice,
-                                client: appState.clients.first { $0.id == invoice.clientId },
+                                client: allClients.first { $0.id == invoice.clientId },
                                 colors: colors,
                                 isVatExempt: isVatExempt,
                                 baseCurrency: baseCurrency
@@ -252,32 +180,34 @@ struct InvoiceListView: View {
             }
         }
         .background(colors.base)
+        .navigationTitle("Invoices")
+        .searchable(text: $browsingState.searchText, prompt: "Search invoices, clients...")
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    Picker("Sort invoices", selection: $browsingState.sortBy) {
+                        ForEach(SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                } label: {
+                    Label("Sort: \(browsingState.sortBy.rawValue)", systemImage: "arrow.up.arrow.down")
+                }
+                .help("Sort invoices")
+                .accessibilityLabel("Sort invoices: \(browsingState.sortBy.rawValue)")
+            }
+            ToolbarItem {
+                Button("New Invoice", systemImage: "plus") { showingNewInvoice = true }
+                    .miraPrimaryAction()
+                    .help("New Invoice (⌘N)")
+            }
+        }
         .sheet(isPresented: $showingNewInvoice) {
             InvoiceEditorView(invoice: nil).environmentObject(appState).environment(\.themeColors, colors)
         }
         .sheet(item: $selectedInvoice) { invoice in
             InvoiceDetailView(invoice: invoice).environmentObject(appState).environment(\.themeColors, colors)
         }
-    }
-}
-
-struct StatusPill: View {
-    let title: String
-    let isSelected: Bool
-    let colors: ThemeColors
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? colors.accent : colors.surface0)
-                .foregroundColor(isSelected ? .white : colors.text)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -366,6 +296,6 @@ struct InvoiceRow: View {
 
 struct InvoiceListView_Previews: PreviewProvider {
     static var previews: some View {
-        InvoiceListView().environmentObject(AppState())
+        InvoiceListView(browsingState: .constant(InvoiceBrowsingState())).environmentObject(AppState())
     }
 }

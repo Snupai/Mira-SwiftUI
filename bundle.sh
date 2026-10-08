@@ -137,19 +137,41 @@ fi
 # Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 
+# Match the push environment to the profile embedded in this build. A development
+# certificate/profile cannot authorize the production entitlement in the release
+# entitlements file, even though codesign's on-disk verification succeeds.
+SIGNING_ENTITLEMENTS="Mira.entitlements"
+if [ -f "Mira.entitlements" ] && [ -f "Mira.mobileprovision" ]; then
+    PROFILE_PLIST=$(mktemp -t mira-profile)
+    BUILD_ENTITLEMENTS=$(mktemp -t mira-entitlements)
+    trap 'rm -f "$PROFILE_PLIST" "$BUILD_ENTITLEMENTS"' EXIT
+    security cms -D -i "Mira.mobileprovision" > "$PROFILE_PLIST"
+    cp "Mira.entitlements" "$BUILD_ENTITLEMENTS"
+    if /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.aps-environment' "$BUILD_ENTITLEMENTS" >/dev/null 2>&1; then
+        PUSH_ENVIRONMENT=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.aps-environment' "$PROFILE_PLIST")
+        case "$PUSH_ENVIRONMENT" in
+            development|production) ;;
+            *) echo "Invalid push environment in Mira.mobileprovision" >&2; exit 1 ;;
+        esac
+        /usr/libexec/PlistBuddy -c "Set :com.apple.developer.aps-environment $PUSH_ENVIRONMENT" "$BUILD_ENTITLEMENTS"
+        echo "   Using provisioning profile push environment: $PUSH_ENVIRONMENT"
+    fi
+    SIGNING_ENTITLEMENTS="$BUILD_ENTITLEMENTS"
+fi
+
 echo "🔐 Signing app bundle..."
 if [ -n "$SIGNING_IDENTITY" ]; then
     echo "   Using identity: $SIGNING_IDENTITY"
     if [ -f "Mira.entitlements" ]; then
         echo "   Using entitlements: Mira.entitlements"
-        codesign --force --deep --sign "$SIGNING_IDENTITY" --entitlements Mira.entitlements --options runtime "${APP_NAME}.app"
+        codesign --force --deep --sign "$SIGNING_IDENTITY" --entitlements "$SIGNING_ENTITLEMENTS" --options runtime "${APP_NAME}.app"
     else
         codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime "${APP_NAME}.app"
     fi
 else
     echo "   Using ad-hoc signing (set SIGNING_IDENTITY for iCloud support)"
     if [ -f "Mira.entitlements" ]; then
-        codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+        codesign --force --deep --sign - --entitlements "$SIGNING_ENTITLEMENTS" "${APP_NAME}.app"
     else
         codesign --force --deep --sign - "${APP_NAME}.app"
     fi

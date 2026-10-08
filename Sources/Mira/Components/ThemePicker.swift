@@ -125,6 +125,9 @@ struct ThemePicker: View {
                     }
                 }
             }
+
+            Divider()
+            LiquidGlassPreferenceView()
         }
         .fileImporter(
             isPresented: $showingImportPicker,
@@ -170,6 +173,66 @@ struct ThemePicker: View {
         } message: {
             Text(importError ?? "Unknown error")
         }
+    }
+}
+
+// This preference styles app controls, independently of theme palettes and the
+// system-provided material used by native navigation chrome.
+enum MiraGlassAppearance {
+    static let preferenceKey = "mira.liquidGlassEnabled"
+
+    static var isSupported: Bool {
+        if #available(macOS 26.0, *) { return true }
+        return false
+    }
+}
+
+struct LiquidGlassPreferenceView: View {
+    @AppStorage(MiraGlassAppearance.preferenceKey) private var enabled = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Liquid Glass", isOn: $enabled)
+                .disabled(!MiraGlassAppearance.isSupported)
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var description: String {
+        if !MiraGlassAppearance.isSupported {
+            return "Requires macOS 26 or later. Standard controls are used on this Mac."
+        }
+        if reduceTransparency {
+            return "Reduce Transparency is enabled, so controls use a solid appearance."
+        }
+        return "Use glass styling for primary buttons. Navigation follows your Mac’s appearance."
+    }
+}
+
+private struct MiraPrimaryActionStyle: ViewModifier {
+    @AppStorage(MiraGlassAppearance.preferenceKey) private var enabled = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var prominentFallback: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *), enabled, !reduceTransparency {
+            content.buttonStyle(.glassProminent)
+        } else if prominentFallback {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.automatic)
+        }
+    }
+}
+
+extension View {
+    func miraPrimaryAction(prominentFallback: Bool = false) -> some View {
+        modifier(MiraPrimaryActionStyle(prominentFallback: prominentFallback))
     }
 }
 

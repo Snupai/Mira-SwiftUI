@@ -279,7 +279,9 @@ struct InvoiceEditorView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveInvoice() }.disabled(!canSave)
+                    Button("Save") { saveInvoice() }
+                        .miraPrimaryAction()
+                        .disabled(!canSave)
                 }
             }
             .alert("Save as Template", isPresented: $showingSaveTemplate) {
@@ -502,48 +504,7 @@ struct ClientPickerView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button(action: { dismiss() }) {
-                    Text("Cancel")
-                        .font(.system(size: 14))
-                        .foregroundColor(colors.accent)
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text("Select Client")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(colors.text)
-                
-                Spacer()
-                
-                // Create New Client button
-                Button(action: { 
-                    newClient = Client()
-                    showingNewClient = true 
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("New")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(colors.accent)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(colors.mantle)
-            
-            // Client list
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 8) {
                     if allClients.isEmpty {
@@ -593,9 +554,21 @@ struct ClientPickerView: View {
                 }
                 .padding(16)
             }
+            .navigationTitle("Select Client")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("New Client", systemImage: "plus") {
+                        newClient = Client()
+                        showingNewClient = true
+                    }
+                    .miraPrimaryAction()
+                }
+            }
         }
         .frame(width: 400, height: 350)
-        .background(colors.base)
         .sheet(isPresented: $showingNewClient) {
             QuickClientEditorView(client: $newClient) { savedClient in
                 if usesSwiftData {
@@ -628,35 +601,7 @@ struct QuickClientEditorView: View {
     var canSave: Bool { !client.name.isEmpty }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button("Cancel") { dismiss() }
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.accent)
-                    .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text("New Client")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(colors.text)
-                
-                Spacer()
-                
-                Button("Save") {
-                    client.updatedAt = Date()
-                    onSave(client)
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(canSave ? colors.accent : colors.subtext)
-                .buttonStyle(.plain)
-                .disabled(!canSave)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(colors.mantle)
-            
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Basic Info
@@ -692,9 +637,22 @@ struct QuickClientEditorView: View {
                 }
                 .padding(20)
             }
+            .navigationTitle("New Client")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        client.updatedAt = Date()
+                        onSave(client)
+                    }
+                    .miraPrimaryAction()
+                    .disabled(!canSave)
+                }
+            }
         }
         .frame(width: 400, height: 450)
-        .background(colors.base)
     }
 }
 

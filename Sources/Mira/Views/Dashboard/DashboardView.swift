@@ -110,32 +110,10 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Dashboard")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundColor(colors.text)
-                        Text(greeting)
-                            .font(.system(size: 14))
-                            .foregroundColor(colors.subtext)
-                    }
-                    Spacer()
-                    Button(action: { showingNewInvoice = true }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                            Text("New Invoice")
-                        }
-                        .font(.system(size: 14, weight: .medium))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(colors.accent)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-                
+                Text(greeting)
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.subtext)
+
                 // Stats Row
                 HStack(spacing: 16) {
                     StatCard(
@@ -277,6 +255,14 @@ struct DashboardView: View {
             .padding(32)
         }
         .background(colors.base)
+        .navigationTitle("Dashboard")
+        .toolbar {
+            ToolbarItem {
+                Button("New Invoice", systemImage: "plus") { showingNewInvoice = true }
+                    .miraPrimaryAction()
+                    .help("New Invoice (⌘N)")
+            }
+        }
         .sheet(isPresented: $showingNewInvoice) {
             InvoiceEditorView(invoice: nil).environmentObject(appState).environment(\.themeColors, colors)
         }

@@ -10,7 +10,7 @@ struct ClientListView: View {
     @Query(sort: \SDClient.name) private var sdClients: [SDClient]
     @Query private var sdInvoices: [SDInvoice]
     
-    @State private var searchText = ""
+    @Binding var searchText: String
     @State private var showingNewClient = false
     @State private var selectedClient: Client?
     
@@ -48,58 +48,19 @@ struct ClientListView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Clients")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button(action: { showingNewClient = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 36, height: 36)
-                        .background(colors.accent)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 32)
-            .padding(.top, 32)
-            .padding(.bottom, 24)
-            
-            // Search
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(colors.subtext)
-                    .font(.system(size: 14))
-                TextField("Search clients...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.text)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(colors.surface0)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: 200)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 32)
-            .padding(.bottom, 20)
-            
-            Divider().background(colors.surface1)
-            
             // List
             if filteredClients.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
-                    Text("No clients")
+                    Text(allClients.isEmpty ? "No clients" : "No matching clients")
                         .font(.system(size: 17))
                         .foregroundColor(colors.subtext)
                     if allClients.isEmpty {
                         Button("Add your first client") { showingNewClient = true }
                             .buttonStyle(.plain)
                             .foregroundColor(colors.accent)
+                    } else {
+                        Button("Clear search") { searchText = "" }
                     }
                     Spacer()
                 }
@@ -107,7 +68,7 @@ struct ClientListView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(filteredClients) { client in
-                            ClientRow(client: client, invoiceCount: appState.invoices.filter { $0.clientId == client.id }.count, colors: colors)
+                            ClientRow(client: client, invoiceCount: invoiceCount(for: client.id), colors: colors)
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedClient = client }
                             Divider().background(colors.surface0)
@@ -118,6 +79,15 @@ struct ClientListView: View {
             }
         }
         .background(colors.base)
+        .navigationTitle("Clients")
+        .searchable(text: $searchText, prompt: "Search clients...")
+        .toolbar {
+            ToolbarItem {
+                Button("New Client", systemImage: "plus") { showingNewClient = true }
+                    .miraPrimaryAction()
+                    .help("New Client (⇧⌘N)")
+            }
+        }
         .sheet(isPresented: $showingNewClient) {
             ClientEditorView(client: nil).environmentObject(appState)
         }
@@ -208,36 +178,7 @@ struct ClientEditorView: View {
     var canSave: Bool { !client.name.isEmpty }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button(action: { dismiss() }) {
-                    Text("Cancel")
-                        .font(.system(size: 14))
-                        .foregroundColor(colors.subtext)
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text(isEditing ? "Edit Client" : "New Client")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(colors.text)
-                
-                Spacer()
-                
-                Button(action: { saveClient() }) {
-                    Text("Save")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(canSave ? colors.accent : colors.subtext)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSave)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(colors.mantle)
-            
+        NavigationStack {
             // Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
@@ -287,9 +228,19 @@ struct ClientEditorView: View {
                 }
                 .padding(24)
             }
+            .navigationTitle(isEditing ? "Edit Client" : "New Client")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { saveClient() }
+                        .miraPrimaryAction()
+                        .disabled(!canSave)
+                }
+            }
         }
         .frame(width: 500, height: 600)
-        .background(colors.base)
     }
     
     func saveClient() {
@@ -489,6 +440,6 @@ struct ClientDetailView: View {
 
 struct ClientListView_Previews: PreviewProvider {
     static var previews: some View {
-        ClientListView().environmentObject(AppState())
+        ClientListView(searchText: .constant("")).environmentObject(AppState())
     }
 }

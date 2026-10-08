@@ -68,21 +68,17 @@ struct OnboardingThemePreview: View {
                     .fill(colors.subtext)
                     .frame(width: 120, height: 6)
                 
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(colors.accent)
-                        .frame(width: 50, height: 20)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(colors.surface1)
-                        .frame(width: 50, height: 20)
-                }
+                Button("New Invoice", systemImage: "plus") {}
+                    .miraPrimaryAction(prominentFallback: true)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 .padding(.top, 4)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(colors.base)
         }
-        .frame(height: 100)
+        .frame(height: 120)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -248,12 +244,9 @@ struct OnboardingStepLayout<Content: View>: View {
                     Text("Continue")
                         .font(.system(size: 15, weight: .medium))
                         .frame(width: 140)
-                        .padding(.vertical, 12)
-                        .background(continueEnabled ? colors.accent : colors.surface1)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
+                .controlSize(.large)
+                .miraPrimaryAction(prominentFallback: true)
                 .disabled(!continueEnabled)
                 .keyboardShortcut(.return, modifiers: [])
             }

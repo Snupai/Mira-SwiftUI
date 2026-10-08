@@ -3,16 +3,9 @@ import SwiftData
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-    @Environment(\.modelContext) private var modelContext
     
     // SwiftData query for company profile
     @Query private var profiles: [SDCompanyProfile]
-    
-    var themeColors: ThemeColors {
-        themeManager.colors(for: colorScheme)
-    }
     
     /// Check if setup is complete (works with both old and new data)
     private var isSetupComplete: Bool {
@@ -35,13 +28,23 @@ struct ContentView: View {
                 OnboardingContainerView()
             }
         }
-        .environment(\.themeColors, themeColors)
-        .tint(themeColors.accent)
-        .background(themeColors.base)
-        .foregroundColor(themeColors.text)
+        .modifier(MiraThemeStyle())
         #if os(macOS)
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 760, minHeight: 600)
         #endif
+    }
+}
+
+/// Theme document/content surfaces while leaving native window chrome adaptive.
+struct MiraThemeStyle: ViewModifier {
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let colors = themeManager.colors(for: colorScheme)
+        content
+            .environment(\.themeColors, colors)
+            .tint(colors.accent)
     }
 }
 
@@ -49,7 +52,9 @@ struct MainView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
-    @State private var selectedTab: Tab = .invoices
+    @State private var selectedTab: Tab? = .invoices
+    @State private var invoiceBrowsingState = InvoiceBrowsingState()
+    @State private var clientSearchText = ""
     
     var colors: ThemeColors {
         themeManager.colors(for: colorScheme)
@@ -85,30 +90,19 @@ struct MainView: View {
     
     var body: some View {
         #if os(macOS)
-        HStack(spacing: 0) {
-            // Custom sidebar
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    SidebarButton(
-                        tab: tab,
-                        isSelected: selectedTab == tab,
-                        colors: colors,
-                        action: { selectedTab = tab }
-                    )
-                }
-                Spacer()
+        NavigationSplitView {
+            List(Tab.allCases, id: \.self, selection: $selectedTab) { tab in
+                Label(tab.rawValue, systemImage: tab.icon)
+                    .tag(tab)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
-            .frame(width: 200)
-            .background(colors.mantle)
-            
-            // Content
-            content(for: selectedTab)
+            .listStyle(.sidebar)
+            .navigationTitle("Mira")
+            .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 280)
+        } detail: {
+            content(for: selectedTab ?? .invoices)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(colors.base)
+                .navigationTitle((selectedTab ?? .invoices).rawValue)
         }
-        .background(colors.base)
         // Keyboard shortcut handlers
         .onReceive(NotificationCenter.default.publisher(for: .newInvoice)) { _ in
             showingNewInvoice = true
@@ -154,8 +148,8 @@ struct MainView: View {
     func content(for tab: Tab) -> some View {
         switch tab {
         case .dashboard: DashboardView()
-        case .invoices: InvoiceListView()
-        case .clients: ClientListView()
+        case .invoices: InvoiceListView(browsingState: $invoiceBrowsingState)
+        case .clients: ClientListView(searchText: $clientSearchText)
         case .settings: SettingsView()
         }
     }
@@ -184,23 +178,7 @@ struct ShortcutsHelpView: View {
     ]
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Keyboard Shortcuts")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(colors.subtext)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(20)
-            .background(colors.mantle)
-            
+        NavigationStack {
             // Shortcuts list
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -235,37 +213,14 @@ struct ShortcutsHelpView: View {
                 }
                 .padding(20)
             }
+            .navigationTitle("Keyboard Shortcuts")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
         .frame(width: 360, height: 380)
-        .background(colors.base)
-    }
-}
-
-struct SidebarButton: View {
-    let tab: MainView.Tab
-    let isSelected: Bool
-    let colors: ThemeColors
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 14))
-                    .frame(width: 20)
-                Text(tab.rawValue)
-                    .font(.system(size: 14))
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .foregroundColor(isSelected ? .white : colors.text)
-            .background(isSelected ? colors.accent : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
     }
 }
 
