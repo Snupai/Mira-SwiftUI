@@ -1,10 +1,10 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.2
 import PackageDescription
 
 let package = Package(
     name: "Mira",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v26)
     ],
     products: [
         .executable(name: "Mira", targets: ["Mira"])
@@ -28,5 +28,6 @@ let package = Package(
             dependencies: ["Mira"],
             path: "Tests/MiraTests"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

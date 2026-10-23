@@ -1,668 +1,247 @@
 import SwiftUI
 import SwiftData
-import UniformTypeIdentifiers
-import os
-#if os(macOS)
-import AppKit
-#endif
 
-struct InvoiceDetailView: View {
+/// Trailing inspector for the selected invoice: the paper itself, then what
+/// to do with it, then the numbers behind it.
+struct InvoiceInspector: View {
+    let invoiceID: UUID
+
     @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) var dismiss
+    @Environment(NavigationModel.self) private var nav
+    @Environment(\.themeColors) private var colors
     @Environment(\.modelContext) private var modelContext
+
     @Query private var sdInvoices: [SDInvoice]
     @Query private var sdClients: [SDClient]
     @Query private var sdProfiles: [SDCompanyProfile]
-    
-    let invoice: Invoice
-    @State private var showingEdit = false
-    @State private var showingExportLanguage = false
-    @State private var exportLanguage: PDFLanguage = .german
-    @State private var showingExchangeRateDialog = false
-    @State private var exchangeRateInput: String = ""
-    @State private var showingDeleteConfirmation = false
-    
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
+
+    @State private var showingExchangeRate = false
+    @State private var pendingDelete = false
+    @State private var previewLanguage: PDFLanguage = .german
+
+    private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
+
+    private var invoice: Invoice? {
+        usesSwiftData
+            ? sdInvoices.first { $0.id == invoiceID }?.toLegacy()
+            : appState.invoices.first { $0.id == invoiceID }
     }
-    
-    var client: Client? {
-        if usesSwiftData {
-            return sdClients.first { $0.id == invoice.clientId }?.toLegacy()
-        }
-        return appState.clients.first { $0.id == invoice.clientId }
+    private var profile: CompanyProfile? {
+        usesSwiftData ? sdProfiles.first?.toLegacy() : appState.companyProfile
     }
-    
-    var currentInvoice: Invoice {
-        if usesSwiftData {
-            return sdInvoices.first { $0.id == invoice.id }?.toLegacy() ?? invoice
-        }
-        return appState.invoices.first { $0.id == invoice.id } ?? invoice
+    private func client(for invoice: Invoice) -> Client? {
+        usesSwiftData
+            ? sdClients.first { $0.id == invoice.clientId }?.toLegacy()
+            : appState.clients.first { $0.id == invoice.clientId }
     }
-    
-    var isVatExempt: Bool {
-        if usesSwiftData {
-            return sdProfiles.first?.isVatExempt ?? false
-        }
-        return appState.companyProfile?.isVatExempt ?? false
+    private var actions: InvoiceActions {
+        InvoiceActions(modelContext: modelContext, appState: appState, sdInvoices: sdInvoices)
     }
-    var displayTotal: Double { isVatExempt ? currentInvoice.subtotal : currentInvoice.total }
-    
-    // MARK: - Body Sections (split to help compiler)
-    
-    private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(currentInvoice.invoiceNumber)
-                    .font(.system(size: 24, weight: .semibold))
-                Text(client?.name ?? "—")
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(formatCurrency(displayTotal))
-                    .font(.system(size: 24, weight: .semibold))
-                StatusBadge(status: currentInvoice.status)
-            }
-        }
-    }
-    
-    private var datesSection: some View {
-        HStack(spacing: 32) {
-            DateBlock(label: "Issued", date: currentInvoice.issueDate)
-            DateBlock(label: "Due", date: currentInvoice.dueDate, isOverdue: currentInvoice.isOverdue)
-            if let paid = currentInvoice.paidAt {
-                DateBlock(label: "Paid", date: paid)
-            }
-        }
-    }
-    
-    private var lineItemsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Items")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
-            
-            VStack(spacing: 0) {
-                ForEach(currentInvoice.lineItems) { item in
-                    lineItemRow(item)
-                }
-            }
-            .padding(16)
-            .background(Color.primary.opacity(0.03))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-    
-    private func lineItemRow(_ item: LineItem) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(item.description)
-                    .font(.system(size: 14))
-                Spacer()
-                Text("\(formatQty(item.quantity)) × \(formatCurrency(item.unitPrice))")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                Text(formatCurrency(item.total))
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(width: 80, alignment: .trailing)
-            }
-            .padding(.vertical, 10)
-            if item.id != currentInvoice.lineItems.last?.id {
-                Divider()
-            }
-        }
-    }
-    
-    private var totalsSection: some View {
-        HStack {
-            Spacer()
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 32) {
-                    Text("Subtotal").foregroundColor(.secondary)
-                    Text(formatCurrency(currentInvoice.subtotal))
-                }
-                .font(.system(size: 14))
-                
-                if isVatExempt {
-                    Text("VAT exempt (§19 UStG)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.orange)
-                } else {
-                    ForEach(currentInvoice.taxBreakdown, id: \.rate) { breakdown in
-                        HStack(spacing: 32) {
-                            Text("VAT \(Int(breakdown.rate))%").foregroundColor(.secondary)
-                            Text(formatCurrency(breakdown.amount))
-                        }
-                        .font(.system(size: 14))
-                    }
-                }
-                
-                Divider().frame(width: 180)
-                
-                HStack(spacing: 32) {
-                    Text("Total")
-                    Text(formatCurrency(displayTotal))
-                }
-                .font(.system(size: 17, weight: .semibold))
-            }
-        }
-    }
-    
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    headerSection
-                    Divider()
-                    datesSection
-                    lineItemsSection
-                    totalsSection
-                    
-                    // Actions
-                    HStack(spacing: 12) {
-                        if currentInvoice.status == .draft {
-                            Button(action: markAsSent) {
-                                Text("Mark Sent")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        
-                        if currentInvoice.status == .sent || currentInvoice.status == .overdue {
-                            Button(action: markAsPaid) {
-                                Text("Mark Paid")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(Color.green)
-                                    .foregroundColor(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        
-                        Menu {
-                            Button("Deutsch (German)") {
-                                exportLanguage = .german
-                                exportPDF()
-                            }
-                            Button("English") {
-                                exportLanguage = .english
-                                exportPDF()
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.down.doc")
-                                Text("Export")
-                            }
-                            .font(.system(size: 14, weight: .medium))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color.primary.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        
+        if let invoice {
+            content(invoice)
+        } else {
+            ContentUnavailableView("Invoice not found", systemImage: "doc.text")
+        }
+    }
+
+    private func content(_ invoice: Invoice) -> some View {
+        let client = client(for: invoice)
+        let profile = profile ?? CompanyProfile()
+        let isVatExempt = profile.isVatExempt
+        let total = isVatExempt ? invoice.subtotal : invoice.total
+        let status: InvoiceStatus = (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
+        let baseCurrency = profile.defaultCurrency
+
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                // The document
+                GeometryReader { geo in
+                    InvoicePaper(invoice: invoice, client: client, profile: profile, language: previewLanguage, width: min(geo.size.width, 300))
+                        .frame(maxWidth: .infinity)
+                }
+                .aspectRatio(1 / 1.4142, contentMode: .fit)
+                .frame(maxWidth: 300)
+                .frame(maxWidth: .infinity)
+                .padding(.top, Spacing.s)
+
+                // Headline
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(invoice.invoiceNumber)
+                            .font(.title3.weight(.semibold))
+                            .monospacedDigit()
                         Spacer()
-                        
-                        Button(action: { showingDeleteConfirmation = true }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "trash")
-                                Text("Delete")
-                            }
-                            .font(.system(size: 14, weight: .medium))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        StatusBadge(status: status, prominent: true)
+                    }
+                    MoneyText(total, invoice.currency, font: .title, weight: .semibold)
+                    if let client {
+                        Button {
+                            nav.reveal(clientID: client.id)
+                        } label: {
+                            Text(client.name)
+                                .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .help("Show client")
+                    }
+                    if let relative = Dates.relativeDue(invoice.dueDate, status: status) {
+                        Text(relative)
+                            .font(.callout)
+                            .foregroundStyle(status == .overdue ? Color.red : .secondary)
+                    } else if status == .paid, let paidAt = invoice.paidAt {
+                        Text("Paid on \(Dates.medium.string(from: paidAt))")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .padding(32)
-            }
-            .navigationTitle("Invoice")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-                if currentInvoice.status == .draft {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Edit") { showingEdit = true }
+
+                // Actions
+                actionsSection(invoice, client: client, profile: profile, status: status, baseCurrency: baseCurrency)
+
+                Divider()
+
+                // Numbers
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    DetailRow(label: "Issued", value: Dates.medium.string(from: invoice.issueDate))
+                    DetailRow(label: "Due", value: Dates.medium.string(from: invoice.dueDate), valueColor: status == .overdue ? .red : nil)
+                    if let sentAt = invoice.sentAt {
+                        DetailRow(label: "Sent", value: Dates.medium.string(from: sentAt))
                     }
-                }
-            }
-            .sheet(isPresented: $showingEdit) {
-                InvoiceEditorView(invoice: currentInvoice).environmentObject(appState)
-            }
-            .alert("Delete Invoice", isPresented: $showingDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) { deleteInvoice() }
-            } message: {
-                Text("Are you sure you want to delete invoice \(currentInvoice.invoiceNumber)? This action cannot be undone.")
-            }
-            .sheet(isPresented: $showingExchangeRateDialog) {
-                ExchangeRateDialog(
-                    invoice: currentInvoice,
-                    baseCurrency: usesSwiftData
-                        ? (sdProfiles.first?.defaultCurrency ?? .eur)
-                        : (appState.companyProfile?.defaultCurrency ?? .eur),
-                    exchangeRateInput: $exchangeRateInput,
-                    onConfirm: { rate, baseAmount in
-                        if usesSwiftData {
-                            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                                sdInvoice.status = .paid
-                                sdInvoice.paidAt = Date()
-                                sdInvoice.paidExchangeRate = rate
-                                sdInvoice.paidAmountInBaseCurrency = baseAmount
-                                sdInvoice.updatedAt = Date()
-                                try? modelContext.save()
-                            }
-                        } else {
-                            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                                appState.invoices[i].markAsPaid(exchangeRate: rate, amountInBaseCurrency: baseAmount)
-                                appState.saveInvoices()
-                            }
+                    if let paidAt = invoice.paidAt {
+                        DetailRow(label: "Paid", value: Dates.medium.string(from: paidAt))
+                    }
+                    if invoice.currency != baseCurrency, let base = invoice.paidAmountInBaseCurrency {
+                        DetailRow(label: "Received", value: Money.string(base, baseCurrency))
+                        if let rate = invoice.paidExchangeRate {
+                            DetailRow(label: "Rate", value: "1 \(invoice.currency.rawValue) = \(String(format: "%.4f", rate)) \(baseCurrency.rawValue)")
                         }
-                        showingExchangeRateDialog = false
-                    },
-                    onCancel: {
-                        showingExchangeRateDialog = false
-                    }
-                )
-            }
-        }
-    }
-    
-    func markAsSent() {
-        if usesSwiftData {
-            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                sdInvoice.status = .sent
-                sdInvoice.updatedAt = Date()
-                try? modelContext.save()
-            }
-        } else {
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices[i].markAsSent()
-                appState.saveInvoices()
-            }
-        }
-    }
-    
-    func deleteInvoice() {
-        if usesSwiftData {
-            if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                modelContext.delete(sdInvoice)
-                try? modelContext.save()
-            }
-        } else {
-            if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                appState.invoices.remove(at: i)
-                appState.saveInvoices()
-            }
-        }
-        dismiss()
-    }
-    
-    func markAsPaid() {
-        let baseCurrency = usesSwiftData
-            ? (sdProfiles.first?.defaultCurrency ?? .eur)
-            : (appState.companyProfile?.defaultCurrency ?? .eur)
-        
-        // If currencies differ, show exchange rate dialog
-        if currentInvoice.currency != baseCurrency {
-            exchangeRateInput = ""
-            showingExchangeRateDialog = true
-        } else {
-            // Same currency, no conversion needed
-            if usesSwiftData {
-                if let sdInvoice = sdInvoices.first(where: { $0.id == invoice.id }) {
-                    sdInvoice.status = .paid
-                    sdInvoice.paidAt = Date()
-                    sdInvoice.updatedAt = Date()
-                    try? modelContext.save()
-                }
-            } else {
-                if let i = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
-                    appState.invoices[i].markAsPaid()
-                    appState.saveInvoices()
-                }
-            }
-        }
-    }
-    
-    func exportPDF() {
-        guard let client = client else { return }
-        
-        // Use SwiftData profile if available
-        let profile: CompanyProfile
-        if usesSwiftData, let sdProfile = sdProfiles.first {
-            profile = sdProfile.toLegacy()
-        } else if let legacyProfile = appState.companyProfile {
-            profile = legacyProfile
-        } else {
-            return
-        }
-        
-        #if os(macOS)
-        let fileName = "\(currentInvoice.invoiceNumber).pdf"
-        
-        // Check for default export path
-        if !profile.defaultExportPath.isEmpty {
-            let folderURL = URL(fileURLWithPath: profile.defaultExportPath)
-            let fileURL = folderURL.appendingPathComponent(fileName)
-            
-            // Check if folder exists and is writable
-            if FileManager.default.isWritableFile(atPath: profile.defaultExportPath) {
-                _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: fileURL, language: exportLanguage)
-                NSWorkspace.shared.selectFile(fileURL.path, inFileViewerRootedAtPath: folderURL.path)
-                return
-            }
-        }
-        
-        // Fallback to save panel
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = fileName
-        panel.begin { [exportLanguage] r in
-            if r == .OK, let url = panel.url {
-                _ = PDFGenerator.saveInvoicePDF(invoice: currentInvoice, client: client, companyProfile: profile, to: url, language: exportLanguage)
-            }
-        }
-        #endif
-    }
-    
-    func formatCurrency(_ value: Double) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currentInvoice.currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "€0"
-    }
-    
-    func formatQty(_ q: Double) -> String {
-        q.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(q)) : String(format: "%.2f", q)
-    }
-}
-
-struct DateBlock: View {
-    let label: String
-    let date: Date
-    var isOverdue: Bool = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-            Text(formatDate(date))
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(isOverdue ? .red : .primary)
-        }
-    }
-    
-    func formatDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        return f.string(from: d)
-    }
-}
-
-struct StatusBadge: View {
-    let status: InvoiceStatus
-    
-    var color: Color {
-        switch status {
-        case .paid: return .green
-        case .overdue: return .red
-        case .sent: return .blue
-        case .cancelled: return .orange
-        default: return .secondary
-        }
-    }
-    
-    var body: some View {
-        Text(status.rawValue)
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.12))
-            .foregroundColor(color)
-            .clipShape(Capsule())
-    }
-}
-
-struct InvoiceDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        InvoiceDetailView(invoice: Invoice(clientId: UUID())).environmentObject(AppState())
-    }
-}
-
-// MARK: - Exchange Rate Dialog
-
-struct ExchangeRateDialog: View {
-    let invoice: Invoice
-    let baseCurrency: Currency
-    @Binding var exchangeRateInput: String
-    let onConfirm: (Double, Double) -> Void
-    let onCancel: () -> Void
-    
-    var isVatExempt: Bool = false
-    
-    @State private var isLoading = true
-    @State private var fetchError: String? = nil
-    @State private var rateSource: String = ""
-    
-    var invoiceTotal: Double {
-        isVatExempt ? invoice.subtotal : invoice.total
-    }
-    
-    var exchangeRate: Double? {
-        Double(exchangeRateInput.replacingOccurrences(of: ",", with: "."))
-    }
-    
-    var convertedAmount: Double? {
-        guard let rate = exchangeRate, rate > 0 else { return nil }
-        return invoiceTotal * rate
-    }
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "arrow.left.arrow.right.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(.blue)
-                
-                Text("Currency Conversion")
-                    .font(.system(size: 18, weight: .semibold))
-                
-                Text(fetchError != nil ? "Enter the exchange rate manually" : "Fetching current exchange rate...")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            // Invoice info
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Invoice Total:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(formatCurrency(invoiceTotal, currency: invoice.currency))
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                
-                HStack {
-                    Text("Base Currency:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(baseCurrency.symbol) \(baseCurrency.rawValue)")
-                        .font(.system(size: 15, weight: .medium))
-                }
-            }
-            .font(.system(size: 14))
-            .padding()
-            .background(Color.secondary.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            
-            // Exchange rate input
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Exchange Rate")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                    
-                    if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                    } else if !rateSource.isEmpty {
-                        Text("(\(rateSource))")
-                            .font(.system(size: 11))
-                            .foregroundColor(.green)
-                    } else if fetchError != nil {
-                        Text("(manual)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.orange)
                     }
                 }
-                
-                HStack {
-                    Text("1 \(invoice.currency.rawValue) =")
-                        .foregroundColor(.secondary)
-                    TextField("0.00", text: $exchangeRateInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 100)
-                        .padding(8)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    Text(baseCurrency.rawValue)
-                        .foregroundColor(.secondary)
-                    
-                    // Refresh button
-                    Button(action: { fetchExchangeRate() }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14))
-                            .foregroundColor(.blue)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    ForEach(invoice.lineItems) { item in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.description.nilIfEmpty ?? "Untitled item")
+                                Text("\(Money.quantity(item.quantity)) × \(Money.string(item.unitPrice, invoice.currency))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Spacer()
+                            MoneyText(item.total, invoice.currency, font: .callout)
+                        }
+                        .font(.callout)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isLoading)
-                }
-                
-                if let error = fetchError {
-                    Text(error)
-                        .font(.system(size: 11))
-                        .foregroundColor(.orange)
-                }
-            }
-            
-            // Converted amount preview
-            if let converted = convertedAmount {
-                HStack {
-                    Text("You received:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(formatCurrency(converted, currency: baseCurrency))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.green)
-                }
-                .padding()
-                .background(Color.green.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            
-            Spacer()
-            
-            // Buttons
-            HStack(spacing: 12) {
-                Button(action: onCancel) {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .buttonStyle(.plain)
-                .background(Color.secondary.opacity(Opacity.subtle))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                Button(action: {
-                    if let rate = exchangeRate, let converted = convertedAmount {
-                        onConfirm(rate, converted)
-                    }
-                }) {
-                    Text("Mark as Paid")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                }
-                .buttonStyle(.plain)
-                .background(exchangeRate != nil ? Color.green : Color.gray)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .disabled(exchangeRate == nil)
-            }
-        }
-        .padding(24)
-        .frame(width: 380, height: 480)
-        .onAppear {
-            fetchExchangeRate()
-        }
-    }
-    
-    func fetchExchangeRate() {
-        isLoading = true
-        fetchError = nil
-        rateSource = ""
-        
-        // Using Frankfurter API (free, no API key needed)
-        let from = invoice.currency.rawValue
-        let to = baseCurrency.rawValue
-        guard let url = URL(string: "https://api.frankfurter.app/latest?from=\(from)&to=\(to)") else {
-            fetchError = "Invalid currency"
-            isLoading = false
-            return
-        }
-        
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            DispatchQueue.main.async {
-                isLoading = false
-                
-                if let error = error {
-                    fetchError = "No internet connection"
-                    Log.app.error("Exchange rate fetch error: \(error.localizedDescription, privacy: .public)")
-                    return
-                }
-                
-                guard let data = data else {
-                    fetchError = "No data received"
-                    return
-                }
-                
-                do {
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let rates = json["rates"] as? [String: Double],
-                       let rate = rates[to] {
-                        exchangeRateInput = String(format: "%.4f", rate)
-                        rateSource = "live rate"
+                    Divider()
+                    DetailRow(label: "Subtotal", value: Money.string(invoice.subtotal, invoice.currency))
+                    if isVatExempt {
+                        DetailRow(label: "VAT", value: "Exempt (§19 UStG)")
                     } else {
-                        fetchError = "Could not parse rate"
+                        ForEach(invoice.taxBreakdown, id: \.rate) { b in
+                            DetailRow(label: "VAT \(Int(b.rate)) %", value: Money.string(b.amount, invoice.currency))
+                        }
                     }
-                } catch {
-                    fetchError = "Failed to decode response"
+                    HStack {
+                        Text("Total").fontWeight(.semibold)
+                        Spacer()
+                        MoneyText(total, invoice.currency, weight: .semibold)
+                    }
+                }
+
+                if !invoice.notes.isEmpty {
+                    Divider()
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Notes").font(.callout).foregroundStyle(.secondary)
+                        Text(invoice.notes).font(.callout).textSelection(.enabled)
+                    }
                 }
             }
-        }.resume()
+            .padding(Spacing.xl)
+        }
+        .confirmationDialog("Delete \(invoice.invoiceNumber)?", isPresented: $pendingDelete, titleVisibility: .visible) {
+            Button("Delete invoice", role: .destructive) {
+                actions.delete(invoice)
+                nav.selectedInvoiceID = nil
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes the invoice. Exported PDFs are not affected.")
+        }
+        .sheet(isPresented: $showingExchangeRate) {
+            ExchangeRateDialog(invoice: invoice, baseCurrency: baseCurrency, isVatExempt: isVatExempt) { rate, baseAmount in
+                actions.markPaid(invoice, exchangeRate: rate, amountInBaseCurrency: baseAmount)
+            }
+        }
     }
-    
-    func formatCurrency(_ value: Double, currency: Currency) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
+
+    @ViewBuilder
+    private func actionsSection(_ invoice: Invoice, client: Client?, profile: CompanyProfile, status: InvoiceStatus, baseCurrency: Currency) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            // Primary: the next step in the invoice's life.
+            switch status {
+            case .draft:
+                HStack(spacing: Spacing.s) {
+                    Button("Mark as sent", systemImage: "paperplane") { actions.markSent(invoice) }
+                        .buttonStyle(.glassProminent)
+                    Button("Edit", systemImage: "pencil") { nav.sheet = .editInvoice(invoice) }
+                        .buttonStyle(.glass)
+                }
+            case .sent, .overdue:
+                Button("Mark as paid", systemImage: "checkmark.circle") {
+                    if invoice.currency == baseCurrency {
+                        actions.markPaid(invoice)
+                    } else {
+                        showingExchangeRate = true
+                    }
+                }
+                .buttonStyle(.glassProminent)
+            case .paid, .cancelled:
+                EmptyView()
+            }
+
+            HStack(spacing: Spacing.s) {
+                Menu {
+                    Button("Deutsch") { actions.exportPDF(invoice, client: client, profile: profile, language: .german) }
+                    Button("English") { actions.exportPDF(invoice, client: client, profile: profile, language: .english) }
+                } label: {
+                    Label("Export PDF", systemImage: "arrow.down.doc")
+                }
+                .buttonStyle(.glass)
+                .disabled(client == nil)
+                .help(client == nil ? "This invoice has no client" : "Save a PDF")
+
+                Picker("Preview language", selection: $previewLanguage) {
+                    Text("DE").tag(PDFLanguage.german)
+                    Text("EN").tag(PDFLanguage.english)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 90)
+                .help("Preview language")
+
+                Spacer()
+
+                Menu {
+                    if status == .sent || status == .overdue {
+                        Button("Back to draft", systemImage: "arrow.uturn.backward") { actions.revertToDraft(invoice) }
+                    }
+                    if status != .paid && status != .cancelled {
+                        Button("Cancel invoice", systemImage: "xmark.circle") { actions.cancel(invoice) }
+                    }
+                    Divider()
+                    Button("Delete…", systemImage: "trash", role: .destructive) { pendingDelete = true }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.glass)
+                .help("More actions")
+            }
+        }
     }
 }

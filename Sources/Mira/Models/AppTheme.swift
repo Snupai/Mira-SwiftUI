@@ -25,6 +25,10 @@ struct ThemeColors {
     let text: Color
     let subtext: Color
     let accent: Color
+    /// True when the palette resolves to macOS semantic colors. The content
+    /// layer then leaves window backgrounds alone so Liquid Glass chrome shows
+    /// the real desktop through it; custom palettes paint their own base.
+    var isSystem: Bool = false
     
     static let fallback = ThemeColors(
         base: Color(nsColor: .windowBackgroundColor),
@@ -36,7 +40,8 @@ struct ThemeColors {
         overlay0: Color.secondary.opacity(0.3),
         text: Color.primary,
         subtext: Color.secondary,
-        accent: .purple
+        accent: .accentColor,
+        isSystem: true
     )
     
     static func forTheme(_ theme: AppTheme, colorScheme: ColorScheme, accentName: String, customAccentHex: String) -> ThemeColors {

@@ -254,7 +254,8 @@ class ThemeManager: ObservableObject {
             overlay0: resolveColor(palette.overlay0, isSystem: isSystem),
             text: resolveColor(palette.text, isSystem: isSystem),
             subtext: resolveColor(palette.subtext, isSystem: isSystem),
-            accent: accent
+            accent: accent,
+            isSystem: isSystem
         )
     }
 
@@ -284,10 +285,17 @@ class ThemeManager: ObservableObject {
     private func systemColor(named name: String) -> Color {
         switch name {
         case "windowBackground": return Color(nsColor: .windowBackgroundColor)
+        case "underPageBackground": return Color(nsColor: .underPageBackgroundColor)
         case "controlBackground": return Color(nsColor: .controlBackgroundColor)
+        case "textBackground": return Color(nsColor: .textBackgroundColor)
         case "separator": return Color(nsColor: .separatorColor)
         case "label": return Color(nsColor: .labelColor)
         case "secondaryLabel": return Color(nsColor: .secondaryLabelColor)
+        case "tertiaryLabel": return Color(nsColor: .tertiaryLabelColor)
+        case "quaternaryLabel": return Color(nsColor: .quaternaryLabelColor)
+        case "secondaryFill": return Color(nsColor: .labelColor).opacity(0.16)
+        case "tertiaryFill": return Color(nsColor: .labelColor).opacity(0.10)
+        case "quaternaryFill": return Color(nsColor: .labelColor).opacity(0.05)
         case "accent": return Color.accentColor
         default: return .gray
         }

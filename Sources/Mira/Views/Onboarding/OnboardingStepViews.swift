@@ -720,8 +720,11 @@ struct CursorAwareTextEditor: NSViewRepresentable {
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
-        
+        guard let textView = scrollView.documentView as? NSTextView else {
+            Log.onboarding.error("CursorAwareTextEditor: scrollableTextView documentView was not NSTextView")
+            return scrollView
+        }
+
         textView.delegate = context.coordinator
         textView.isRichText = false
         textView.font = NSFont.systemFont(ofSize: 13)

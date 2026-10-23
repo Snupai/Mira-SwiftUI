@@ -31,8 +31,7 @@ struct MiraApp: App {
         }
         .modelContainer(modelContainer)
         #if os(macOS)
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1200, height: 800)
+        .defaultSize(width: 1240, height: 800)
         .commands {
             // Custom About window
             CommandGroup(replacing: .appInfo) {
@@ -56,7 +55,7 @@ struct MiraApp: App {
             }
 
             CommandGroup(replacing: .sidebar) {
-                Button("Dashboard") {
+                Button("Overview") {
                     NotificationCenter.default.post(name: .navigateTo, object: "dashboard")
                 }
                 .keyboardShortcut("1", modifiers: .command)
@@ -92,6 +91,7 @@ struct MiraApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appState)
+                .environment(\.themeColors, ThemeManager.shared.colors(for: .light))
         }
         .modelContainer(modelContainer)
         #endif
