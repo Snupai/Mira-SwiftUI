@@ -1,471 +1,482 @@
 import SwiftUI
 import SwiftData
+import Charts
 
+/// Overview: what is owed to you right now, how the year is going, and the
+/// invoices that need a hand. Flat content, one large number, no tile grid.
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.themeColors) var colors
-    @Environment(\.modelContext) private var modelContext
-    
-    // SwiftData queries
+    @Environment(NavigationModel.self) private var nav
+    @Environment(\.themeColors) private var colors
+
     @Query private var sdInvoices: [SDInvoice]
     @Query private var sdClients: [SDClient]
     @Query private var sdProfiles: [SDCompanyProfile]
-    
-    @State private var showingNewInvoice = false
-    
-    // Use SwiftData if migrated or no legacy data exists
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
-    }
-    
+
+    // MARK: Data
+
+    private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
+
     private var allInvoices: [Invoice] {
-        if usesSwiftData {
-            return sdInvoices.map { $0.toLegacy() }
-        }
-        return appState.invoices
+        usesSwiftData ? sdInvoices.map { $0.toLegacy() } : appState.invoices
     }
-    
+
     private var allClients: [Client] {
-        if usesSwiftData {
-            return sdClients.map { $0.toLegacy() }
-        }
-        return appState.clients
+        usesSwiftData ? sdClients.map { $0.toLegacy() } : appState.clients
     }
-    
-    var isVatExempt: Bool { 
-        if let profile = sdProfiles.first {
-            return profile.isVatExempt
-        }
-        return appState.companyProfile?.isVatExempt ?? false 
+
+    private var clientsByID: [UUID: Client] {
+        Dictionary(allClients.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
-    
-    // Stats calculations
-    var thisMonthInvoices: [Invoice] {
-        let now = Date()
-        let calendar = Calendar.current
-        return allInvoices.filter {
-            calendar.isDate($0.issueDate, equalTo: now, toGranularity: .month)
-        }
+
+    private var profile: CompanyProfile? {
+        usesSwiftData ? sdProfiles.first?.toLegacy() : appState.companyProfile
     }
-    
-    var thisYearInvoices: [Invoice] {
-        let now = Date()
-        let calendar = Calendar.current
-        return allInvoices.filter {
-            calendar.isDate($0.issueDate, equalTo: now, toGranularity: .year)
-        }
+
+    private var isVatExempt: Bool { profile?.isVatExempt ?? false }
+    private var baseCurrency: Currency { profile?.defaultCurrency ?? .eur }
+
+    private func effectiveStatus(_ invoice: Invoice) -> InvoiceStatus {
+        (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
     }
-    
-    var outstandingInvoices: [Invoice] {
-        allInvoices.filter { $0.status == .sent || $0.status == .overdue }
-    }
-    
-    var overdueInvoices: [Invoice] {
-        allInvoices.filter { $0.status == .overdue || ($0.status == .sent && $0.isOverdue) }
-    }
-    
-    var baseCurrency: Currency { 
-        if let profile = sdProfiles.first {
-            return profile.defaultCurrency
-        }
-        return appState.companyProfile?.defaultCurrency ?? .eur 
-    }
-    
-    func totalFor(_ invoices: [Invoice]) -> Double {
+
+    /// Sums invoices in the base currency. Paid invoices use the recorded
+    /// converted amount; unpaid foreign-currency invoices are skipped because
+    /// there is no honest rate for them yet.
+    private func totalFor(_ invoices: [Invoice]) -> Double {
         invoices.reduce(0) { total, invoice in
-            let invoiceAmount = isVatExempt ? invoice.subtotal : invoice.total
-            
-            // For paid invoices with saved conversion, use the base currency amount
-            if invoice.status == .paid, let baseAmount = invoice.paidAmountInBaseCurrency {
-                return total + baseAmount
+            let amount = isVatExempt ? invoice.subtotal : invoice.total
+            if invoice.status == .paid, let base = invoice.paidAmountInBaseCurrency {
+                return total + base
             }
-            
-            // For invoices in the same currency as base, use the amount directly
             if invoice.currency == baseCurrency {
-                return total + invoiceAmount
+                return total + amount
             }
-            
-            // For unpaid invoices in different currencies, we can't accurately convert
-            // Just skip them in the total (they'll be counted when paid with actual rate)
             return total
         }
     }
-    
-    // Monthly data for chart (last 6 months)
-    var monthlyRevenue: [(month: String, amount: Double)] {
+
+    private var thisYearInvoices: [Invoice] {
         let calendar = Calendar.current
-        let now = Date()
+        return allInvoices.filter { calendar.isDate($0.issueDate, equalTo: Date(), toGranularity: .year) }
+    }
+
+    private var thisMonthPaid: [Invoice] {
+        let calendar = Calendar.current
+        return allInvoices.filter { $0.status == .paid && calendar.isDate($0.paidAt ?? $0.issueDate, equalTo: Date(), toGranularity: .month) }
+    }
+
+    private var outstandingInvoices: [Invoice] {
+        allInvoices.filter { $0.status == .sent || $0.status == .overdue }
+    }
+
+    private var overdueInvoices: [Invoice] {
+        allInvoices.filter { effectiveStatus($0) == .overdue }
+    }
+
+    private var staleDrafts: [Invoice] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return allInvoices.filter { $0.status == .draft && $0.createdAt < cutoff }
+    }
+
+    private var needsAttention: [Invoice] {
+        (overdueInvoices + staleDrafts).sorted { $0.dueDate < $1.dueDate }
+    }
+
+    private var recentInvoices: [Invoice] {
+        Array(allInvoices.sorted { $0.createdAt > $1.createdAt }.prefix(5))
+    }
+
+    fileprivate struct MonthRevenue: Identifiable {
+        let id: Date
+        let label: String
+        let amount: Double
+    }
+
+    private var monthlyRevenue: [MonthRevenue] {
+        let calendar = Calendar.current
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM"
-        
-        return (0..<6).reversed().map { monthsAgo in
-            let date = calendar.date(byAdding: .month, value: -monthsAgo, to: now)!
-            let monthInvoices = allInvoices.filter { inv in
-                inv.status == .paid && calendar.isDate(inv.issueDate, equalTo: date, toGranularity: .month)
-            }
-            return (formatter.string(from: date), totalFor(monthInvoices))
+        return (0..<6).reversed().compactMap { monthsAgo in
+            guard let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()),
+                  let start = calendar.dateInterval(of: .month, for: date)?.start else { return nil }
+            let paid = allInvoices.filter { $0.status == .paid && calendar.isDate($0.issueDate, equalTo: date, toGranularity: .month) }
+            return MonthRevenue(id: start, label: formatter.string(from: date), amount: totalFor(paid))
         }
     }
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Dashboard")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundColor(colors.text)
-                        Text(greeting)
-                            .font(.system(size: 14))
-                            .foregroundColor(colors.subtext)
-                    }
-                    Spacer()
-                    Button(action: { showingNewInvoice = true }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                            Text("New Invoice")
-                        }
-                        .font(.system(size: 14, weight: .medium))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(colors.accent)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-                // Stats Row
-                HStack(spacing: 16) {
-                    StatCard(
-                        title: "This Month",
-                        value: formatCurrency(totalFor(thisMonthInvoices.filter { $0.status == .paid })),
-                        subtitle: "\(thisMonthInvoices.count) invoices",
-                        icon: "calendar",
-                        colors: colors
-                    )
-                    StatCard(
-                        title: "This Year",
-                        value: formatCurrency(totalFor(thisYearInvoices.filter { $0.status == .paid })),
-                        subtitle: "\(thisYearInvoices.filter { $0.status == .paid }.count) paid",
-                        icon: "chart.line.uptrend.xyaxis",
-                        colors: colors
-                    )
-                    StatCard(
-                        title: "Outstanding",
-                        value: formatCurrency(totalFor(outstandingInvoices)),
-                        subtitle: "\(outstandingInvoices.count) pending",
-                        icon: "clock",
-                        colors: colors,
-                        valueColor: outstandingInvoices.isEmpty ? nil : colors.accent
-                    )
-                    if !overdueInvoices.isEmpty {
-                        StatCard(
-                            title: "Overdue",
-                            value: formatCurrency(totalFor(overdueInvoices)),
-                            subtitle: "\(overdueInvoices.count) need attention",
-                            icon: "exclamationmark.triangle",
-                            colors: colors,
-                            valueColor: .red
-                        )
-                    }
-                }
-                
-                // Revenue Chart & Recent
-                HStack(alignment: .top, spacing: 20) {
-                    // Chart
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Revenue (Last 6 Months)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(colors.subtext)
-                        
-                        RevenueChart(data: monthlyRevenue, colors: colors)
-                            .frame(height: 160)
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity)
-                    .background(colors.surface0)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    
-                    // Top Clients
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Top Clients")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(colors.subtext)
-                        
-                        if topClients.isEmpty {
-                            Text("No invoices yet")
-                                .font(.system(size: 13))
-                                .foregroundColor(colors.subtext)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 40)
-                        } else {
-                            VStack(spacing: 12) {
-                                ForEach(topClients.prefix(4), id: \.client.id) { item in
-                                    HStack {
-                                        Text(item.client.name)
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(colors.text)
-                                            .lineLimit(1)
-                                        Spacer()
-                                        Text(formatCurrency(item.total))
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(colors.accent)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(20)
-                    .frame(width: 240)
-                    .background(colors.surface0)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                
-                // Recent Invoices
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Recent Invoices")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(colors.subtext)
-                        Spacer()
-                        if allInvoices.count > 5 {
-                            Text("View All →")
-                                .font(.system(size: 12))
-                                .foregroundColor(colors.accent)
-                        }
-                    }
-                    
-                    if allInvoices.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 32))
-                                .foregroundColor(colors.subtext)
-                            Text("No invoices yet")
-                                .font(.system(size: 14))
-                                .foregroundColor(colors.subtext)
-                            Button("Create your first invoice") { showingNewInvoice = true }
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(colors.accent)
-                                .buttonStyle(.plain)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                        .background(colors.surface0)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(allInvoices.sorted { $0.createdAt > $1.createdAt }.prefix(5).enumerated()), id: \.element.id) { index, invoice in
-                                InvoiceRowDashboard(
-                                    invoice: invoice,
-                                    client: allClients.first { $0.id == invoice.clientId },
-                                    colors: colors,
-                                    isVatExempt: isVatExempt,
-                                    baseCurrency: baseCurrency
-                                )
-                                if index < 4 {
-                                    Divider().background(colors.surface1)
-                                }
-                            }
-                        }
-                        .background(colors.surface0)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-            }
-            .padding(32)
-        }
-        .background(colors.base)
-        .sheet(isPresented: $showingNewInvoice) {
-            InvoiceEditorView(invoice: nil).environmentObject(appState).environment(\.themeColors, colors)
-        }
-    }
-    
-    var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let name = appState.companyProfile?.ownerName.components(separatedBy: " ").first ?? ""
-        let prefix = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
-        return name.isEmpty ? prefix : "\(prefix), \(name)"
-    }
-    
-    var topClients: [(client: Client, total: Double)] {
-        var clientTotals: [UUID: Double] = [:]
-        for invoice in thisYearInvoices.filter({ $0.status == .paid }) {
-            let invoiceAmount = isVatExempt ? invoice.subtotal : invoice.total
-            
-            // Use base currency amount if available, otherwise use direct amount if same currency
-            if let baseAmount = invoice.paidAmountInBaseCurrency {
-                clientTotals[invoice.clientId, default: 0] += baseAmount
+
+    private var topClients: [(client: Client, total: Double)] {
+        var totals: [UUID: Double] = [:]
+        for invoice in thisYearInvoices where invoice.status == .paid {
+            let amount = isVatExempt ? invoice.subtotal : invoice.total
+            if let base = invoice.paidAmountInBaseCurrency {
+                totals[invoice.clientId, default: 0] += base
             } else if invoice.currency == baseCurrency {
-                clientTotals[invoice.clientId, default: 0] += invoiceAmount
+                totals[invoice.clientId, default: 0] += amount
             }
-            // Skip invoices in different currencies without conversion data
         }
-        return clientTotals.compactMap { id, total in
-            guard let client = allClients.first(where: { $0.id == id }) else { return nil }
-            return (client, total)
-        }.sorted { $0.total > $1.total }
+        let clients = clientsByID
+        return totals.compactMap { id, total in
+            clients[id].map { ($0, total) }
+        }
+        .sorted { $0.total > $1.total }
     }
-    
-    func formatCurrency(_ value: Double) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = appState.companyProfile?.defaultCurrency.rawValue ?? "EUR"
-        return f.string(from: NSNumber(value: value)) ?? "€0"
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let prefix = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+        let first = profile?.ownerName.split(separator: " ").first.map(String.init) ?? ""
+        if first.isEmpty {
+            let f = DateFormatter()
+            f.dateFormat = "MMMM yyyy"
+            return f.string(from: Date())
+        }
+        return "\(prefix), \(first)"
     }
-}
 
-// MARK: - Components
+    // MARK: Body
 
-struct StatCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let icon: String
-    let colors: ThemeColors
-    var valueColor: Color? = nil
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.subtext)
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(colors.subtext)
+        Group {
+            if allInvoices.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xxl) {
+                        hero
+                        HStack(alignment: .top, spacing: Spacing.xxl) {
+                            revenueSection
+                            topClientsSection
+                                .frame(width: 280)
+                        }
+                        if !needsAttention.isEmpty {
+                            attentionSection
+                        }
+                        recentSection
+                    }
+                    .frame(maxWidth: 960, alignment: .leading)
+                    .padding(Spacing.page)
+                }
             }
-            Text(value)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(valueColor ?? colors.text)
-            Text(subtitle)
-                .font(.system(size: 11))
-                .foregroundColor(colors.subtext)
+        }
+        .navigationTitle("Overview")
+        .navigationSubtitle(greeting)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New invoice", systemImage: "plus") {
+                    nav.sheet = .newInvoice(clientID: nil)
+                }
+                .help("New invoice (⌘N)")
+            }
+        }
+    }
+
+    // MARK: Hero
+
+    private var hero: some View {
+        let outstandingTotal = totalFor(outstandingInvoices)
+        let overdueCount = overdueInvoices.count
+        let yearPaid = totalFor(thisYearInvoices.filter { $0.status == .paid })
+        let yearOverdue = totalFor(thisYearInvoices.filter { effectiveStatus($0) == .overdue })
+        let yearOpen = totalFor(thisYearInvoices.filter { effectiveStatus($0) == .sent })
+        let yearTotal = yearPaid + yearOverdue + yearOpen
+
+        return VStack(alignment: .leading, spacing: Spacing.l) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                if outstandingInvoices.isEmpty {
+                    Text("Nothing outstanding")
+                        .font(.system(size: 44, weight: .semibold))
+                    Text("Everything you've sent has been paid. \(Money.string(totalFor(thisMonthPaid), baseCurrency)) came in this month.")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                } else {
+                    Text(Money.string(outstandingTotal, baseCurrency))
+                        .font(.system(size: 44, weight: .semibold))
+                        .monospacedDigit()
+                    outstandingSentence(count: outstandingInvoices.count, overdue: overdueCount)
+                        .font(.title3)
+                        .monospacedDigit()
+                }
+            }
+
+            if yearTotal > 0 {
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    GeometryReader { geo in
+                        HStack(spacing: 2) {
+                            segment(yearPaid / yearTotal, width: geo.size.width, color: .green)
+                            segment(yearOpen / yearTotal, width: geo.size.width, color: colors.accent)
+                            segment(yearOverdue / yearTotal, width: geo.size.width, color: .red)
+                        }
+                    }
+                    .frame(height: 8)
+                    .clipShape(Capsule())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("This year: \(Money.string(yearPaid, baseCurrency)) paid, \(Money.string(yearOpen, baseCurrency)) outstanding, \(Money.string(yearOverdue, baseCurrency)) overdue")
+
+                    HStack(spacing: Spacing.xl) {
+                        legend("Paid", yearPaid, color: .green)
+                        legend("Outstanding", yearOpen, color: colors.accent)
+                        if yearOverdue > 0 {
+                            legend("Overdue", yearOverdue, color: .red)
+                        }
+                        Spacer()
+                        Text("This year")
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func outstandingSentence(count: Int, overdue: Int) -> Text {
+        let base = Text("Outstanding across \(count) \(count == 1 ? "invoice" : "invoices")")
+            .foregroundStyle(.secondary)
+        guard overdue > 0 else { return base }
+        return base
+            + Text(", ").foregroundStyle(.secondary)
+            + Text("\(overdue) overdue").foregroundStyle(.red)
+    }
+
+    @ViewBuilder
+    private func segment(_ fraction: Double, width: CGFloat, color: Color) -> some View {
+        if fraction > 0 {
+            Rectangle()
+                .fill(color)
+                .frame(width: max(2, width * fraction))
+        }
+    }
+
+    private func legend(_ label: String, _ amount: Double, color: Color) -> some View {
+        HStack(spacing: Spacing.s) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label).foregroundStyle(.secondary)
+            MoneyText(amount, baseCurrency, font: .callout, weight: .medium)
+        }
+        .font(.callout)
+    }
+
+    // MARK: Revenue chart
+
+    private var revenueSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Revenue, last 6 months")
+            RevenueChart(data: monthlyRevenue, currency: baseCurrency, accent: colors.accent)
+                .frame(height: 200)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(colors.surface0)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
-}
 
-struct RevenueChart: View {
-    let data: [(month: String, amount: Double)]
-    let colors: ThemeColors
-    
-    var maxAmount: Double { max(data.map(\.amount).max() ?? 1, 1) }
-    
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            ForEach(Array(data.enumerated()), id: \.offset) { index, item in
-                VStack(spacing: 8) {
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(colors.accent.opacity(item.amount > 0 ? 1 : 0.3))
-                        .frame(width: 32, height: max(4, CGFloat(item.amount / maxAmount) * 120))
-                    Text(item.month)
-                        .font(.system(size: 10))
-                        .foregroundColor(colors.subtext)
+    // MARK: Top clients
+
+    private var topClientsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Top clients this year")
+            if topClients.isEmpty {
+                Text("No paid invoices yet this year.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                let shown = Array(topClients.prefix(5))
+                VStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.client.id) { index, item in
+                        HoverRow {
+                            nav.reveal(clientID: item.client.id)
+                        } content: {
+                            HStack(spacing: Spacing.m) {
+                                ClientAvatar(name: item.client.name, size: 28)
+                                Text(item.client.name)
+                                    .lineLimit(1)
+                                Spacer(minLength: Spacing.m)
+                                MoneyText(item.total, baseCurrency, font: .callout, weight: .medium)
+                            }
+                            .font(.callout)
+                        }
+                        .accessibilityLabel("\(item.client.name), \(Money.string(item.total, baseCurrency)). Show client")
+                        if index < shown.count - 1 {
+                            Divider()
+                        }
+                    }
                 }
             }
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Attention and recent
+
+    private var attentionSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Needs attention")
+            invoiceRows(needsAttention)
+        }
+    }
+
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Recent invoices") {
+                Button("Show all") { nav.showInvoices() }
+                    .buttonStyle(.borderless)
+            }
+            invoiceRows(recentInvoices)
+        }
+    }
+
+    private func invoiceRows(_ invoices: [Invoice]) -> some View {
+        let clients = clientsByID
+        return VStack(spacing: 0) {
+            ForEach(Array(invoices.enumerated()), id: \.element.id) { index, invoice in
+                InvoiceSummaryRow(
+                    invoice: invoice,
+                    status: effectiveStatus(invoice),
+                    clientName: clients[invoice.clientId]?.name ?? "No client",
+                    amount: isVatExempt ? invoice.subtotal : invoice.total
+                ) {
+                    nav.reveal(invoiceID: invoice.id)
+                }
+                if index < invoices.count - 1 {
+                    Divider()
+                }
+            }
+        }
+    }
+
+    // MARK: Empty
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("Nothing to show yet", systemImage: "chart.bar")
+        } description: {
+            Text("Your revenue, outstanding payments and recent invoices appear here once you've sent your first invoice.")
+        } actions: {
+            Button("New invoice") { nav.sheet = .newInvoice(clientID: nil) }
+                .buttonStyle(.borderedProminent)
+            Button("Add client") { nav.sheet = .newClient }
+        }
     }
 }
 
-struct InvoiceRowDashboard: View {
+// MARK: - Chart
+
+private struct RevenueChart: View {
+    let data: [DashboardView.MonthRevenue]
+    let currency: Currency
+    let accent: Color
+    @State private var selectedMonth: Date?
+
+    private var selected: DashboardView.MonthRevenue? {
+        guard let selectedMonth else { return nil }
+        let calendar = Calendar.current
+        return data.first { calendar.isDate($0.id, equalTo: selectedMonth, toGranularity: .month) }
+    }
+
+    var body: some View {
+        Chart(data) { month in
+            BarMark(
+                x: .value("Month", month.id, unit: .month),
+                y: .value("Revenue", month.amount)
+            )
+            .foregroundStyle(selected == nil || selected?.id == month.id ? accent : accent.opacity(0.35))
+            .cornerRadius(4)
+
+            if let selected, selected.id == month.id {
+                RuleMark(x: .value("Month", selected.id, unit: .month))
+                    .foregroundStyle(.clear)
+                    .annotation(position: .top, spacing: Spacing.xs) {
+                        VStack(spacing: 2) {
+                            Text(Money.string(selected.amount, currency))
+                                .font(.callout.weight(.semibold))
+                                .monospacedDigit()
+                            Text(selected.label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, Spacing.s)
+                        .padding(.vertical, Spacing.xs)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+            }
+        }
+        .chartXSelection(value: $selectedMonth)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .month)) { _ in
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let amount = value.as(Double.self) {
+                        Text(Money.compact(amount, currency))
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
+        .accessibilityLabel("Paid revenue per month for the last six months")
+    }
+}
+
+// MARK: - Row components
+
+/// A plain row that lights up softly on hover and acts as a button.
+private struct HoverRow<Content: View>: View {
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            content()
+                .padding(.vertical, Spacing.m)
+                .padding(.horizontal, Spacing.s)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.quaternary.opacity(isHovered ? 0.5 : 0), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { isHovered = $0 }
+    }
+}
+
+private struct InvoiceSummaryRow: View {
     let invoice: Invoice
-    let client: Client?
-    let colors: ThemeColors
-    let isVatExempt: Bool
-    let baseCurrency: Currency
-    
-    var displayTotal: Double { isVatExempt ? invoice.subtotal : invoice.total }
-    
-    // Amount to display in base currency
-    var baseCurrencyAmount: Double? {
-        if invoice.status == .paid, let baseAmount = invoice.paidAmountInBaseCurrency {
-            return baseAmount
-        } else if invoice.currency == baseCurrency {
-            return displayTotal
-        }
-        return nil // Can't convert unpaid foreign currency invoices
-    }
-    
+    let status: InvoiceStatus
+    let clientName: String
+    let amount: Double
+    let action: () -> Void
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HoverRow(action: action) {
+            HStack(spacing: Spacing.m) {
+                StatusBadge(status: status)
+                    .frame(width: 84, alignment: .leading)
                 Text(invoice.invoiceNumber)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(colors.text)
-                Text(client?.name ?? "—")
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.subtext)
-            }
-            
-            Spacer()
-            
-            Text(formatDate(invoice.issueDate))
-                .font(.system(size: 12))
-                .foregroundColor(colors.subtext)
-                .frame(width: 80)
-            
-            // Show base currency amount (or original with indicator if can't convert)
-            VStack(alignment: .trailing, spacing: 2) {
-                if let baseAmount = baseCurrencyAmount {
-                    Text(formatCurrency(baseAmount, currency: baseCurrency))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colors.text)
-                } else {
-                    Text(formatCurrency(displayTotal, currency: invoice.currency))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colors.text)
-                    Text("(\(invoice.currency.rawValue))")
-                        .font(.system(size: 10))
-                        .foregroundColor(colors.subtext)
+                    .fontWeight(.medium)
+                    .monospacedDigit()
+                Text(clientName)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.m)
+                if let relative = Dates.relativeDue(invoice.dueDate, status: status) {
+                    Text(relative)
+                        .font(.callout)
+                        .foregroundStyle(status == .overdue ? Color.red : Color.secondary)
+                } else if status == .draft {
+                    Text("Draft since \(Dates.medium.string(from: invoice.createdAt))")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
+                MoneyText(amount, invoice.currency, font: .callout, weight: .medium)
+                    .frame(width: 110, alignment: .trailing)
             }
-            .frame(width: 100, alignment: .trailing)
-            
-            Text(invoice.status.rawValue)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(statusColor.opacity(0.12))
-                .foregroundColor(statusColor)
-                .clipShape(Capsule())
-                .frame(width: 80)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-    
-    var statusColor: Color {
-        switch invoice.status {
-        case .paid: return .green
-        case .overdue: return .red
-        case .sent: return colors.accent
-        default: return colors.subtext
-        }
-    }
-    
-    func formatDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .short
-        return f.string(from: d)
-    }
-    
-    func formatCurrency(_ value: Double, currency: Currency) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
+        .accessibilityLabel("\(invoice.invoiceNumber), \(clientName), \(status.rawValue), \(Money.string(amount, invoice.currency)). Show invoice")
     }
 }
 
-struct DashboardView_Previews: PreviewProvider {
-    static var previews: some View {
-        DashboardView().environmentObject(AppState())
-    }
+#Preview {
+    DashboardView()
+        .environmentObject(AppState())
+        .environment(NavigationModel())
 }
