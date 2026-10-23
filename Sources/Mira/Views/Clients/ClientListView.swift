@@ -2,256 +2,221 @@ import SwiftUI
 import SwiftData
 import os
 
+/// Clients as a searchable list with the selected client in a trailing
+/// inspector. Each row shows what matters at a glance: who they are and
+/// what they still owe.
 struct ClientListView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.themeColors) var colors
+    @Environment(NavigationModel.self) private var nav
+    @Environment(\.themeColors) private var colors
     @Environment(\.modelContext) private var modelContext
-    
-    // SwiftData queries
+
     @Query(sort: \SDClient.name) private var sdClients: [SDClient]
     @Query private var sdInvoices: [SDInvoice]
-    
-    @State private var searchText = ""
-    @State private var showingNewClient = false
-    @State private var selectedClient: Client?
-    
-    // Use SwiftData if migrated or no legacy data exists
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
-    }
-    
-    private var allClients: [Client] {
-        if usesSwiftData {
-            return sdClients.map { $0.toLegacy() }
-        }
-        return appState.clients
-    }
-    
-    private var allInvoices: [Invoice] {
-        if usesSwiftData {
-            return sdInvoices.map { $0.toLegacy() }
-        }
-        return appState.invoices
-    }
-    
-    var filteredClients: [Client] {
-        let clients = allClients.sorted { $0.name < $1.name }
-        if searchText.isEmpty { return clients }
-        return clients.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.email.localizedCaseInsensitiveContains(searchText)
-        }
-    }
-    
-    private func invoiceCount(for clientId: UUID) -> Int {
-        allInvoices.filter { $0.clientId == clientId }.count
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Clients")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button(action: { showingNewClient = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 36, height: 36)
-                        .background(colors.accent)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 32)
-            .padding(.top, 32)
-            .padding(.bottom, 24)
-            
-            // Search
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(colors.subtext)
-                    .font(.system(size: 14))
-                TextField("Search clients...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.text)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(colors.surface0)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: 200)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 32)
-            .padding(.bottom, 20)
-            
-            Divider().background(colors.surface1)
-            
-            // List
-            if filteredClients.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Text("No clients")
-                        .font(.system(size: 17))
-                        .foregroundColor(colors.subtext)
-                    if allClients.isEmpty {
-                        Button("Add your first client") { showingNewClient = true }
-                            .buttonStyle(.plain)
-                            .foregroundColor(colors.accent)
-                    }
-                    Spacer()
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredClients) { client in
-                            ClientRow(client: client, invoiceCount: appState.invoices.filter { $0.clientId == client.id }.count, colors: colors)
-                                .contentShape(Rectangle())
-                                .onTapGesture { selectedClient = client }
-                            Divider().background(colors.surface0)
-                        }
-                    }
-                    .padding(.horizontal, 32)
-                }
-            }
-        }
-        .background(colors.base)
-        .sheet(isPresented: $showingNewClient) {
-            ClientEditorView(client: nil).environmentObject(appState)
-        }
-        .sheet(item: $selectedClient) { client in
-            ClientDetailView(client: client).environmentObject(appState)
-        }
-    }
-}
+    @Query private var sdProfiles: [SDCompanyProfile]
 
-struct ClientRow: View {
-    let client: Client
-    let invoiceCount: Int
-    let colors: ThemeColors
-    
+    @State private var searchText = ""
+    @State private var showInspector = true
+    @State private var pendingDelete: Client?
+
+    private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
+
+    private var profile: CompanyProfile? {
+        usesSwiftData ? sdProfiles.first?.toLegacy() : appState.companyProfile
+    }
+    private var isVatExempt: Bool { profile?.isVatExempt ?? false }
+    private var baseCurrency: Currency { profile?.defaultCurrency ?? .eur }
+
+    private var allClients: [Client] {
+        (usesSwiftData ? sdClients.map { $0.toLegacy() } : appState.clients)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+    private var allInvoices: [Invoice] {
+        usesSwiftData ? sdInvoices.map { $0.toLegacy() } : appState.invoices
+    }
+
+    private var filteredClients: [Client] {
+        guard !searchText.isEmpty else { return allClients }
+        return allClients.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.contactPerson.localizedCaseInsensitiveContains(searchText)
+                || $0.email.localizedCaseInsensitiveContains(searchText)
+                || $0.city.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    /// Per-client invoice summary used by the rows.
+    private struct Summary {
+        var count = 0
+        var outstanding: Double = 0
+        var outstandingCurrency: Currency = .eur
+        var hasOverdue = false
+    }
+
+    private var summaries: [UUID: Summary] {
+        var result: [UUID: Summary] = [:]
+        for invoice in allInvoices {
+            var s = result[invoice.clientId, default: Summary(outstandingCurrency: baseCurrency)]
+            s.count += 1
+            if invoice.status == .sent || invoice.status == .overdue {
+                s.outstanding += isVatExempt ? invoice.subtotal : invoice.total
+                s.outstandingCurrency = invoice.currency
+                if invoice.status == .overdue || invoice.isOverdue { s.hasOverdue = true }
+            }
+            result[invoice.clientId] = s
+        }
+        return result
+    }
+
+    // MARK: Body
+
     var body: some View {
-        HStack(spacing: 16) {
-            // Avatar
-            Text(client.initials)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(colors.text)
-                .frame(width: 40, height: 40)
-                .background(colors.surface1)
-                .clipShape(Circle())
-            
+        @Bindable var nav = nav
+        Group {
+            if filteredClients.isEmpty {
+                emptyState
+            } else {
+                list
+            }
+        }
+        .navigationTitle("Clients")
+        .navigationSubtitle("\(allClients.count) \(allClients.count == 1 ? "client" : "clients")")
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search clients")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New client", systemImage: "plus") {
+                    nav.sheet = .newClient
+                }
+                .help("New client (⌘⇧N)")
+            }
+            ToolbarItem(placement: .automatic) {
+                Button("Inspector", systemImage: "sidebar.trailing") {
+                    withAnimation { showInspector.toggle() }
+                }
+                .help("Show or hide the inspector")
+            }
+        }
+        .inspector(isPresented: $showInspector) {
+            Group {
+                if let id = nav.selectedClientID, allClients.contains(where: { $0.id == id }) {
+                    ClientInspector(clientID: id)
+                } else {
+                    ContentUnavailableView {
+                        Label("No client selected", systemImage: "person")
+                    } description: {
+                        Text("Select a client to see their details and invoices.")
+                    }
+                }
+            }
+            .inspectorColumnWidth(min: 300, ideal: 340, max: 440)
+        }
+        .confirmationDialog(
+            "Delete \(pendingDelete?.name ?? "client")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete client", role: .destructive) {
+                if let client = pendingDelete { delete(client) }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("Their invoices are kept but lose the link to this client.")
+        }
+        .onChange(of: nav.selectedClientID) { _, id in
+            if id != nil && !showInspector { withAnimation { showInspector = true } }
+        }
+        .onChange(of: allClients.count) { _, _ in
+            if let id = nav.selectedClientID, !allClients.contains(where: { $0.id == id }) {
+                nav.selectedClientID = nil
+            }
+        }
+    }
+
+    private var list: some View {
+        @Bindable var nav = nav
+        let summaries = summaries
+        return List(selection: $nav.selectedClientID) {
+            ForEach(filteredClients) { client in
+                row(client, summary: summaries[client.id] ?? Summary(outstandingCurrency: baseCurrency))
+                    .tag(client.id)
+                    .contextMenu {
+                        Button("New invoice", systemImage: "plus") { nav.sheet = .newInvoice(clientID: client.id) }
+                        Button("Edit", systemImage: "pencil") { nav.sheet = .editClient(client) }
+                        Divider()
+                        Button("Delete…", systemImage: "trash", role: .destructive) { pendingDelete = client }
+                    }
+            }
+        }
+        .listStyle(.inset)
+    }
+
+    private func row(_ client: Client, summary: Summary) -> some View {
+        HStack(spacing: Spacing.m) {
+            ClientAvatar(name: client.name, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(client.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(colors.text)
-                Text(client.email)
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.subtext)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                if let secondary = client.contactPerson.nilIfEmpty ?? client.email.nilIfEmpty {
+                    Text(secondary)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
-            
             Spacer()
-            
-            Text("\(invoiceCount) invoices")
-                .font(.system(size: 13))
-                .foregroundColor(colors.subtext)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(summary.count == 0 ? "No invoices" : "\(summary.count) \(summary.count == 1 ? "invoice" : "invoices")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if summary.outstanding > 0 {
+                    MoneyText(summary.outstanding, summary.outstandingCurrency, font: .callout, weight: .medium)
+                        .foregroundStyle(summary.hasOverdue ? Color.red : .primary)
+                }
+            }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 4)
     }
-}
 
-// MARK: - Client Detail
-
-struct ClientDetailView: View {
-    @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.themeColors) var colors
-    
-    let client: Client
-    @State private var showingEdit = false
-    
-    var currentClient: Client { appState.clients.first { $0.id == client.id } ?? client }
-    var clientInvoices: [Invoice] { appState.invoices.filter { $0.clientId == client.id } }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Header
-                    HStack(spacing: 16) {
-                        ClientAvatar(name: currentClient.name, size: 60)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(currentClient.name)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(colors.text)
-                            Text(currentClient.email)
-                                .font(.system(size: 14))
-                                .foregroundColor(colors.subtext)
-                        }
-                    }
-                    
-                    if !currentClient.street.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Address")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(colors.subtext)
-                            Text(currentClient.formattedAddress)
-                                .font(.system(size: 14))
-                                .foregroundColor(colors.text)
-                        }
-                    }
-                    
-                    if !clientInvoices.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Invoices")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(colors.subtext)
-                            
-                            ForEach(clientInvoices) { invoice in
-                                HStack {
-                                    Text(invoice.invoiceNumber)
-                                        .font(.system(size: 14))
-                                        .foregroundColor(colors.text)
-                                    Spacer()
-                                    Text(formatCurrency(invoice.total, currency: invoice.currency))
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(colors.text)
-                                }
-                                .padding(.vertical, 8)
-                            }
-                        }
-                    }
+    private var emptyState: some View {
+        Group {
+            if allClients.isEmpty {
+                ContentUnavailableView {
+                    Label("No clients yet", systemImage: "person.2")
+                } description: {
+                    Text("Add the people and companies you invoice. Their details fill in on every invoice automatically.")
+                } actions: {
+                    Button("Add client") { nav.sheet = .newClient }
+                        .buttonStyle(.borderedProminent)
                 }
-                .padding(32)
-            }
-            .background(colors.base)
-            .navigationTitle("Client")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Edit") { showingEdit = true }
-                }
-            }
-            .sheet(isPresented: $showingEdit) {
-                ClientEditorView(client: currentClient).environmentObject(appState)
+            } else {
+                ContentUnavailableView.search(text: searchText)
             }
         }
     }
-    
-    func formatCurrency(_ value: Double, currency: Currency) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency.rawValue
-        return f.string(from: NSNumber(value: value)) ?? "\(currency.symbol)0"
+
+    // MARK: Actions
+
+    private func delete(_ client: Client) {
+        if usesSwiftData {
+            guard let sd = sdClients.first(where: { $0.id == client.id }) else { return }
+            modelContext.delete(sd)
+            do {
+                try modelContext.save()
+            } catch {
+                Log.data.error("Client delete failed: \(error.localizedDescription, privacy: .public)")
+            }
+        } else {
+            appState.clients.removeAll { $0.id == client.id }
+            appState.saveClients()
+        }
+        if nav.selectedClientID == client.id { nav.selectedClientID = nil }
     }
 }
 
-struct ClientListView_Previews: PreviewProvider {
-    static var previews: some View {
-        ClientListView().environmentObject(AppState())
-    }
+#Preview {
+    ClientListView()
+        .environmentObject(AppState())
+        .environment(NavigationModel())
 }
