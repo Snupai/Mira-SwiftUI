@@ -86,6 +86,9 @@ final class EncryptionService {
             _ = try loadKeyFromKeychain()
             return true
         } catch {
+            // Expected on first launch (errSecItemNotFound). Logged at .debug so it's
+            // visible under verbose console filtering but stripped from release builds.
+            Log.encryption.debug("hasKey check failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
