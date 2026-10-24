@@ -148,3 +148,5 @@ iOSInjectionProject/
 .private/
 # Wiki (separate repo)
 wiki/
+.claude/
+.swiftpm/

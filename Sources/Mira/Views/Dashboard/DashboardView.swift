@@ -234,9 +234,8 @@ struct DashboardView: View {
         let base = Text("Outstanding across \(count) \(count == 1 ? "invoice" : "invoices")")
             .foregroundStyle(.secondary)
         guard overdue > 0 else { return base }
-        return base
-            + Text(", ").foregroundStyle(.secondary)
-            + Text("\(overdue) overdue").foregroundStyle(.red)
+        let overdueText = Text("\(overdue) overdue").foregroundStyle(.red)
+        return Text("\(base), \(overdueText)")
     }
 
     @ViewBuilder

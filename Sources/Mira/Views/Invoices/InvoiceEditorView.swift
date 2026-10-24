@@ -220,50 +220,53 @@ struct InvoiceEditorView: View {
     private var lineItemsEditor: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             if !invoice.lineItems.isEmpty {
-                Grid(alignment: .leading, horizontalSpacing: Spacing.s, verticalSpacing: Spacing.s) {
-                    GridRow {
-                        Text("Description")
-                        Text("Qty").gridColumnAlignment(.trailing)
-                        Text("Unit price").gridColumnAlignment(.trailing)
-                        if !isVatExempt { Text("VAT") }
-                        Text("Amount").gridColumnAlignment(.trailing)
-                        Color.clear.frame(width: 20, height: 1)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: Spacing.s) {
+                    Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Qty").frame(width: 56, alignment: .trailing)
+                    Text("Unit price").frame(width: 96, alignment: .trailing)
+                    if !isVatExempt { Text("VAT").frame(width: 72, alignment: .leading) }
+                    Text("Amount").frame(width: 96, alignment: .trailing)
+                    Color.clear.frame(width: 20, height: 1)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-                    ForEach($invoice.lineItems) { $item in
-                        GridRow {
-                            TextField("What did you do?", text: $item.description)
-                                .textFieldStyle(.roundedBorder)
-                            TextField("1", value: $item.quantity, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 56)
-                            TextField("0.00", value: $item.unitPrice, format: .number.precision(.fractionLength(2)))
-                                .textFieldStyle(.roundedBorder)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 96)
-                            if !isVatExempt {
-                                Picker("VAT", selection: $item.vatRate) {
-                                    Text("0 %").tag(0.0)
-                                    Text("7 %").tag(7.0)
-                                    Text("19 %").tag(19.0)
-                                }
-                                .labelsHidden()
-                                .frame(width: 72)
+                ForEach($invoice.lineItems) { $item in
+                    HStack(spacing: Spacing.s) {
+                        TextField("Description", text: $item.description, prompt: Text("What did you do?"))
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                        TextField("Quantity", value: $item.quantity, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                        TextField("Unit price", value: $item.unitPrice, format: .number.precision(.fractionLength(2)))
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 96)
+                        if !isVatExempt {
+                            Picker("VAT", selection: $item.vatRate) {
+                                Text("0 %").tag(0.0)
+                                Text("7 %").tag(7.0)
+                                Text("19 %").tag(19.0)
                             }
-                            MoneyText(item.total, invoice.currency, font: .callout, weight: .medium)
-                                .frame(width: 96, alignment: .trailing)
-                            Button {
-                                withAnimation(.snappy) { invoice.lineItems.removeAll { $0.id == item.id } }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Remove item")
+                            .labelsHidden()
+                            .frame(width: 72)
                         }
+                        MoneyText(item.total, invoice.currency, font: .callout, weight: .medium)
+                            .frame(width: 96, alignment: .trailing)
+                        Button {
+                            withAnimation(.snappy) { invoice.lineItems.removeAll { $0.id == item.id } }
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Remove item")
+                        .accessibilityLabel("Remove item")
                     }
                 }
             }

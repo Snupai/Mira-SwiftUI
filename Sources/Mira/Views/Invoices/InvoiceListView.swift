@@ -100,7 +100,7 @@ struct InvoicesView: View {
     }
 
     private var subtitle: String {
-        if let filter = nav.invoiceFilter {
+        if nav.invoiceFilter != nil {
             let n = rows.count
             return "\(n) \(n == 1 ? "invoice" : "invoices")"
         }
@@ -160,7 +160,7 @@ struct InvoicesView: View {
                     }
                 }
             }
-            .inspectorColumnWidth(min: 320, ideal: 360, max: 460)
+            .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
         .confirmationDialog(
             "Delete \(pendingDelete?.invoiceNumber ?? "invoice")?",
@@ -181,6 +181,12 @@ struct InvoicesView: View {
         .onChange(of: nav.selectedInvoiceID) { _, id in
             if id != nil && !showInspector { withAnimation { showInspector = true } }
         }
+        .onAppear {
+            // Demo/snapshot runs want something selected so the inspector has content.
+            if DemoData.isEnabled, nav.selectedInvoiceID == nil {
+                nav.selectedInvoiceID = rows.first(where: { $0.status == .sent })?.id ?? rows.first?.id
+            }
+        }
     }
 
     private var actions: InvoiceActions {
@@ -195,19 +201,19 @@ struct InvoicesView: View {
                     .fontWeight(.medium)
                     .monospacedDigit()
             }
-            .width(min: 110, ideal: 130)
+            .width(min: 112, ideal: 124)
 
             TableColumn("Client", value: \.clientName) { row in
                 Text(row.clientName).lineLimit(1)
             }
-            .width(min: 140, ideal: 220)
+            .width(min: 120, ideal: 180)
 
             TableColumn("Issued", value: \.issueDate) { row in
                 Text(Dates.medium.string(from: row.issueDate))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
-            .width(min: 96, ideal: 110)
+            .width(min: 84, ideal: 100)
 
             TableColumn("Due", value: \.dueDate) { row in
                 VStack(alignment: .leading, spacing: 1) {
@@ -221,19 +227,19 @@ struct InvoicesView: View {
                     }
                 }
             }
-            .width(min: 110, ideal: 130)
+            .width(min: 112, ideal: 124)
 
             TableColumn("Amount", value: \.amount) { row in
                 MoneyText(row.amount, row.currency, weight: .medium)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 100, ideal: 120)
+            .width(min: 92, ideal: 110)
             .alignment(.trailing)
 
             TableColumn("Status", value: \.statusRank) { row in
                 StatusBadge(status: row.status)
             }
-            .width(min: 84, ideal: 96)
+            .width(min: 76, ideal: 88)
         }
         .contextMenu(forSelectionType: UUID.self) { ids in
             if let id = ids.first, let invoice = allInvoices.first(where: { $0.id == id }) {

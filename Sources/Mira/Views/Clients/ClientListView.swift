@@ -126,6 +126,11 @@ struct ClientListView: View {
         .onChange(of: nav.selectedClientID) { _, id in
             if id != nil && !showInspector { withAnimation { showInspector = true } }
         }
+        .onAppear {
+            if DemoData.isEnabled, nav.selectedClientID == nil {
+                nav.selectedClientID = allClients.sorted { $0.name < $1.name }.first?.id
+            }
+        }
         .onChange(of: allClients.count) { _, _ in
             if let id = nav.selectedClientID, !allClients.contains(where: { $0.id == id }) {
                 nav.selectedClientID = nil

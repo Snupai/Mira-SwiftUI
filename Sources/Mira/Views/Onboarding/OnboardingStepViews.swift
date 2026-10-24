@@ -269,7 +269,7 @@ struct OnboardingBrandingView: View {
         OnboardingStepLayout(
             step: step,
             title: "Invoice defaults",
-            explanation: "Numbering, payment terms and the colour your invoices use. All of this can change later.",
+            explanation: "Numbering, payment terms and the color your invoices use. All of this can change later.",
             onBack: onBack,
             onContinue: onContinue,
             continueEnabled: true
@@ -309,7 +309,7 @@ struct OnboardingBrandingView: View {
             }
 
             VStack(alignment: .leading, spacing: Spacing.s) {
-                Text("Brand colour")
+                Text("Brand color")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: Spacing.s) {
@@ -335,12 +335,12 @@ struct OnboardingBrandingView: View {
                         .accessibilityLabel(preset.name)
                         .accessibilityAddTraits(selected ? .isSelected : [])
                     }
-                    ColorPicker("Custom colour", selection: Binding(
+                    ColorPicker("Custom color", selection: Binding(
                         get: { Color(hex: profile.brandColorHex) ?? .blue },
                         set: { profile.brandColorHex = $0.toHex() }
                     ))
                     .labelsHidden()
-                    .help("Custom colour")
+                    .help("Custom color")
                 }
             }
 

@@ -17,7 +17,12 @@ final class EncryptionService {
     
     private var cachedKey: SymmetricKey?
     
-    private init() {}
+    private init() {
+        // Demo mode never touches the user's Keychain: use a throwaway key.
+        if DemoData.isEnabled {
+            cachedKey = SymmetricKey(size: .bits256)
+        }
+    }
     
     // MARK: - Public API
     
@@ -82,6 +87,7 @@ final class EncryptionService {
     
     /// Check if encryption key exists
     var hasKey: Bool {
+        if cachedKey != nil { return true }
         do {
             _ = try loadKeyFromKeychain()
             return true

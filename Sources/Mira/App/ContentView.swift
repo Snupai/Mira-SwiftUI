@@ -67,7 +67,7 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             Sidebar(statusCounts: invoiceStatusCounts)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 224, max: 300)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 300)
         } detail: {
             detail
                 .background(contentBackground)

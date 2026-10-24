@@ -19,6 +19,12 @@ struct MiraApp: App {
 
     @MainActor
     init() {
+        if DemoData.isEnabled, let demo = try? DemoData.makeContainer() {
+            modelContainer = demo
+            containerError = nil
+            SnapshotRunner.runIfRequested()
+            return
+        }
         let result = DataContainer.createWithFallback()
         modelContainer = result.container
         containerError = result.error
@@ -31,7 +37,7 @@ struct MiraApp: App {
         }
         .modelContainer(modelContainer)
         #if os(macOS)
-        .defaultSize(width: 1240, height: 800)
+        .defaultSize(width: 1360, height: 840)
         .commands {
             // Custom About window
             CommandGroup(replacing: .appInfo) {

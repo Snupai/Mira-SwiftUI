@@ -54,6 +54,18 @@ struct OnboardingContainerView: View {
         .onExitCommand {
             if currentStep != .welcome && currentStep != .done { previousStep() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snapshotAdvanceOnboarding)) { _ in
+            // Demo-only hook so snapshot runs can walk every step; fills sample data so the paper has content.
+            guard DemoData.isEnabled else { return }
+            if companyProfile.companyName.isEmpty {
+                var sample = CompanyProfile()
+                sample.companyName = "Studio Nord"; sample.ownerName = "Jana Weber"; sample.email = "hallo@studionord.de"
+                sample.street = "Hafenstraße 12"; sample.postalCode = "20457"; sample.city = "Hamburg"
+                sample.vatId = "DE123456789"; sample.iban = SampleData.placeholderIBAN; sample.bic = SampleData.placeholderBIC; sample.bankName = "Commerzbank"
+                companyProfile = sample
+            }
+            nextStep()
+        }
         .onAppear {
             guard !didLoadExisting else { return }
             didLoadExisting = true
