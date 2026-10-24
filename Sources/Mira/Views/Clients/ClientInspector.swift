@@ -162,7 +162,7 @@ struct ClientInspector: View {
             SectionTitle("Invoices")
             DetailRow(label: "Paid this year", value: Money.string(paidThisYear, baseCurrency))
             DetailRow(label: "Outstanding", value: Money.string(outstanding, outstandingCurrency),
-                      valueColor: open.contains { $0.isOverdue || $0.status == .overdue } ? .red : nil)
+                      valueColor: open.contains { $0.effectiveStatus == .overdue } ? .red : nil)
 
             if invoices.isEmpty {
                 Text("No invoices yet.")
@@ -172,7 +172,7 @@ struct ClientInspector: View {
             } else {
                 VStack(spacing: Spacing.s) {
                     ForEach(invoices) { invoice in
-                        let status: InvoiceStatus = (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
+                        let status = invoice.effectiveStatus
                         Button {
                             nav.reveal(invoiceID: invoice.id)
                         } label: {

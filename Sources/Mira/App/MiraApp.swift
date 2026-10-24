@@ -61,7 +61,7 @@ struct MiraApp: App {
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             }
 
-            CommandGroup(replacing: .sidebar) {
+            CommandGroup(after: .sidebar) {
                 Button("Overview") {
                     NotificationCenter.default.post(name: .navigateTo, object: "dashboard")
                 }
@@ -171,7 +171,7 @@ struct RootView: View {
 
     @MainActor
     private func runMigration() async {
-        guard MigrationService.shared.needsMigration else { return }
+        guard !DemoData.isEnabled, MigrationService.shared.needsMigration else { return }
 
         isMigrating = true
 
@@ -273,7 +273,7 @@ class AppState: ObservableObject {
         
         // Only load legacy data if migration hasn't completed
         // This keeps the app working during the transition period
-        if MigrationService.shared.migrationStatus != .completed {
+        if !DemoData.isEnabled && MigrationService.shared.migrationStatus != .completed {
             loadLegacyData()
         }
     }
@@ -318,6 +318,22 @@ class AppState: ObservableObject {
                 Log.app.error("Failed to load legacy templates.json: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+    
+    func persistCompanyProfile(_ profile: CompanyProfile) throws {
+        try JSONEncoder().encode(profile).write(to: profileURL, options: .atomic)
+    }
+
+    func persistClients(_ values: [Client]) throws {
+        try JSONEncoder().encode(values).write(to: clientsURL, options: .atomic)
+    }
+
+    func persistInvoices(_ values: [Invoice]) throws {
+        try JSONEncoder().encode(values).write(to: invoicesURL, options: .atomic)
+    }
+
+    func persistTemplates(_ values: [InvoiceTemplate]) throws {
+        try JSONEncoder().encode(values).write(to: templatesURL, options: .atomic)
     }
 
     // Legacy save methods - deprecated, will be removed after full migration

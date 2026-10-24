@@ -61,7 +61,7 @@ struct ClientListView: View {
             if invoice.status == .sent || invoice.status == .overdue {
                 s.outstanding += isVatExempt ? invoice.subtotal : invoice.total
                 s.outstandingCurrency = invoice.currency
-                if invoice.status == .overdue || invoice.isOverdue { s.hasOverdue = true }
+                if invoice.effectiveStatus == .overdue { s.hasOverdue = true }
             }
             result[invoice.clientId] = s
         }

@@ -8,10 +8,14 @@ import os
 ///
 ///     MIRA_DEMO=1 ./Mira.app/Contents/MacOS/Mira
 ///
+/// `MIRA_UI_REVIEW=1` (used by `script/build_and_run.sh --ui-review`) is an
+/// alias for the same isolated mode.
+///
 /// Add `MIRA_DEMO_EMPTY=1` to seed only the company profile.
 enum DemoData {
     static var isEnabled: Bool {
-        ProcessInfo.processInfo.environment["MIRA_DEMO"] == "1"
+        let env = ProcessInfo.processInfo.environment
+        return env["MIRA_DEMO"] == "1" || env["MIRA_UI_REVIEW"] == "1"
     }
 
     /// In-memory container with demo content. Also marks onboarding and

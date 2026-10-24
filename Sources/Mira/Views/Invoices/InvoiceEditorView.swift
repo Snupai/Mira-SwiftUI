@@ -57,7 +57,20 @@ struct InvoiceEditorView: View {
     private var hasContent: Bool {
         invoice.lineItems.contains { !$0.description.isEmpty || $0.unitPrice != 0 }
     }
-    private var canSave: Bool { selectedClientID != nil && hasContent && !invoice.invoiceNumber.isEmpty }
+    /// Invoice numbers already taken by other invoices (used to reject duplicates).
+    private var existingNumbers: [String] {
+        usesSwiftData
+            ? sdInvoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
+            : appState.invoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
+    }
+    /// Everything that blocks saving. Blank placeholder rows are ignored, the
+    /// same way `save()` drops them.
+    private var validationIssues: [String] {
+        var candidate = invoice
+        candidate.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
+        return InvoiceValidation.issues(for: candidate, hasClient: selectedClientID != nil, existingNumbers: existingNumbers)
+    }
+    private var canSave: Bool { validationIssues.isEmpty }
 
     private var displayTotal: Double { isVatExempt ? invoice.subtotal : invoice.total }
 
@@ -275,6 +288,19 @@ struct InvoiceEditorView: View {
                 withAnimation(.snappy) { addLineItem() }
             }
             .buttonStyle(.borderless)
+
+            if !validationIssues.isEmpty {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("To save this invoice:")
+                            .font(.subheadline.weight(.medium))
+                        ForEach(validationIssues, id: \.self) { Text("• " + $0) }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
+                }
+            }
         }
         .padding(.vertical, Spacing.xs)
     }
@@ -361,8 +387,9 @@ struct InvoiceEditorView: View {
     }
 
     private func save() {
-        guard let clientID = selectedClientID else { return }
+        guard canSave, let clientID = selectedClientID else { return }
         invoice.clientId = clientID
+        invoice.invoiceNumber = invoice.invoiceNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         invoice.updatedAt = Date()
         invoice.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
 

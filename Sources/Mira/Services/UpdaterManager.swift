@@ -24,6 +24,8 @@ final class UpdaterManager: ObservableObject {
     }
     
     private func setupSparkle() {
+        // Demo/review runs never talk to the update feed.
+        guard !DemoData.isEnabled else { return }
         // Create the updater controller
         // The updater will use the SUFeedURL from Info.plist
         updaterController = SPUStandardUpdaterController(

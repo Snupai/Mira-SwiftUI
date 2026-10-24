@@ -47,7 +47,7 @@ final class MigrationService {
     
     /// Whether to use SwiftData (migration completed OR no legacy data exists)
     var useSwiftData: Bool {
-        migrationStatus == .completed || !needsMigration
+        DemoData.isEnabled || migrationStatus == .completed || !needsMigration
     }
     
     // MARK: - Backup

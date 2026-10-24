@@ -36,10 +36,6 @@ struct DashboardView: View {
     private var isVatExempt: Bool { profile?.isVatExempt ?? false }
     private var baseCurrency: Currency { profile?.defaultCurrency ?? .eur }
 
-    private func effectiveStatus(_ invoice: Invoice) -> InvoiceStatus {
-        (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
-    }
-
     /// Sums invoices in the base currency. Paid invoices use the recorded
     /// converted amount; unpaid foreign-currency invoices are skipped because
     /// there is no honest rate for them yet.
@@ -71,7 +67,7 @@ struct DashboardView: View {
     }
 
     private var overdueInvoices: [Invoice] {
-        allInvoices.filter { effectiveStatus($0) == .overdue }
+        allInvoices.filter { $0.effectiveStatus == .overdue }
     }
 
     private var staleDrafts: [Invoice] {
@@ -178,8 +174,8 @@ struct DashboardView: View {
         let outstandingTotal = totalFor(outstandingInvoices)
         let overdueCount = overdueInvoices.count
         let yearPaid = totalFor(thisYearInvoices.filter { $0.status == .paid })
-        let yearOverdue = totalFor(thisYearInvoices.filter { effectiveStatus($0) == .overdue })
-        let yearOpen = totalFor(thisYearInvoices.filter { effectiveStatus($0) == .sent })
+        let yearOverdue = totalFor(thisYearInvoices.filter { $0.effectiveStatus == .overdue })
+        let yearOpen = totalFor(thisYearInvoices.filter { $0.effectiveStatus == .sent })
         let yearTotal = yearPaid + yearOverdue + yearOpen
 
         return VStack(alignment: .leading, spacing: Spacing.l) {
@@ -408,7 +404,7 @@ struct DashboardView: View {
             ForEach(Array(invoices.enumerated()), id: \.element.id) { index, invoice in
                 InvoiceSummaryRow(
                     invoice: invoice,
-                    status: effectiveStatus(invoice),
+                    status: invoice.effectiveStatus,
                     clientName: clients[invoice.clientId]?.name ?? "No client",
                     amount: isVatExempt ? invoice.subtotal : invoice.total
                 ) {

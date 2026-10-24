@@ -51,16 +51,12 @@ struct InvoicesView: View {
         let invoice: Invoice
     }
 
-    private func effectiveStatus(_ invoice: Invoice) -> InvoiceStatus {
-        (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
-    }
-
     private var rows: [Row] {
         let clients = clientsByID
         var invoices = allInvoices
 
         if let filter = nav.invoiceFilter {
-            invoices = invoices.filter { effectiveStatus($0) == filter }
+            invoices = invoices.filter { $0.effectiveStatus == filter }
         }
         if !searchText.isEmpty {
             let needle = searchText.lowercased()
@@ -74,7 +70,7 @@ struct InvoicesView: View {
         }
         let ranks: [InvoiceStatus: Int] = [.overdue: 0, .sent: 1, .draft: 2, .paid: 3, .cancelled: 4]
         return invoices.map { inv in
-            let status = effectiveStatus(inv)
+            let status = inv.effectiveStatus
             return Row(
                 id: inv.id,
                 number: inv.invoiceNumber,

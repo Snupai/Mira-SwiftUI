@@ -48,7 +48,7 @@ struct MainView: View {
         var counts: [InvoiceStatus: Int] = [:]
         for invoice in invoices {
             // Treat sent-but-past-due as overdue in the sidebar so the count is honest.
-            let status: InvoiceStatus = (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
+            let status = invoice.effectiveStatus
             counts[status, default: 0] += 1
         }
         return counts

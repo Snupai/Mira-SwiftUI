@@ -51,7 +51,7 @@ struct InvoiceInspector: View {
         let profile = profile ?? CompanyProfile()
         let isVatExempt = profile.isVatExempt
         let total = isVatExempt ? invoice.subtotal : invoice.total
-        let status: InvoiceStatus = (invoice.status == .sent && invoice.isOverdue) ? .overdue : invoice.status
+        let status = invoice.effectiveStatus
         let baseCurrency = profile.defaultCurrency
 
         return ScrollView {
