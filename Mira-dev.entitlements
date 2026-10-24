@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- Entitlements for ad-hoc (unsigned) local builds. iCloud, push and
+     keychain-group entitlements need a provisioning profile and make an
+     ad-hoc signed app fail to launch ("Launchd job spawn failed"), so they
+     live only in Mira.entitlements, used when SIGNING_IDENTITY is set. -->
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

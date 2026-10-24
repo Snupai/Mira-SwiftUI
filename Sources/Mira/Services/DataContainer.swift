@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import CloudKit
+import Security
 import os
 
 /// SwiftData container configuration with CloudKit sync
@@ -88,16 +89,29 @@ enum DataContainer {
 
     /// Wrapper around the cascading-fallback container creation that also reports
     /// the underlying error to callers (so they can surface it in UI).
+    /// Whether this process is signed with the iCloud entitlement. Ad-hoc
+    /// local builds are not; asking CloudKit for a container then traps inside
+    /// CoreData's mirroring setup, so those builds must stay local-only.
+    static var hasCloudKitEntitlement: Bool {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-services" as CFString, nil)
+        return value != nil
+    }
+
     @MainActor
     static func createWithFallback() -> (container: ModelContainer, error: DataContainerError?) {
-        // Try CloudKit first.
-        do {
+        // Try CloudKit first, but only when the binary is entitled to use it.
+        if hasCloudKitEntitlement {
+          do {
             let container = try createCloudKitContainer()
             Log.data.notice("SwiftData container created with CloudKit sync")
             return (container, nil)
-        } catch let cloudKitError {
+          } catch let cloudKitError {
             Log.cloudKit.error("CloudKit container failed: \(cloudKitError.localizedDescription, privacy: .public)")
             Log.data.notice("Falling back to local-only storage")
+          }
+        } else {
+            Log.cloudKit.notice("No iCloud entitlement in this build; using local-only storage")
         }
 
         // Fallback to local-only.

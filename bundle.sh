@@ -132,6 +132,11 @@ if [ -f "Mira.mobileprovision" ]; then
     cp "Mira.mobileprovision" "${APP_NAME}.app/Contents/embedded.provisionprofile"
 fi
 
+# Clear extended attributes. A rebuilt bundle inherits com.apple.provenance from
+# the previous launch, and LaunchServices then refuses to spawn it
+# ("Launchd job spawn failed", POSIX error 163).
+xattr -cr "${APP_NAME}.app"
+
 # Code signing (MUST happen AFTER Info.plist is created)
 # Set SIGNING_IDENTITY to your certificate name, or leave empty for ad-hoc
 # Example: export SIGNING_IDENTITY="Apple Development: your@email.com (TEAMID)"
@@ -148,8 +153,10 @@ if [ -n "$SIGNING_IDENTITY" ]; then
     fi
 else
     echo "   Using ad-hoc signing (set SIGNING_IDENTITY for iCloud support)"
-    if [ -f "Mira.entitlements" ]; then
-        codesign --force --deep --sign - --entitlements Mira.entitlements "${APP_NAME}.app"
+    # Restricted entitlements (iCloud, push, keychain groups) are rejected on
+    # ad-hoc signed apps and the launch fails, so use the reduced dev set.
+    if [ -f "Mira-dev.entitlements" ]; then
+        codesign --force --deep --sign - --entitlements Mira-dev.entitlements "${APP_NAME}.app"
     else
         codesign --force --deep --sign - "${APP_NAME}.app"
     fi
