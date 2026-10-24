@@ -52,6 +52,10 @@ enum MainSheet: Identifiable {
 @MainActor
 @Observable
 final class NavigationModel {
+    /// Set by onboarding's "Create your first invoice" so the main window opens
+    /// the editor as soon as it appears.
+    static var wantsFirstInvoice = false
+
     var section: MainSection = .overview
     var invoiceFilter: InvoiceStatus? = nil
     var selectedInvoiceID: UUID? = nil

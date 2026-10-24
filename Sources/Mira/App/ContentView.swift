@@ -78,6 +78,13 @@ struct MainView: View {
                 .environmentObject(appState)
                 .environment(nav)
         }
+        .onAppear {
+            if NavigationModel.wantsFirstInvoice {
+                NavigationModel.wantsFirstInvoice = false
+                nav.section = .invoices
+                nav.sheet = .newInvoice(clientID: nil)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newInvoice)) { _ in
             nav.sheet = .newInvoice(clientID: nil)
         }

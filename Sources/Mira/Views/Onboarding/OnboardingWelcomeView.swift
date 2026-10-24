@@ -91,7 +91,10 @@ struct OnboardingCompleteView: View {
                 Button("Open Mira", action: onFinish)
                     .buttonStyle(.glass)
                     .controlSize(.large)
-                Button("Create your first invoice", action: onFinish)
+                Button("Create your first invoice") {
+                    NavigationModel.wantsFirstInvoice = true
+                    onFinish()
+                }
                     .buttonStyle(.glassProminent)
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
