@@ -1,91 +1,50 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Theme grid with accent swatches and import/export controls.
 struct ThemePicker: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.themeColors) private var colors
     @State private var showingImportPicker = false
     @State private var showingExportPicker = false
     @State private var themeToExport: ThemeFile?
     @State private var importError: String?
-    @State private var showingImportError = false
-    
+
     var compact: Bool = false
     var showOpenFolder: Bool = true
-    
+
+    private var currentPalette: ThemePalette? {
+        guard let theme = themeManager.selectedTheme else { return nil }
+        return colorScheme == .dark ? theme.dark : theme.light
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 16) {
+        VStack(alignment: .leading, spacing: compact ? Spacing.m : Spacing.l) {
             HStack {
-                if !compact {
-                    Text("Choose Theme")
-                        .font(.headline)
-                }
-                
+                Text("Theme")
+                    .font(compact ? .callout : .headline)
                 Spacer()
-                
-                HStack(spacing: 8) {
-                    // Import button
-                    Button(action: { showingImportPicker = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "square.and.arrow.down")
-                            if !compact {
-                                Text("Import")
-                            }
-                        }
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Import Theme – Load a custom theme from a JSON file")
-                    
-                    // Export current theme button
+                HStack(spacing: Spacing.s) {
+                    Button("Import…") { showingImportPicker = true }
+                        .help("Load a theme from a JSON file")
                     if let theme = themeManager.selectedTheme {
-                        Button(action: {
+                        Button("Export…") {
                             themeToExport = theme
                             showingExportPicker = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.and.arrow.up")
-                                if !compact {
-                                    Text("Export")
-                                }
-                            }
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
-                        .help("Export Theme – Save \"\(theme.name)\" as a JSON file to share or backup")
+                        .help("Save \"\(theme.name)\" as a JSON file")
                     }
-                    
                     if showOpenFolder {
-                        Button(action: { themeManager.openThemesFolder() }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "folder")
-                                if !compact {
-                                    Text("Folder")
-                                }
-                            }
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
-                        .help("Open Themes Folder – Browse custom themes in Finder")
+                        Button("Show folder") { themeManager.openThemesFolder() }
+                            .help("Open the themes folder in Finder")
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: compact ? 100 : 140), spacing: 12)
-            ], spacing: 12) {
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 100 : 120), spacing: Spacing.m)], spacing: Spacing.m) {
                 ForEach(themeManager.availableThemes) { theme in
                     ThemeCard(
                         theme: theme,
@@ -94,35 +53,20 @@ struct ThemePicker: View {
                         action: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 themeManager.selectedThemeName = theme.name
-                                // Reset accent to theme default
                                 let palette = colorScheme == .dark ? theme.dark : theme.light
                                 themeManager.selectedAccentName = palette.defaultAccent
                             }
                         },
-                        onDelete: {
-                            themeManager.deleteCustomTheme(theme)
-                        }
+                        onDelete: { themeManager.deleteCustomTheme(theme) }
                     )
                 }
             }
-            
-            // Accent color picker (if theme has multiple accents)
-            if let theme = themeManager.selectedTheme {
-                let palette = colorScheme == .dark ? theme.dark : theme.light
-                if palette.accents.count > 1 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if !compact {
-                            Text("Accent Color")
-                                .font(.headline)
-                                .padding(.top, 8)
-                        }
-                        
-                        AccentPicker(
-                            accents: palette.accents,
-                            selected: $themeManager.selectedAccentName,
-                            compact: compact
-                        )
-                    }
+
+            if let palette = currentPalette, palette.accents.count > 1 {
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    Text("Accent")
+                        .font(compact ? .callout : .headline)
+                    AccentPicker(accents: palette.accents, selected: $themeManager.selectedAccentName, compact: compact)
                 }
             }
         }
@@ -133,25 +77,17 @@ struct ThemePicker: View {
         ) { result in
             switch result {
             case .success(let urls):
-                if let url = urls.first {
-                    // Need to access security-scoped resource
-                    guard url.startAccessingSecurityScopedResource() else {
-                        importError = "Unable to access the selected file"
-                        showingImportError = true
-                        return
-                    }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    
-                    if themeManager.importTheme(from: url) {
-                        // Success - theme is now loaded
-                    } else {
-                        importError = "Failed to import theme. Make sure it's a valid Mira theme JSON file."
-                        showingImportError = true
-                    }
+                guard let url = urls.first else { return }
+                guard url.startAccessingSecurityScopedResource() else {
+                    importError = "Mira wasn't allowed to read the selected file."
+                    return
+                }
+                defer { url.stopAccessingSecurityScopedResource() }
+                if !themeManager.importTheme(from: url) {
+                    importError = "That file isn't a valid Mira theme. Export an existing theme to see the expected format."
                 }
             case .failure(let error):
                 importError = error.localizedDescription
-                showingImportError = true
             }
         }
         .fileExporter(
@@ -162,13 +98,12 @@ struct ThemePicker: View {
         ) { result in
             if case .failure(let error) = result {
                 importError = "Export failed: \(error.localizedDescription)"
-                showingImportError = true
             }
         }
-        .alert("Theme Import Error", isPresented: $showingImportError) {
-            Button("OK", role: .cancel) { }
+        .alert("Couldn't import theme", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button("OK", role: .cancel) {}
         } message: {
-            Text(importError ?? "Unknown error")
+            Text(importError ?? "")
         }
     }
 }
@@ -177,20 +112,20 @@ struct ThemePicker: View {
 @preconcurrency
 struct ThemeDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
-    
+
     let theme: ThemeFile
-    
+
     init(theme: ThemeFile) {
         self.theme = theme
     }
-    
+
     init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
         self.theme = try JSONDecoder().decode(ThemeFile.self, from: data)
     }
-    
+
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -205,46 +140,44 @@ struct ThemeCard: View {
     let compact: Bool
     let action: () -> Void
     var onDelete: (() -> Void)? = nil
-    
+
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.themeColors) private var colors
     @State private var showingDeleteConfirm = false
-    
+
     var palette: ThemePalette {
         colorScheme == .dark ? theme.dark : theme.light
     }
-    
-    /// Bundled themes that cannot be deleted
+
+    /// Bundled themes that cannot be deleted.
     private static let protectedThemes = ["Default", "Catppuccin"]
-    
+
     var canDelete: Bool {
-        // Don't allow deletion of system themes or protected bundled themes
         if theme.isSystemTheme == true { return false }
         if Self.protectedThemes.contains(theme.name) { return false }
         return true
     }
-    
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: compact ? 6 : 10) {
-                // Theme preview
-                ThemePreview(palette: palette, compact: compact)
-                    .frame(height: compact ? 50 : 70)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(spacing: Spacing.s) {
+                ThemePreview(palette: palette)
+                    .frame(width: compact ? 100 : 120, height: compact ? 54 : 64)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                            .strokeBorder(isSelected ? colors.accent : Color.primary.opacity(0.1), lineWidth: isSelected ? 2 : 1)
                     )
-                
-                // Theme name
-                HStack(spacing: 4) {
-                    Text(theme.name)
-                        .font(compact ? .caption : .subheadline)
-                        .fontWeight(isSelected ? .semibold : .regular)
-                        .foregroundColor(isSelected ? .accentColor : .primary)
-                }
+                Text(theme.name)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(theme.name) theme")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .contextMenu {
             if let author = theme.author {
                 Text("By \(author)")
@@ -259,62 +192,64 @@ struct ThemeCard: View {
                 Button(role: .destructive) {
                     showingDeleteConfirm = true
                 } label: {
-                    Label("Delete Theme", systemImage: "trash")
+                    Label("Delete theme", systemImage: "trash")
                 }
             }
         }
-        .confirmationDialog(
-            "Delete \"\(theme.name)\"?",
-            isPresented: $showingDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                onDelete?()
-            }
-            Button("Cancel", role: .cancel) { }
+        .confirmationDialog("Delete \"\(theme.name)\"?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete theme", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently remove the theme file.")
+            Text("This permanently removes the theme file.")
         }
     }
 }
 
+/// Miniature window: sidebar strip, content area, a text line and an accent chip.
 struct ThemePreview: View {
     let palette: ThemePalette
-    let compact: Bool
-    
-    private func resolveColor(_ hex: String) -> Color {
-        if hex.hasPrefix("system:") || hex.hasPrefix("rgba:") {
-            return Color.gray // Simplified for preview
-        }
-        return Color(hex: hex) ?? .gray
-    }
-    
-    var body: some View {
-        GeometryReader { geo in
-            HStack(spacing: 0) {
-                // Base color
-                resolveColor(palette.base)
-                    .frame(width: geo.size.width * 0.4)
-                
-                VStack(spacing: 0) {
-                    // Surface colors
-                    resolveColor(palette.surface0)
-                    resolveColor(palette.surface1)
-                }
-                .frame(width: geo.size.width * 0.3)
-                
-                VStack(spacing: 0) {
-                    // Text preview
-                    resolveColor(palette.text)
-                    // Accent preview
-                    if let accentHex = palette.accents[palette.defaultAccent] {
-                        resolveColor(accentHex)
-                    } else {
-                        Color.purple
-                    }
-                }
-                .frame(width: geo.size.width * 0.3)
+
+    private func resolve(_ value: String) -> Color {
+        if value.hasPrefix("system:") {
+            switch String(value.dropFirst(7)) {
+            case "windowBackground": return Color(nsColor: .windowBackgroundColor)
+            case "underPageBackground": return Color(nsColor: .underPageBackgroundColor)
+            case "label": return Color(nsColor: .labelColor)
+            case "secondaryLabel": return Color(nsColor: .secondaryLabelColor)
+            case "quaternaryFill": return Color(nsColor: .labelColor).opacity(0.05)
+            case "tertiaryFill": return Color(nsColor: .labelColor).opacity(0.10)
+            default: return Color(nsColor: .controlBackgroundColor)
             }
+        }
+        return Color(hex: value) ?? .gray
+    }
+
+    private var accent: Color {
+        palette.accents[palette.defaultAccent].map(resolve) ?? .purple
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            resolve(palette.mantle)
+                .frame(width: 28)
+                .overlay(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Capsule().fill(accent).frame(width: 14, height: 3)
+                        Capsule().fill(resolve(palette.surface1)).frame(width: 16, height: 3)
+                        Capsule().fill(resolve(palette.surface1)).frame(width: 12, height: 3)
+                    }
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            resolve(palette.base)
+                .overlay(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Capsule().fill(resolve(palette.text)).frame(width: 34, height: 4)
+                        Capsule().fill(resolve(palette.subtext)).frame(width: 50, height: 3)
+                        RoundedRectangle(cornerRadius: 2).fill(resolve(palette.surface0)).frame(height: 14).padding(.top, 2)
+                    }
+                    .padding(8)
+                }
         }
     }
 }
@@ -323,41 +258,33 @@ struct AccentPicker: View {
     let accents: [String: String]
     @Binding var selected: String
     let compact: Bool
-    
-    var sortedAccents: [(name: String, hex: String)] {
+
+    private var sortedAccents: [(name: String, hex: String)] {
         accents.map { ($0.key, $0.value) }.sorted { $0.name < $1.name }
     }
-    
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: compact ? 6 : 10) {
-                ForEach(sortedAccents, id: \.name) { accent in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selected = accent.name
-                        }
-                    } label: {
-                        VStack(spacing: 4) {
-                            Circle()
-                                .fill(Color(hex: accent.hex) ?? .gray)
-                                .frame(width: compact ? 24 : 32, height: compact ? 24 : 32)
-                                .overlay(
-                                    Circle()
-                                        .stroke(selected == accent.name ? Color.primary : Color.clear, lineWidth: 2)
-                                )
-                                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                            
-                            if !compact {
-                                Text(accent.name)
-                                    .font(.caption2)
-                                    .foregroundColor(selected == accent.name ? .primary : .secondary)
+        HStack(spacing: compact ? Spacing.s : Spacing.m) {
+            ForEach(sortedAccents, id: \.name) { accent in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selected = accent.name }
+                } label: {
+                    Circle()
+                        .fill(Color(hex: accent.hex) ?? .gray)
+                        .frame(width: compact ? 22 : 28, height: compact ? 22 : 28)
+                        .overlay {
+                            if selected == accent.name {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: compact ? 10 : 12, weight: .bold))
+                                    .foregroundStyle(.white)
                             }
                         }
-                    }
-                    .buttonStyle(.plain)
                 }
+                .buttonStyle(.plain)
+                .help(accent.name)
+                .accessibilityLabel(accent.name)
+                .accessibilityAddTraits(selected == accent.name ? .isSelected : [])
             }
-            .padding(.horizontal, 4)
         }
     }
 }
