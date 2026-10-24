@@ -49,6 +49,8 @@ final class UpdaterManager: ObservableObject {
     
     /// Check for updates on app startup - only shows UI if update is available
     private func checkForUpdatesOnStartup() {
+        // Demo and snapshot runs must not pop an update prompt over the UI.
+        guard !DemoData.isEnabled else { return }
         guard let updater = updaterController?.updater, updater.canCheckForUpdates else { return }
         
         // Use checkForUpdatesInBackground which silently checks and only shows UI if update found

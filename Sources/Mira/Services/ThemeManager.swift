@@ -259,7 +259,9 @@ class ThemeManager: ObservableObject {
         )
     }
 
-    private func resolveColor(_ value: String, isSystem: Bool) -> Color {
+    /// Resolves a palette entry (`#hex`, `rgba:`, or `system:`) to a Color.
+    /// Shared with the theme cards so previews match what the app paints.
+    func resolveColor(_ value: String, isSystem: Bool = false) -> Color {
         // Handle system colors
         if value.hasPrefix("system:") {
             let systemName = String(value.dropFirst(7))

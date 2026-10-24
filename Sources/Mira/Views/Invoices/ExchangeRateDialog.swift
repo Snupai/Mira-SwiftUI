@@ -68,7 +68,7 @@ struct ExchangeRateDialog: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .themedGroupedForm()
             .navigationTitle("Mark as paid in \(baseCurrency.rawValue)")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

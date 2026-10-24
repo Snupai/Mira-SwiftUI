@@ -34,6 +34,7 @@ struct MiraApp: App {
         WindowGroup {
             RootView(containerError: containerError)
                 .environmentObject(appState)
+                .themed()
         }
         .modelContainer(modelContainer)
         #if os(macOS)
@@ -97,7 +98,7 @@ struct MiraApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appState)
-                .environment(\.themeColors, ThemeManager.shared.colors(for: .light))
+                .themed()
         }
         .modelContainer(modelContainer)
         #endif

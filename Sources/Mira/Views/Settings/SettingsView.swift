@@ -222,7 +222,7 @@ private struct GeneralSettingsTab: View {
                      : "PDFs are saved straight into this folder and revealed in Finder.")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -257,7 +257,7 @@ private struct CompanySettingsTab: View {
                 Text("Appears in the sender line and footer of every invoice.")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -295,7 +295,7 @@ private struct TaxBankSettingsTab: View {
                 Text("Printed on every invoice so clients know where to pay.")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -361,7 +361,7 @@ private struct BrandingSettingsTab: View {
                     Text("Used for headings and rules on the PDF.")
                 }
             }
-            .formStyle(.grouped)
+            .themedGroupedForm()
             .frame(width: 380)
 
             Divider()
@@ -446,7 +446,7 @@ private struct TemplatesSettingsTab: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -509,7 +509,7 @@ private struct AppearanceSettingsTab: View {
                 Text("Themes are JSON files. Edit or add your own in the themes folder.")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -580,7 +580,7 @@ private struct SyncSettingsTab: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
         .confirmationDialog("Restart onboarding?", isPresented: $confirmRestart, titleVisibility: .visible) {
             Button("Restart onboarding") { appState.hasCompletedOnboarding = false }
             Button("Cancel", role: .cancel) {}

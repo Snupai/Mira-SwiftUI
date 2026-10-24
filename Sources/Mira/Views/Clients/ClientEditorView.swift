@@ -83,7 +83,7 @@ struct ClientEditorView: View {
                         .lineLimit(3...8)
                 }
             }
-            .formStyle(.grouped)
+            .themedGroupedForm()
             .navigationTitle(isEditing ? "Edit client" : "New client")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

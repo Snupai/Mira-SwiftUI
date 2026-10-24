@@ -7,6 +7,8 @@ import os
 /// safe for screenshots, design review and manual QA.
 ///
 ///     MIRA_DEMO=1 ./Mira.app/Contents/MacOS/Mira
+///
+/// Add `MIRA_DEMO_EMPTY=1` to seed only the company profile.
 enum DemoData {
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["MIRA_DEMO"] == "1"
@@ -55,6 +57,13 @@ enum DemoData {
         profile.invoiceNumberPrefix = "SN-"
         profile.nextInvoiceNumber = 15
         context.insert(SDCompanyProfile(from: profile))
+
+        // `MIRA_DEMO_EMPTY=1` stops here: a freshly onboarded user with no
+        // clients or invoices, for first-run screens.
+        if ProcessInfo.processInfo.environment["MIRA_DEMO_EMPTY"] == "1" {
+            try? context.save()
+            return
+        }
 
         // Clients
         func makeClient(_ name: String, contact: String, email: String, street: String, postal: String, city: String, country: String = "Germany", currency: Currency? = nil, language: String = "de", vat: String = "") -> SDClient {
@@ -181,8 +190,9 @@ enum SnapshotRunner {
                 }
                 NotificationCenter.default.post(name: .navigateTo, object: "settings")
                 try? await Task.sleep(for: .seconds(1.5))
-                capture("settings", to: directory)
-                NSApp.windows.first(where: { $0.title.localizedCaseInsensitiveContains("settings") || $0.title.localizedCaseInsensitiveContains("general") })?.close()
+                let settingsWindow = NSApp.windows.first(where: { $0.title.localizedCaseInsensitiveContains("settings") || $0.title.localizedCaseInsensitiveContains("general") })
+                capture("settings", to: directory, window: settingsWindow)
+                settingsWindow?.close()
                 try? await Task.sleep(for: .seconds(0.5))
                 NotificationCenter.default.post(name: .newInvoice, object: nil)
                 try? await Task.sleep(for: .seconds(1.5))
@@ -193,9 +203,10 @@ enum SnapshotRunner {
     }
 
     @MainActor
-    private static func capture(_ name: String, to directory: URL, preferSheet: Bool = false) {
+    private static func capture(_ name: String, to directory: URL, preferSheet: Bool = false, window preferred: NSWindow? = nil) {
         let windows = NSApp.windows.filter { $0.isVisible }
-        let window = (preferSheet ? windows.first(where: { $0.sheetParent != nil }) : nil)
+        let window = preferred
+            ?? (preferSheet ? windows.first(where: { $0.sheetParent != nil }) : nil)
             ?? NSApp.keyWindow ?? windows.first
         guard let window, let content = window.contentView, let frameView = content.superview else { return }
         let rect = frameView.bounds

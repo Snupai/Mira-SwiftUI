@@ -154,6 +154,7 @@ struct ClientListView: View {
             }
         }
         .listStyle(.inset)
+        .themedScrollBackground()
     }
 
     private func row(_ client: Client, summary: Summary) -> some View {

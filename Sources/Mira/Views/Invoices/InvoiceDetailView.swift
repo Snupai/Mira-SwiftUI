@@ -176,6 +176,7 @@ struct InvoiceInspector: View {
             ExchangeRateDialog(invoice: invoice, baseCurrency: baseCurrency, isVatExempt: isVatExempt) { rate, baseAmount in
                 actions.markPaid(invoice, exchangeRate: rate, amountInBaseCurrency: baseAmount)
             }
+            .themed()
         }
     }
 

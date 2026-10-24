@@ -109,6 +109,7 @@ struct InvoiceEditorView: View {
                     applyClientDefaults(saved)
                 }
                 .environmentObject(appState)
+                .themed()
             }
         }
         .frame(minWidth: 960, idealWidth: 1040, minHeight: 620, idealHeight: 700)
@@ -214,7 +215,7 @@ struct InvoiceEditorView: View {
                     .lineLimit(2...6)
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 
     private var lineItemsEditor: some View {

@@ -2,17 +2,12 @@ import SwiftUI
 import SwiftData
 
 /// Root of the main window. Decides between onboarding and the main split
-/// view, and installs the theme into the environment.
+/// view. The theme is installed one level up by `RootView` so the migration
+/// screen is themed too.
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
 
     @Query private var profiles: [SDCompanyProfile]
-
-    var themeColors: ThemeColors {
-        themeManager.colors(for: colorScheme)
-    }
 
     /// Setup is complete once onboarding has been finished and a company
     /// profile exists. Deliberately not gated on the profile's encrypted fields
@@ -31,8 +26,6 @@ struct ContentView: View {
                 OnboardingContainerView()
             }
         }
-        .environment(\.themeColors, themeColors)
-        .tint(themeColors.accent)
         .frame(minWidth: 980, minHeight: 640)
     }
 }
@@ -74,6 +67,7 @@ struct MainView: View {
             sheetContent(sheet)
                 .environmentObject(appState)
                 .environment(nav)
+                .themed()
         }
         .onAppear {
             if NavigationModel.wantsFirstInvoice {
@@ -255,7 +249,7 @@ struct ShortcutsHelpView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .themedGroupedForm()
             .navigationTitle("Keyboard shortcuts")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -268,5 +262,5 @@ struct ShortcutsHelpView: View {
 }
 
 #Preview {
-    ContentView().environmentObject(AppState())
+    ContentView().environmentObject(AppState()).themed()
 }

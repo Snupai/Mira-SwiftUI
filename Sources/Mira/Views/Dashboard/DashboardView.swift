@@ -100,7 +100,8 @@ struct DashboardView: View {
         return (0..<6).reversed().compactMap { monthsAgo in
             guard let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()),
                   let start = calendar.dateInterval(of: .month, for: date)?.start else { return nil }
-            let paid = allInvoices.filter { $0.status == .paid && calendar.isDate($0.issueDate, equalTo: date, toGranularity: .month) }
+            // Bucket by the month the money came in, matching "came in this month" in the hero.
+            let paid = allInvoices.filter { $0.status == .paid && calendar.isDate($0.paidAt ?? $0.issueDate, equalTo: date, toGranularity: .month) }
             return MonthRevenue(id: start, label: formatter.string(from: date), amount: totalFor(paid))
         }
     }
@@ -139,7 +140,7 @@ struct DashboardView: View {
     var body: some View {
         Group {
             if allInvoices.isEmpty {
-                emptyState
+                firstRun
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.xxl) {
@@ -259,12 +260,35 @@ struct DashboardView: View {
     // MARK: Revenue chart
 
     private var revenueSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.l) {
-            SectionTitle("Revenue, last 6 months")
-            RevenueChart(data: monthlyRevenue, currency: baseCurrency, accent: colors.accent)
+        let months = monthlyRevenue
+        let total = months.reduce(0) { $0 + $1.amount }
+        let activeMonths = months.filter { $0.amount > 0 }.count
+        return VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Revenue, last 6 months") {
+                if total > 0 {
+                    HStack(spacing: Spacing.l) {
+                        chartStat("Total", Money.string(total, baseCurrency))
+                        chartStat("Avg. per month", Money.string(total / Double(max(activeMonths, 1)), baseCurrency))
+                    }
+                }
+            }
+            RevenueChart(data: months, currency: baseCurrency, accent: colors.accent)
                 .frame(height: 200)
+                .padding(Spacing.l)
+                .groupedSurface()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chartStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(value)
+                .font(.callout.weight(.semibold))
+                .monospacedDigit()
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: Top clients
@@ -273,11 +297,10 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             SectionTitle("Top clients this year")
             if topClients.isEmpty {
-                Text("No paid invoices yet this year.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                topClientsPlaceholder
             } else {
                 let shown = Array(topClients.prefix(5))
+                let top = shown.first?.total ?? 1
                 VStack(spacing: 0) {
                     ForEach(Array(shown.enumerated()), id: \.element.client.id) { index, item in
                         HoverRow {
@@ -285,8 +308,18 @@ struct DashboardView: View {
                         } content: {
                             HStack(spacing: Spacing.m) {
                                 ClientAvatar(name: item.client.name, size: 28)
-                                Text(item.client.name)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    Text(item.client.name)
+                                        .lineLimit(1)
+                                    // Share bar: how this client compares to the top one.
+                                    GeometryReader { geo in
+                                        Capsule()
+                                            .fill(colors.accent.opacity(0.8))
+                                            .frame(width: max(4, geo.size.width * item.total / max(top, 1)))
+                                    }
+                                    .frame(height: 3)
+                                    .background(Capsule().fill(.quaternary.opacity(0.6)))
+                                }
                                 Spacer(minLength: Spacing.m)
                                 MoneyText(item.total, baseCurrency, font: .callout, weight: .medium)
                             }
@@ -294,12 +327,60 @@ struct DashboardView: View {
                         }
                         .accessibilityLabel("\(item.client.name), \(Money.string(item.total, baseCurrency)). Show client")
                         if index < shown.count - 1 {
-                            Divider()
+                            Divider().padding(.horizontal, Spacing.s)
                         }
                     }
                 }
+                .padding(Spacing.xs)
+                .groupedSurface()
             }
         }
+    }
+
+    /// Three ghost rows in the same layout as real ones, faded, plus a line
+    /// saying what fills them. Keeps the column looking designed, not broken.
+    private var topClientsPlaceholder: some View {
+        let widths: [CGFloat] = [96, 72, 84]
+        let shares: [CGFloat] = [1.0, 0.7, 0.45]
+        return VStack(spacing: 0) {
+            ForEach(0..<3, id: \.self) { index in
+                HStack(spacing: Spacing.m) {
+                    Circle()
+                        .fill(colors.accent.opacity(0.14))
+                        .frame(width: 28, height: 28)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Capsule()
+                            .fill(.quaternary)
+                            .frame(width: widths[index], height: 9)
+                        GeometryReader { geo in
+                            Capsule()
+                                .fill(colors.accent.opacity(0.35))
+                                .frame(width: geo.size.width * shares[index])
+                        }
+                        .frame(height: 3)
+                        .background(Capsule().fill(.quaternary.opacity(0.6)))
+                    }
+                    Spacer(minLength: Spacing.m)
+                    Capsule()
+                        .fill(.quaternary)
+                        .frame(width: 48, height: 9)
+                }
+                .padding(.vertical, Spacing.m)
+                .padding(.horizontal, Spacing.s)
+                if index < 2 {
+                    Divider().padding(.horizontal, Spacing.s)
+                }
+            }
+            Text("Your best-paying clients rank here.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.m)
+        }
+        .padding(Spacing.xs)
+        .groupedSurface()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Top clients. Your best-paying clients rank here once invoices are paid.")
     }
 
     // MARK: Attention and recent
@@ -334,23 +415,128 @@ struct DashboardView: View {
                     nav.reveal(invoiceID: invoice.id)
                 }
                 if index < invoices.count - 1 {
-                    Divider()
+                    Divider().padding(.horizontal, Spacing.s)
                 }
             }
         }
+        .padding(Spacing.xs)
+        .groupedSurface()
     }
 
-    // MARK: Empty
+    // MARK: First run
 
-    private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Nothing to show yet", systemImage: "chart.bar")
-        } description: {
-            Text("Your revenue, outstanding payments and recent invoices appear here once you've sent your first invoice.")
-        } actions: {
-            Button("New invoice") { nav.sheet = .newInvoice(clientID: nil) }
-                .buttonStyle(.borderedProminent)
-            Button("Add client") { nav.sheet = .newClient }
+    /// Shown until the first invoice exists. Keeps the page's real shape so
+    /// the user sees what fills in, and walks them through the first steps.
+    private var firstRun: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                firstRunHero
+                gettingStarted
+                HStack(alignment: .top, spacing: Spacing.xxl) {
+                    revenueSection
+                    topClientsSection
+                        .frame(width: 280)
+                }
+            }
+            .frame(maxWidth: 960, alignment: .leading)
+            .padding(Spacing.page)
+        }
+    }
+
+    private var firstRunHero: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(allClients.isEmpty ? "Let's get you paid" : "Ready for your first invoice")
+                .font(.system(size: 44, weight: .semibold))
+            Text("Once you've sent an invoice, this page shows what's owed, what's been paid and who your best clients are.")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 620, alignment: .leading)
+        }
+    }
+
+    private struct SetupStep: Identifiable {
+        let id: Int
+        let title: String
+        let detail: String
+        let symbol: String
+        let done: Bool
+        let action: (() -> Void)?
+    }
+
+    private var steps: [SetupStep] {
+        let hasProfile = profile != nil
+        let hasClient = !allClients.isEmpty
+        return [
+            SetupStep(id: 1, title: "Set up your business", detail: "Name, address, tax and bank details go on every invoice.",
+                 symbol: "building.2", done: hasProfile, action: nil),
+            SetupStep(id: 2, title: "Add your first client", detail: "Who you're billing. You only type their details once.",
+                 symbol: "person.badge.plus", done: hasClient, action: { nav.sheet = .newClient }),
+            SetupStep(id: 3, title: "Create an invoice", detail: "Pick the client, add line items, and watch the PDF build itself.",
+                 symbol: "doc.badge.plus", done: false, action: { nav.sheet = .newInvoice(clientID: allClients.first?.id) }),
+            SetupStep(id: 4, title: "Send it and mark it paid", detail: "Export the PDF, then record the payment when it lands.",
+                 symbol: "paperplane", done: false, action: nil),
+        ]
+    }
+
+    private var gettingStarted: some View {
+        let steps = steps
+        let doneCount = steps.filter(\.done).count
+        let next = steps.first { !$0.done }
+        return VStack(alignment: .leading, spacing: Spacing.l) {
+            SectionTitle("Getting started") {
+                Text("\(doneCount) of \(steps.count) done")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            VStack(spacing: 0) {
+                ForEach(steps) { (step: SetupStep) in
+                    let isNext = step.id == next?.id
+                    HStack(spacing: Spacing.l) {
+                        ZStack {
+                            Circle()
+                                .fill(step.done ? Color.green.opacity(0.16) : (isNext ? colors.accent.opacity(0.16) : Color.secondary.opacity(0.1)))
+                            Image(systemName: step.done ? "checkmark" : step.symbol)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(step.done ? Color.green : (isNext ? colors.accent : Color.secondary))
+                        }
+                        .frame(width: 36, height: 36)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .fontWeight(.medium)
+                                .strikethrough(step.done, color: .secondary)
+                                .foregroundStyle(step.done ? .secondary : .primary)
+                            Text(step.detail)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: Spacing.m)
+
+                        if step.done {
+                            Text("Done")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        } else if let action = step.action {
+                            let label = step.title.hasPrefix("Add") ? "Add client" : "New invoice"
+                            if isNext {
+                                Button(label, action: action).buttonStyle(.borderedProminent)
+                            } else {
+                                Button(label, action: action).buttonStyle(.bordered)
+                            }
+                        }
+                    }
+                    .padding(.vertical, Spacing.m)
+                    .padding(.horizontal, Spacing.l)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(step.title). \(step.done ? "Done" : step.detail)")
+                    if step.id != steps.last?.id {
+                        Divider().padding(.horizontal, Spacing.l)
+                    }
+                }
+            }
+            .padding(.vertical, Spacing.xs)
+            .groupedSurface()
         }
     }
 }
@@ -369,16 +555,43 @@ private struct RevenueChart: View {
         return data.first { calendar.isDate($0.id, equalTo: selectedMonth, toGranularity: .month) }
     }
 
+    private var isEmpty: Bool { data.allSatisfy { $0.amount <= 0 } }
+
+    /// Illustrative shape shown faded while there is no revenue yet, so the
+    /// card reads as a chart rather than an empty box. Unlabeled on purpose.
+    private static let sampleShape: [Double] = [0.35, 0.6, 0.45, 0.8, 0.55, 0.7]
+
+    private var plotted: [DashboardView.MonthRevenue] {
+        guard isEmpty else { return data }
+        return data.enumerated().map { index, month in
+            DashboardView.MonthRevenue(id: month.id, label: month.label, amount: Self.sampleShape[index % Self.sampleShape.count] * 1000)
+        }
+    }
+
+    /// Fixed upper bound so the axis, gridlines and labels render even when
+    /// every month is zero, and bars never touch the top edge.
+    private var yMax: Double {
+        let peak = data.map(\.amount).max() ?? 0
+        return peak > 0 ? peak * 1.2 : 1000
+    }
+
     var body: some View {
-        Chart(data) { month in
+        Chart(plotted) { month in
             BarMark(
                 x: .value("Month", month.id, unit: .month),
-                y: .value("Revenue", month.amount)
+                y: .value("Revenue", month.amount),
+                width: .ratio(0.55)
             )
-            .foregroundStyle(selected == nil || selected?.id == month.id ? accent : accent.opacity(0.35))
-            .cornerRadius(4)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: isEmpty ? [accent.opacity(0.28), accent.opacity(0.08)] : [accent, accent.opacity(0.55)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .opacity(selected == nil || selected?.id == month.id ? 1 : 0.35)
+            .cornerRadius(5)
 
-            if let selected, selected.id == month.id {
+            if !isEmpty, let selected, selected.id == month.id {
                 RuleMark(x: .value("Month", selected.id, unit: .month))
                     .foregroundStyle(.clear)
                     .annotation(position: .top, spacing: Spacing.xs) {
@@ -397,20 +610,52 @@ private struct RevenueChart: View {
             }
         }
         .chartXSelection(value: $selectedMonth)
+        .chartYScale(domain: 0...yMax)
         .chartXAxis {
             AxisMarks(values: .stride(by: .month)) { _ in
                 AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    .foregroundStyle(.secondary)
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading) { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let amount = value.as(Double.self) {
-                        Text(Money.compact(amount, currency))
-                            .monospacedDigit()
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                    .foregroundStyle(.quaternary)
+                if !isEmpty {
+                    AxisValueLabel {
+                        if let amount = value.as(Double.self) {
+                            Text(Money.compact(amount, currency))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+            }
+        }
+        .chartPlotStyle { plot in
+            plot.overlay(alignment: .bottom) {
+                Rectangle().fill(.quaternary).frame(height: 1)
+            }
+        }
+        .overlay {
+            if isEmpty {
+                VStack(spacing: Spacing.xs) {
+                    Text("Sample")
+                        .font(.caption.weight(.semibold))
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Spacing.s)
+                        .padding(.vertical, 3)
+                        .background(.quaternary.opacity(0.6), in: Capsule())
+                    Text("Paid revenue by month appears here.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, Spacing.l)
+                .padding(.vertical, Spacing.m)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .allowsHitTesting(false)
             }
         }
         .accessibilityLabel("Paid revenue per month for the last six months")

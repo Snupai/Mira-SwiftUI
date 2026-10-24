@@ -55,3 +55,39 @@ extension EnvironmentValues {
         set { self[ThemeColorsKey.self] = newValue }
     }
 }
+
+// MARK: - Window roots
+
+/// Installs the active theme at a window root: the resolved palette goes into
+/// the environment, the accent becomes the tint, and custom palettes paint
+/// their base color behind the content. Observes `ThemeManager`, so every
+/// root re-renders the moment the theme or accent changes.
+///
+/// Apply this to every window and sheet root. Secondary windows (Settings,
+/// About) and sheets are separate windows and inherit nothing from the main
+/// one, which is how pages ended up half-themed.
+struct ThemedRoot: ViewModifier {
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let colors = themeManager.colors(for: colorScheme)
+        content
+            .environment(\.themeColors, colors)
+            .tint(colors.accent)
+            .background {
+                // System palettes leave the window alone so Liquid Glass chrome
+                // shows the desktop through it.
+                if !colors.isSystem {
+                    colors.base.ignoresSafeArea()
+                }
+            }
+    }
+}
+
+extension View {
+    /// Theme this view as a window or sheet root. See `ThemedRoot`.
+    func themed() -> some View {
+        modifier(ThemedRoot())
+    }
+}

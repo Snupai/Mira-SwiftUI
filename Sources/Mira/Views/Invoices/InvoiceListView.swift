@@ -255,6 +255,7 @@ struct InvoicesView: View {
             }
         }
         .tableStyle(.inset)
+        .themedScrollBackground()
         .alternatingRowBackgrounds(.disabled)
     }
 

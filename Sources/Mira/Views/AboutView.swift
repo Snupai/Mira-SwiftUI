@@ -69,7 +69,7 @@ class AboutWindowController {
 
     func showWindow() {
         if window == nil {
-            let hostingController = NSHostingController(rootView: AboutView())
+            let hostingController = NSHostingController(rootView: AboutView().themed())
             let window = NSWindow(contentViewController: hostingController)
             window.title = "About Mira"
             window.styleMask = [.titled, .closable]

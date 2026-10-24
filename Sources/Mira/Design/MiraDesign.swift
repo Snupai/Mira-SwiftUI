@@ -202,6 +202,32 @@ struct DetailRow: View {
     }
 }
 
+// MARK: - Scroll backgrounds
+
+/// Grouped forms, inset lists and tables paint an opaque system background of
+/// their own, which covers the palette base a custom theme paints behind the
+/// window. This hides that layer for custom palettes and leaves it alone for
+/// the system palette, so every scrolling container shows the same base.
+struct ThemedScrollBackground: ViewModifier {
+    @Environment(\.themeColors) private var colors
+
+    func body(content: Content) -> some View {
+        content.scrollContentBackground(colors.isSystem ? .automatic : .hidden)
+    }
+}
+
+extension View {
+    /// Apply to every `Form`, `List` and `Table` in a themed window.
+    func themedScrollBackground() -> some View {
+        modifier(ThemedScrollBackground())
+    }
+
+    /// The app's standard grouped form, with the palette base showing through.
+    func themedGroupedForm() -> some View {
+        formStyle(.grouped).themedScrollBackground()
+    }
+}
+
 // MARK: - Glass helpers
 
 extension View {

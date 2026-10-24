@@ -211,18 +211,7 @@ struct ThemePreview: View {
     let palette: ThemePalette
 
     private func resolve(_ value: String) -> Color {
-        if value.hasPrefix("system:") {
-            switch String(value.dropFirst(7)) {
-            case "windowBackground": return Color(nsColor: .windowBackgroundColor)
-            case "underPageBackground": return Color(nsColor: .underPageBackgroundColor)
-            case "label": return Color(nsColor: .labelColor)
-            case "secondaryLabel": return Color(nsColor: .secondaryLabelColor)
-            case "quaternaryFill": return Color(nsColor: .labelColor).opacity(0.05)
-            case "tertiaryFill": return Color(nsColor: .labelColor).opacity(0.10)
-            default: return Color(nsColor: .controlBackgroundColor)
-            }
-        }
-        return Color(hex: value) ?? .gray
+        ThemeManager.shared.resolveColor(value)
     }
 
     private var accent: Color {
