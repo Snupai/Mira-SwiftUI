@@ -16,6 +16,7 @@ struct OnboardingContainerView: View {
     @State private var companyProfile = CompanyProfile()
     @State private var previewLanguage: PDFLanguage = .german
     @State private var didLoadExisting = false
+    @State private var saveError: String?
 
     enum OnboardingStep: Int, CaseIterable {
         case welcome, business, address, tax, bank, branding, appearance, done
@@ -54,6 +55,12 @@ struct OnboardingContainerView: View {
         .onExitCommand {
             if currentStep != .welcome && currentStep != .done { previousStep() }
         }
+        .alert("Couldn't save your details", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("Try again") { finishOnboarding() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .snapshotAdvanceOnboarding)) { _ in
             // Demo-only hook so snapshot runs can walk every step; fills sample data so the paper has content.
             guard DemoData.isEnabled else { return }
@@ -64,7 +71,7 @@ struct OnboardingContainerView: View {
                 sample.vatId = "DE123456789"; sample.iban = SampleData.placeholderIBAN; sample.bic = SampleData.placeholderBIC; sample.bankName = "Commerzbank"
                 companyProfile = sample
             }
-            nextStep()
+            if currentStep == .done { finishOnboarding() } else { nextStep() }
         }
         .onAppear {
             guard !didLoadExisting else { return }
@@ -215,6 +222,8 @@ struct OnboardingContainerView: View {
             Log.onboarding.notice("Saved to SwiftData")
         } catch {
             Log.onboarding.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
+            saveError = "\(error.localizedDescription)\n\nNothing was changed. Check free disk space and try again."
+            return
         }
 
         appState.hasCompletedOnboarding = true

@@ -44,7 +44,7 @@ struct ThemePicker: View {
                 .controlSize(.small)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 100 : 120), spacing: Spacing.m)], spacing: Spacing.m) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 100 : 120, maximum: compact ? 140 : 160), spacing: Spacing.m, alignment: .leading)], alignment: .leading, spacing: Spacing.m) {
                 ForEach(themeManager.availableThemes) { theme in
                     ThemeCard(
                         theme: theme,
@@ -70,6 +70,7 @@ struct ThemePicker: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .fileImporter(
             isPresented: $showingImportPicker,
             allowedContentTypes: [UTType.json],
@@ -264,7 +265,8 @@ struct AccentPicker: View {
     }
 
     var body: some View {
-        HStack(spacing: compact ? Spacing.s : Spacing.m) {
+        // Wraps instead of scrolling so it never overflows narrow panes.
+        SimpleFlowLayout(spacing: compact ? Spacing.s : Spacing.m) {
             ForEach(sortedAccents, id: \.name) { accent in
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { selected = accent.name }

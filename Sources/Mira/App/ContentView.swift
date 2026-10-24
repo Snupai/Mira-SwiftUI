@@ -14,16 +14,13 @@ struct ContentView: View {
         themeManager.colors(for: colorScheme)
     }
 
-    /// Setup is complete when a company profile exists (SwiftData or legacy)
-    /// and the user has finished onboarding.
+    /// Setup is complete once onboarding has been finished and a company
+    /// profile exists. Deliberately not gated on the profile's encrypted fields
+    /// (IBAN etc.): if those can't be decrypted — for example in a build signed
+    /// with a different identity — the user must still be able to reach the app.
     private var isSetupComplete: Bool {
-        if let profile = profiles.first, profile.isComplete {
-            return appState.hasCompletedOnboarding
-        }
-        if let profile = appState.companyProfile, profile.isComplete {
-            return appState.hasCompletedOnboarding
-        }
-        return false
+        guard appState.hasCompletedOnboarding else { return false }
+        return profiles.first != nil || appState.companyProfile != nil
     }
 
     var body: some View {

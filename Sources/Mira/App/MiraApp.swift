@@ -233,6 +233,8 @@ extension Notification.Name {
 class AppState: ObservableObject {
     @Published var hasCompletedOnboarding: Bool {
         didSet {
+            // Demo runs must leave the real preferences untouched.
+            guard !DemoData.isEnabled else { return }
             UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
@@ -262,7 +264,11 @@ class AppState: ObservableObject {
     private var templatesURL: URL { dataDirectory.appendingPathComponent("templates.json") }
     
     init() {
-        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if DemoData.isEnabled {
+            self.hasCompletedOnboarding = ProcessInfo.processInfo.environment["MIRA_ONBOARDING"] != "1"
+        } else {
+            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        }
         
         // Only load legacy data if migration hasn't completed
         // This keeps the app working during the transition period

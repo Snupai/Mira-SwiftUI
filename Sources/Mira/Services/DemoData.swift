@@ -168,7 +168,7 @@ enum SnapshotRunner {
             try? await Task.sleep(for: .seconds(2.5))
             if ProcessInfo.processInfo.environment["MIRA_ONBOARDING"] == "1" {
                 capture("onboarding-welcome", to: directory)
-                for step in ["business", "address", "tax", "bank", "branding", "appearance", "done"] {
+                for step in ["business", "address", "tax", "bank", "branding", "appearance", "done", "finished"] {
                     NotificationCenter.default.post(name: .snapshotAdvanceOnboarding, object: nil)
                     try? await Task.sleep(for: .seconds(1.0))
                     capture("onboarding-\(step)", to: directory)

@@ -685,7 +685,14 @@ struct SimpleFlowLayout: Layout {
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
-        let maxWidth = proposal.width ?? .infinity
+        var usedWidth: CGFloat = 0
+        // SwiftUI probes with nil/zero/infinite widths; treat anything that is
+        // not a finite positive width as "one row" and report the real extent,
+        // never infinity, or the layout blows up.
+        let maxWidth: CGFloat = {
+            if let w = proposal.width, w.isFinite, w > 0 { return w }
+            return .infinity
+        }()
 
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
@@ -697,8 +704,10 @@ struct SimpleFlowLayout: Layout {
             positions.append(CGPoint(x: x, y: y))
             rowHeight = max(rowHeight, size.height)
             x += size.width + spacing
+            usedWidth = max(usedWidth, x - spacing)
         }
-        return (positions, CGSize(width: maxWidth, height: y + rowHeight))
+        let width = maxWidth.isFinite ? maxWidth : usedWidth
+        return (positions, CGSize(width: width, height: y + rowHeight))
     }
 }
 
