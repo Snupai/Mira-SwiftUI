@@ -179,7 +179,7 @@ struct ClientListView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(summary.count == 0 ? "No invoices" : "\(summary.count) \(summary.count == 1 ? "invoice" : "invoices")")
+                Text(summary.count < 1 ? "No invoices" : "\(summary.count) \(summary.count == 1 ? "invoice" : "invoices")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(summary.outstandingByCurrency, id: \.currency) { entry in

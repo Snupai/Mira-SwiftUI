@@ -101,7 +101,7 @@ struct InvoicesView: View {
             return "\(n) \(n == 1 ? "invoice" : "invoices")"
         }
         let o = outstanding
-        if o.count == 0 { return "Nothing outstanding" }
+        if o.count < 1 { return "Nothing outstanding" }
         return "\(o.count) outstanding, \(Money.compact(o.total, baseCurrency))"
     }
 

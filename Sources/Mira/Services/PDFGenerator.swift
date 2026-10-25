@@ -83,7 +83,10 @@ struct PDFStrings {
 }
 
 class PDFGenerator {
-    
+
+    // Draws the whole invoice page in one pass; splitting it would scatter the
+    // shared y-cursor across helpers. Tracked as a cleanup, not a blocker.
+    // swiftlint:disable:next function_body_length
     static func generateInvoicePDF(
         invoice: Invoice,
         client: Client,
