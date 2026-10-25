@@ -23,6 +23,9 @@ struct InvoiceEditorView: View {
     @State private var previewLanguage: PDFLanguage = .german
     @State private var didPrepare = false
     @State private var saveError: String?
+    /// The number `prepare()` assigned. While the field still holds it, the
+    /// number is re-derived at save time so two editors can't both insert it.
+    @State private var generatedNumber: String?
 
     let isEditing: Bool
 
@@ -68,7 +71,25 @@ struct InvoiceEditorView: View {
     private var validationIssues: [String] {
         var candidate = invoice
         candidate.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
+        if let reserved = reservedGeneratedNumber() {
+            candidate.invoiceNumber = reserved.number
+        }
         return InvoiceValidation.issues(for: candidate, hasClient: selectedClientID != nil, existingNumbers: existingNumbers)
+    }
+
+    /// For a new invoice that still carries the auto-generated number, the
+    /// number it will actually be saved with: derived from the profile's
+    /// current counter and skipping numbers that are already taken (another
+    /// window may have saved in the meantime). `nextCounter` is the counter
+    /// value the profile should hold after this invoice is stored.
+    private func reservedGeneratedNumber() -> (number: String, nextCounter: Int)? {
+        guard !isEditing, let generatedNumber, invoice.invoiceNumber == generatedNumber, let profile else { return nil }
+        let taken = Set(existingNumbers.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        var candidate = profile
+        while taken.contains(candidate.generateInvoiceNumber().lowercased()) {
+            candidate.nextInvoiceNumber += 1
+        }
+        return (candidate.generateInvoiceNumber(), candidate.nextInvoiceNumber + 1)
     }
     private var canSave: Bool { validationIssues.isEmpty }
 
@@ -338,6 +359,7 @@ struct InvoiceEditorView: View {
             invoice.currency = profile.defaultCurrency
             invoice.dueDate = Calendar.current.date(byAdding: .day, value: profile.defaultPaymentTermsDays, to: invoice.issueDate) ?? invoice.dueDate
             invoice.invoiceNumber = profile.generateInvoiceNumber()
+            generatedNumber = invoice.invoiceNumber
         }
         if let client = selectedClient { applyClientDefaults(client) }
         if invoice.lineItems.isEmpty { addLineItem() }
@@ -391,6 +413,9 @@ struct InvoiceEditorView: View {
         invoice.clientId = clientID
         invoice.invoiceNumber = invoice.invoiceNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         invoice.updatedAt = Date()
+        // Decide the final number now, against the invoices that exist at this moment.
+        let reserved = reservedGeneratedNumber()
+        if let reserved { invoice.invoiceNumber = reserved.number }
         invoice.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
 
         if usesSwiftData {
@@ -417,8 +442,12 @@ struct InvoiceEditorView: View {
             } else {
                 modelContext.insert(SDInvoice(from: invoice, client: sdClient))
                 // Only consume the next number once the invoice really exists.
-                if let sdProfile = sdProfiles.first, invoice.invoiceNumber == sdProfile.toLegacy().generateInvoiceNumber() {
-                    sdProfile.nextInvoiceNumber += 1
+                if let sdProfile = sdProfiles.first {
+                    if let reserved {
+                        sdProfile.nextInvoiceNumber = max(sdProfile.nextInvoiceNumber, reserved.nextCounter)
+                    } else if invoice.invoiceNumber == sdProfile.toLegacy().generateInvoiceNumber() {
+                        sdProfile.nextInvoiceNumber += 1
+                    }
                 }
             }
             do {
@@ -433,10 +462,17 @@ struct InvoiceEditorView: View {
                 appState.invoices[index] = invoice
             } else {
                 appState.invoices.append(invoice)
-                if var profile = appState.companyProfile, invoice.invoiceNumber == profile.generateInvoiceNumber() {
-                    profile.nextInvoiceNumber += 1
-                    appState.companyProfile = profile
-                    appState.saveCompanyProfile()
+                if var profile = appState.companyProfile {
+                    let before = profile.nextInvoiceNumber
+                    if let reserved {
+                        profile.nextInvoiceNumber = max(before, reserved.nextCounter)
+                    } else if invoice.invoiceNumber == profile.generateInvoiceNumber() {
+                        profile.nextInvoiceNumber += 1
+                    }
+                    if profile.nextInvoiceNumber != before {
+                        appState.companyProfile = profile
+                        appState.saveCompanyProfile()
+                    }
                 }
             }
             appState.saveInvoices()

@@ -171,7 +171,10 @@ struct RootView: View {
 
     @MainActor
     private func runMigration() async {
-        guard !DemoData.isEnabled, MigrationService.shared.needsMigration else { return }
+        // Never migrate into the emergency in-memory container: the migration
+        // would mark itself complete and move the legacy files, and everything
+        // migrated would be gone on quit.
+        guard containerError == nil, !DemoData.isEnabled, MigrationService.shared.needsMigration else { return }
 
         isMigrating = true
 

@@ -48,19 +48,25 @@ struct ClientListView: View {
     /// Per-client invoice summary used by the rows.
     private struct Summary {
         var count = 0
-        var outstanding: Double = 0
-        var outstandingCurrency: Currency = .eur
+        /// Open amounts keyed by currency; never summed across currencies.
+        var outstanding: [Currency: Double] = [:]
         var hasOverdue = false
+
+        var outstandingByCurrency: [(currency: Currency, amount: Double)] {
+            outstanding
+                .filter { $0.value > 0 }
+                .sorted { $0.key.rawValue < $1.key.rawValue }
+                .map { (currency: $0.key, amount: $0.value) }
+        }
     }
 
     private var summaries: [UUID: Summary] {
         var result: [UUID: Summary] = [:]
         for invoice in allInvoices {
-            var s = result[invoice.clientId, default: Summary(outstandingCurrency: baseCurrency)]
+            var s = result[invoice.clientId, default: Summary()]
             s.count += 1
             if invoice.status == .sent || invoice.status == .overdue {
-                s.outstanding += isVatExempt ? invoice.subtotal : invoice.total
-                s.outstandingCurrency = invoice.currency
+                s.outstanding[invoice.currency, default: 0] += isVatExempt ? invoice.subtotal : invoice.total
                 if invoice.effectiveStatus == .overdue { s.hasOverdue = true }
             }
             result[invoice.clientId] = s
@@ -143,7 +149,7 @@ struct ClientListView: View {
         let summaries = summaries
         return List(selection: $nav.selectedClientID) {
             ForEach(filteredClients) { client in
-                row(client, summary: summaries[client.id] ?? Summary(outstandingCurrency: baseCurrency))
+                row(client, summary: summaries[client.id] ?? Summary())
                     .tag(client.id)
                     .contextMenu {
                         Button("New invoice", systemImage: "plus") { nav.sheet = .newInvoice(clientID: client.id) }
@@ -176,8 +182,8 @@ struct ClientListView: View {
                 Text(summary.count == 0 ? "No invoices" : "\(summary.count) \(summary.count == 1 ? "invoice" : "invoices")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if summary.outstanding > 0 {
-                    MoneyText(summary.outstanding, summary.outstandingCurrency, font: .callout, weight: .medium)
+                ForEach(summary.outstandingByCurrency, id: \.currency) { entry in
+                    MoneyText(entry.amount, entry.currency, font: .callout, weight: .medium)
                         .foregroundStyle(summary.hasOverdue ? Color.red : .primary)
                 }
             }

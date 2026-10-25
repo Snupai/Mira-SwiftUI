@@ -155,13 +155,21 @@ struct ClientInspector: View {
                 return inv.currency == baseCurrency ? sum + (isVatExempt ? inv.subtotal : inv.total) : sum
             }
         let open = invoices.filter { $0.status == .sent || $0.status == .overdue }
-        let outstanding = open.reduce(0.0) { $0 + (isVatExempt ? $1.subtotal : $1.total) }
-        let outstandingCurrency = open.first?.currency ?? baseCurrency
+        // Keep open amounts separated by currency; they can't be added together.
+        var outstandingByCurrency: [Currency: Double] = [:]
+        for invoice in open {
+            outstandingByCurrency[invoice.currency, default: 0] += isVatExempt ? invoice.subtotal : invoice.total
+        }
+        let outstanding = outstandingByCurrency.isEmpty
+            ? Money.string(0, baseCurrency)
+            : outstandingByCurrency.keys.sorted { $0.rawValue < $1.rawValue }
+                .map { Money.string(outstandingByCurrency[$0] ?? 0, $0) }
+                .joined(separator: " · ")
 
         return VStack(alignment: .leading, spacing: Spacing.m) {
             SectionTitle("Invoices")
             DetailRow(label: "Paid this year", value: Money.string(paidThisYear, baseCurrency))
-            DetailRow(label: "Outstanding", value: Money.string(outstanding, outstandingCurrency),
+            DetailRow(label: "Outstanding", value: outstanding,
                       valueColor: open.contains { $0.effectiveStatus == .overdue } ? .red : nil)
 
             if invoices.isEmpty {
