@@ -24,7 +24,8 @@ final class UpdaterManager: ObservableObject {
     }
     
     private func setupSparkle() {
-        guard ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1" else { return }
+        // Demo/review runs never talk to the update feed.
+        guard !DemoData.isEnabled else { return }
         // Create the updater controller
         // The updater will use the SUFeedURL from Info.plist
         updaterController = SPUStandardUpdaterController(
@@ -50,6 +51,8 @@ final class UpdaterManager: ObservableObject {
     
     /// Check for updates on app startup - only shows UI if update is available
     private func checkForUpdatesOnStartup() {
+        // Demo and snapshot runs must not pop an update prompt over the UI.
+        guard !DemoData.isEnabled else { return }
         guard let updater = updaterController?.updater, updater.canCheckForUpdates else { return }
         
         // Use checkForUpdatesInBackground which silently checks and only shows UI if update found

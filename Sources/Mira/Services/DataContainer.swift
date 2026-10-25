@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 import CloudKit
+import Security
+import os
 
 /// SwiftData container configuration with CloudKit sync
 enum DataContainer {
@@ -70,75 +72,90 @@ enum DataContainer {
         )
     }
     
-    /// Isolated sample store for UI verification; never opens the user's database.
-    @MainActor
-    static func createReviewContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration("Mira-Review", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-        let container = try ModelContainer(for: schema, configurations: [configuration])
-        let context = container.mainContext
-        let profile = SDCompanyProfile()
-        profile.companyName = "Mira Studio"
-        profile.ownerName = "Alex Example"
-        profile.email = "alex@example.com"
-        profile.street = "Example Street 1"
-        profile.city = "Berlin"
-        profile.postalCode = "10115"
-        profile.defaultCurrency = .gbp
-        profile.isVatExempt = true
-        profile.defaultVatRate = 0
-        profile.defaultPaymentTermsDays = 30
-        profile.nextInvoiceNumber = 31
-        context.insert(profile)
-        let clients = ["Acme Studio", "Northwind", "Orbit Design"].map { name in
-            let client = SDClient()
-            client.name = name
-            client.email = name.lowercased().replacingOccurrences(of: " ", with: ".") + "@example.com"
-            context.insert(client)
-            return client
-        }
-        for index in 0..<30 {
-            let invoice = SDInvoice()
-            invoice.invoiceNumber = "INV-2026-" + String(format: "%04d", index + 1)
-            invoice.client = clients[index % clients.count]
-            invoice.currency = index % 4 == 0 ? .eur : .gbp
-            invoice.lineItems = [SDLineItem(itemDescription: "Design services", quantity: 4, unit: "hours", unitPrice: Double(100 + index * 5), vatRate: 0)]
-            invoice.issueDate = Calendar.current.date(byAdding: .day, value: -index * 5, to: Date()) ?? Date()
-            invoice.dueDate = Calendar.current.date(byAdding: .day, value: index % 2 == 0 ? -3 : 10, to: Date()) ?? Date()
-            invoice.createdAt = invoice.issueDate
-            invoice.status = index % 3 == 0 ? .draft : index % 3 == 1 ? .sent : .paid
-            if invoice.status == .paid {
-                invoice.paidAt = Calendar.current.date(byAdding: .day, value: -index * 3, to: Date())
-                if invoice.currency != .gbp { invoice.paidAmountInBaseCurrency = invoice.subtotal * 0.85 }
-            }
-            context.insert(invoice)
-        }
-        try context.save()
-        return container
-    }
-
-    /// Shared container instance
-    /// Uses CloudKit if available, falls back to local
+    /// Shared container instance.
+    ///
+    /// Tries CloudKit first, falls back to local, and as an emergency last resort
+    /// returns an in-memory container so the app can still surface an error to the
+    /// user instead of crashing on launch. Real-app initialization in `MiraApp`
+    /// uses `createWithFallback()` which also reports the underlying error.
     @MainActor
     static var shared: ModelContainer = {
-        do {
-            // Try CloudKit first
+        let result = createWithFallback()
+        if let error = result.error {
+            Log.data.fault("Persistent storage unavailable, using in-memory emergency container: \(error.localizedDescription, privacy: .public)")
+        }
+        return result.container
+    }()
+
+    /// Wrapper around the cascading-fallback container creation that also reports
+    /// the underlying error to callers (so they can surface it in UI).
+    /// Whether this process is signed with the iCloud entitlement. Ad-hoc
+    /// local builds are not; asking CloudKit for a container then traps inside
+    /// CoreData's mirroring setup, so those builds must stay local-only.
+    static var hasCloudKitEntitlement: Bool {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-services" as CFString, nil)
+        return value != nil
+    }
+
+    @MainActor
+    static func createWithFallback() -> (container: ModelContainer, error: DataContainerError?) {
+        // Try CloudKit first, but only when the binary is entitled to use it.
+        if hasCloudKitEntitlement {
+          do {
             let container = try createCloudKitContainer()
-            print("✅ SwiftData container created with CloudKit sync")
-            return container
-        } catch {
-            print("⚠️ CloudKit container failed: \(error)")
-            print("⚠️ Falling back to local-only storage")
-            
-            // Fallback to local
+            Log.data.notice("SwiftData container created with CloudKit sync")
+            return (container, nil)
+          } catch let cloudKitError {
+            Log.cloudKit.error("CloudKit container failed: \(cloudKitError.localizedDescription, privacy: .public)")
+            Log.data.notice("Falling back to local-only storage")
+          }
+        } else {
+            Log.cloudKit.notice("No iCloud entitlement in this build; using local-only storage")
+        }
+
+        // Fallback to local-only.
+        do {
+            let container = try createLocalContainer()
+            Log.data.notice("SwiftData container created (local-only)")
+            return (container, nil)
+        } catch let localError {
+            Log.data.fault("Failed to create local persistent container: \(localError.localizedDescription, privacy: .public)")
+
+            // Emergency: in-memory container. Lets the app still launch and show error UI.
             do {
-                let container = try createLocalContainer()
-                print("✅ SwiftData container created (local-only)")
-                return container
+                let container = try createPreviewContainer()
+                Log.data.fault("Using in-memory emergency container — data will NOT persist!")
+                return (container, .unavailable(underlying: localError))
             } catch {
-                fatalError("❌ Failed to create any ModelContainer: \(error)")
+                // SwiftData itself is broken in this process — nothing more we can do.
+                fatalError("Unable to create even an in-memory ModelContainer: \(error)")
             }
         }
-    }()
+    }
+}
+
+// MARK: - Errors
+
+/// Errors raised by `DataContainer` when persistent storage is unavailable.
+enum DataContainerError: LocalizedError {
+    /// Persistent storage (CloudKit and local-only) both failed; the app is
+    /// running on a non-persistent emergency container.
+    case unavailable(underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(let underlying):
+            return "Mira can't open its persistent storage. Your changes will not be saved.\n\n\(underlying.localizedDescription)"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .unavailable:
+            return "Quit Mira and try again. If the problem persists, check Console.app for details (filter by subsystem com.snupai.Mira)."
+        }
+    }
 }
 
 // MARK: - CloudKit Status
@@ -150,17 +167,17 @@ extension DataContainer {
             // Use default container - it should match our entitlements
             let container = CKContainer.default()
             let status = try await container.accountStatus()
-            print("✅ CloudKit status: \(status.rawValue) for container: \(container.containerIdentifier ?? "default")")
+            Log.cloudKit.notice("CloudKit status: \(status.rawValue) for container: \(container.containerIdentifier ?? "default", privacy: .public)")
             return status
         } catch {
-            print("⚠️ CloudKit status check failed: \(error.localizedDescription)")
+            Log.cloudKit.error("CloudKit status check failed: \(error.localizedDescription, privacy: .public)")
             // Try with explicit identifier as fallback
             do {
                 let status = try await CKContainer(identifier: cloudKitContainerID).accountStatus()
-                print("✅ CloudKit status (explicit): \(status.rawValue)")
+                Log.cloudKit.notice("CloudKit status (explicit): \(status.rawValue)")
                 return status
             } catch {
-                print("❌ CloudKit explicit check also failed: \(error.localizedDescription)")
+                Log.cloudKit.error("CloudKit explicit check also failed: \(error.localizedDescription, privacy: .public)")
                 return .couldNotDetermine
             }
         }
@@ -200,8 +217,8 @@ extension DataContainer {
             profile.companyName = "Snupai Studios"
             profile.ownerName = "Snupai"
             profile.email = "hello@snupai.dev"
-            profile.iban = "DE89370400440532013000"
-            profile.bic = "COBADEFFXXX"
+            profile.iban = SampleData.placeholderIBAN
+            profile.bic = SampleData.placeholderBIC
             context.insert(profile)
             
             // Add sample client

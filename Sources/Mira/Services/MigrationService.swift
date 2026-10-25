@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Service to migrate data from legacy JSON storage to SwiftData
 final class MigrationService {
@@ -46,7 +47,7 @@ final class MigrationService {
     
     /// Whether to use SwiftData (migration completed OR no legacy data exists)
     var useSwiftData: Bool {
-        ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1" || migrationStatus == .completed || !needsMigration
+        DemoData.isEnabled || migrationStatus == .completed || !needsMigration
     }
     
     // MARK: - Backup
@@ -66,37 +67,61 @@ final class MigrationService {
             if fileManager.fileExists(atPath: sourceURL.path) {
                 let destURL = backupDir.appendingPathComponent(fileName)
                 try fileManager.copyItem(at: sourceURL, to: destURL)
-                print("✅ Backed up \(fileName)")
+                Log.migration.info("Backed up \(fileName, privacy: .public)")
             }
         }
-        
-        print("✅ Backup completed to: \(backupDir.path)")
+
+        Log.migration.notice("Backup completed to: \(backupDir.path, privacy: .public)")
     }
     
     // MARK: - Load Legacy Data
     
     func loadLegacyProfile() -> CompanyProfile? {
         let url = appSupportURL.appendingPathComponent("profile.json")
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? jsonDecoder.decode(CompanyProfile.self, from: data)
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            return try jsonDecoder.decode(CompanyProfile.self, from: data)
+        } catch {
+            Log.migration.error("Failed to load legacy profile.json: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
-    
+
     func loadLegacyClients() -> [Client] {
         let url = appSupportURL.appendingPathComponent("clients.json")
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? jsonDecoder.decode([Client].self, from: data)) ?? []
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: url)
+            return try jsonDecoder.decode([Client].self, from: data)
+        } catch {
+            Log.migration.error("Failed to load legacy clients.json: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
-    
+
     func loadLegacyInvoices() -> [Invoice] {
         let url = appSupportURL.appendingPathComponent("invoices.json")
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? jsonDecoder.decode([Invoice].self, from: data)) ?? []
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: url)
+            return try jsonDecoder.decode([Invoice].self, from: data)
+        } catch {
+            Log.migration.error("Failed to load legacy invoices.json: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
-    
+
     func loadLegacyTemplates() -> [InvoiceTemplate] {
         let url = appSupportURL.appendingPathComponent("templates.json")
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? jsonDecoder.decode([InvoiceTemplate].self, from: data)) ?? []
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: url)
+            return try jsonDecoder.decode([InvoiceTemplate].self, from: data)
+        } catch {
+            Log.migration.error("Failed to load legacy templates.json: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
     
     // MARK: - Migration
@@ -105,79 +130,76 @@ final class MigrationService {
     @MainActor
     func migrate(context: ModelContext) async throws {
         guard needsMigration else {
-            print("ℹ️ No migration needed")
+            Log.migration.info("No migration needed")
             return
         }
-        
+
         migrationStatus = .inProgress
-        
+
         do {
             // Step 1: Backup
-            print("📦 Creating backup...")
+            Log.migration.notice("Creating backup")
             try backupLegacyData()
-            
+
             // Step 2: Load legacy data
-            print("📖 Loading legacy data...")
+            Log.migration.notice("Loading legacy data")
             let legacyProfile = loadLegacyProfile()
             let legacyClients = loadLegacyClients()
             let legacyInvoices = loadLegacyInvoices()
             let legacyTemplates = loadLegacyTemplates()
-            
-            print("  - Profile: \(legacyProfile != nil ? "✓" : "✗")")
-            print("  - Clients: \(legacyClients.count)")
-            print("  - Invoices: \(legacyInvoices.count)")
-            print("  - Templates: \(legacyTemplates.count)")
-            
+
+            Log.migration.info("Legacy data: profile=\(legacyProfile != nil ? "yes" : "no", privacy: .public), clients=\(legacyClients.count), invoices=\(legacyInvoices.count), templates=\(legacyTemplates.count)")
+
             // Step 3: Migrate profile
             if let profile = legacyProfile {
-                print("🔄 Migrating profile...")
+                Log.migration.notice("Migrating profile")
                 let sdProfile = SDCompanyProfile(from: profile)
                 context.insert(sdProfile)
             }
-            
+
             // Step 4: Migrate clients (need to keep track for invoice relationships)
-            print("🔄 Migrating clients...")
+            Log.migration.notice("Migrating clients (\(legacyClients.count))")
             var clientMap: [UUID: SDClient] = [:]
             for client in legacyClients {
                 let sdClient = SDClient(from: client)
                 context.insert(sdClient)
                 clientMap[client.id] = sdClient
             }
-            
+
             // Step 5: Migrate invoices
-            print("🔄 Migrating invoices...")
+            Log.migration.notice("Migrating invoices (\(legacyInvoices.count))")
             for invoice in legacyInvoices {
                 let client = clientMap[invoice.clientId]
                 let sdInvoice = SDInvoice(from: invoice, client: client)
                 context.insert(sdInvoice)
             }
-            
+
             // Step 6: Migrate templates
-            print("🔄 Migrating templates...")
+            Log.migration.notice("Migrating templates (\(legacyTemplates.count))")
             for template in legacyTemplates {
                 let defaultClient = template.defaultClientId.flatMap { clientMap[$0] }
                 let sdTemplate = SDInvoiceTemplate(from: template, defaultClient: defaultClient)
                 context.insert(sdTemplate)
             }
-            
+
             // Step 7: Save
-            print("💾 Saving to SwiftData...")
+            Log.migration.notice("Saving to SwiftData")
             try context.save()
-            
+
             // Step 8: Mark complete
             migrationStatus = .completed
-            print("✅ Migration completed successfully!")
-            
+            Log.migration.notice("Migration completed successfully")
+
             // Step 9: Handle legacy files (rename or delete)
             if shouldDeleteLegacyFiles {
                 try deleteLegacyFiles()
             } else {
                 try renameLegacyFiles()
             }
-            
+
         } catch {
             migrationStatus = .failed
-            print("❌ Migration failed: \(error)")
+            Log.migration.error("Migration failed: \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }
@@ -199,7 +221,7 @@ final class MigrationService {
                 // Remove existing .migrated file if it exists
                 try? fileManager.removeItem(at: destURL)
                 try fileManager.moveItem(at: sourceURL, to: destURL)
-                print("📁 Renamed \(fileName) → \(fileName).migrated")
+                Log.migration.info("Renamed \(fileName, privacy: .public) → \(fileName, privacy: .public).migrated")
             }
         }
     }
@@ -212,7 +234,7 @@ final class MigrationService {
             let url = appSupportURL.appendingPathComponent(fileName)
             if fileManager.fileExists(atPath: url.path) {
                 try fileManager.removeItem(at: url)
-                print("🗑️ Deleted legacy file: \(fileName)")
+                Log.migration.info("Deleted legacy file: \(fileName, privacy: .public)")
             }
         }
     }
@@ -230,23 +252,23 @@ final class MigrationService {
             throw MigrationError.noBackupFound
         }
         
-        print("🔄 Rolling back to: \(latestBackup.lastPathComponent)")
-        
+        Log.migration.notice("Rolling back to: \(latestBackup.lastPathComponent, privacy: .public)")
+
         let filesToRestore = ["profile.json", "clients.json", "invoices.json", "templates.json"]
-        
+
         for fileName in filesToRestore {
             let sourceURL = latestBackup.appendingPathComponent(fileName)
             let destURL = appSupportURL.appendingPathComponent(fileName)
-            
+
             if fileManager.fileExists(atPath: sourceURL.path) {
                 try? fileManager.removeItem(at: destURL)
                 try fileManager.copyItem(at: sourceURL, to: destURL)
-                print("✅ Restored \(fileName)")
+                Log.migration.info("Restored \(fileName, privacy: .public)")
             }
         }
-        
+
         migrationStatus = .notStarted
-        print("✅ Rollback completed")
+        Log.migration.notice("Rollback completed")
     }
 }
 

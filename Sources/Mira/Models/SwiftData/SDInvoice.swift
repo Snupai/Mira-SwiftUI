@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// SwiftData model for invoices
 @Model
@@ -80,7 +81,7 @@ final class SDInvoice {
             do {
                 return try JSONDecoder().decode([SDLineItem].self, from: data)
             } catch {
-                print("⚠️ Failed to decode line items: \(error)")
+                Log.data.error("Failed to decode line items: \(error.localizedDescription, privacy: .public)")
                 return []
             }
         }
@@ -88,7 +89,7 @@ final class SDInvoice {
             do {
                 lineItemsData = try JSONEncoder().encode(newValue)
             } catch {
-                print("⚠️ Failed to encode line items: \(error)")
+                Log.data.error("Failed to encode line items: \(error.localizedDescription, privacy: .public)")
                 lineItemsData = nil
             }
         }
@@ -189,18 +190,18 @@ final class SDInvoice {
         do {
             return try EncryptionService.shared.encrypt(Data(value.utf8))
         } catch {
-            print("⚠️ Encryption failed: \(error)")
+            Log.encryption.error("Encryption failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
-    
+
     private func decryptString(_ data: Data?) -> String {
         guard let data = data, !data.isEmpty else { return "" }
         do {
             let decrypted = try EncryptionService.shared.decrypt(data)
             return String(data: decrypted, encoding: .utf8) ?? ""
         } catch {
-            print("⚠️ Decryption failed: \(error)")
+            Log.encryption.error("Decryption failed: \(error.localizedDescription, privacy: .public)")
             return ""
         }
     }

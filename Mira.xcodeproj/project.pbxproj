@@ -43,6 +43,9 @@
 		74A1E5B32F23D241007D97FB /* MigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5792F23D241007D97FB /* MigrationService.swift */; };
 		74A1E5B42F23D241007D97FB /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5632F23D241007D97FB /* ThemePicker.swift */; };
 		74A1E5B52F23D241007D97FB /* BrandColorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5622F23D241007D97FB /* BrandColorPicker.swift */; };
+		74A1E5C12F23D241007D97FB /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5C02F23D241007D97FB /* Log.swift */; };
+		74A1E5C32F23D241007D97FB /* AlertContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5C22F23D241007D97FB /* AlertContext.swift */; };
+		74A1E5C52F23D241007D97FB /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1E5C42F23D241007D97FB /* UIConstants.swift */; };
 		74C5059A2F23D4CF00989BB4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 74C505992F23D4CF00989BB4 /* Sparkle */; };
 		B68F73CE36EF4991A495E23E /* InvoiceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D95160D01B344BB895A4359 /* InvoiceSupport.swift */; };
 		FCABF81D858D4A8B86F63C4C /* MiraInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CB483610DB41859FEA7378 /* MiraInput.swift */; };
@@ -76,6 +79,9 @@
 		74A1E57C2F23D241007D97FB /* UpdaterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterManager.swift; sourceTree = "<group>"; };
 		74A1E57E2F23D241007D97FB /* AdaptiveColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveColors.swift; sourceTree = "<group>"; };
 		74A1E57F2F23D241007D97FB /* ColorExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtensions.swift; sourceTree = "<group>"; };
+		74A1E5C02F23D241007D97FB /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		74A1E5C22F23D241007D97FB /* AlertContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertContext.swift; sourceTree = "<group>"; };
+		74A1E5C42F23D241007D97FB /* UIConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIConstants.swift; sourceTree = "<group>"; };
 		74A1E5822F23D241007D97FB /* ClientListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientListView.swift; sourceTree = "<group>"; };
 		74A1E5842F23D241007D97FB /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		74A1E5862F23D241007D97FB /* InvoiceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceDetailView.swift; sourceTree = "<group>"; };
@@ -211,7 +217,10 @@
 			isa = PBXGroup;
 			children = (
 				74A1E57E2F23D241007D97FB /* AdaptiveColors.swift */,
+				74A1E5C22F23D241007D97FB /* AlertContext.swift */,
 				74A1E57F2F23D241007D97FB /* ColorExtensions.swift */,
+				74A1E5C02F23D241007D97FB /* Log.swift */,
+				74A1E5C42F23D241007D97FB /* UIConstants.swift */,
 			);
 			name = Utils;
 			path = Sources/Mira/Utils;
@@ -396,6 +405,9 @@
 				74A1E5B32F23D241007D97FB /* MigrationService.swift in Sources */,
 				74A1E5B42F23D241007D97FB /* ThemePicker.swift in Sources */,
 				74A1E5B52F23D241007D97FB /* BrandColorPicker.swift in Sources */,
+				74A1E5C12F23D241007D97FB /* Log.swift in Sources */,
+				74A1E5C32F23D241007D97FB /* AlertContext.swift in Sources */,
+				74A1E5C52F23D241007D97FB /* UIConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,564 +1,486 @@
 import SwiftUI
 import SwiftData
+import os
 
+/// Create or edit an invoice. The form sits on the left; the paper on the
+/// right redraws as you type so there is no gap between "what I entered" and
+/// "what the client will receive".
 struct InvoiceEditorView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.themeColors) var colors
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query private var sdClients: [SDClient]
+
+    @Query(sort: \SDClient.name) private var sdClients: [SDClient]
     @Query private var sdInvoices: [SDInvoice]
     @Query private var sdTemplates: [SDInvoiceTemplate]
     @Query private var sdProfiles: [SDCompanyProfile]
+
     @State private var invoice: Invoice
-    @State private var selectedClientId: UUID?
-    @State private var showingClientPicker = false
+    @State private var selectedClientID: UUID?
+    @State private var showingNewClient = false
     @State private var showingSaveTemplate = false
     @State private var templateName = ""
-    @State private var selectedTemplateName = "No template"
-    @State private var initialized = false
-    @State private var generatedSequence: Int?
-    @State private var generatedNumber = ""
+    @State private var previewLanguage: PDFLanguage = .german
+    @State private var didPrepare = false
     @State private var saveError: String?
-    @State private var showingSaveError = false
+    /// The number `prepare()` assigned. While the field still holds it, the
+    /// number is re-derived at save time so two editors can't both insert it.
+    @State private var generatedNumber: String?
+
     let isEditing: Bool
 
-    init(invoice: Invoice?) {
-        _invoice = State(initialValue: invoice ?? Invoice(clientId: UUID()))
-        _selectedClientId = State(initialValue: invoice?.clientId)
-        isEditing = invoice != nil
+    init(invoice: Invoice?, preselectedClientID: UUID? = nil) {
+        if let invoice {
+            _invoice = State(initialValue: invoice)
+            _selectedClientID = State(initialValue: invoice.clientId)
+            isEditing = true
+        } else {
+            _invoice = State(initialValue: Invoice(clientId: UUID()))
+            _selectedClientID = State(initialValue: preselectedClientID)
+            isEditing = false
+        }
     }
 
+    // MARK: Data
+
     private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
-    private var allTemplates: [InvoiceTemplate] {
+    private var profile: CompanyProfile? {
+        usesSwiftData ? sdProfiles.first?.toLegacy() : appState.companyProfile
+    }
+    private var clients: [Client] {
+        (usesSwiftData ? sdClients.map { $0.toLegacy() } : appState.clients).sorted { $0.name < $1.name }
+    }
+    private var templates: [InvoiceTemplate] {
         usesSwiftData ? sdTemplates.map { $0.toLegacy() } : appState.templates
     }
     private var selectedClient: Client? {
-        guard let id = selectedClientId else { return nil }
-        return usesSwiftData ? sdClients.first { $0.id == id }?.toLegacy() : appState.clients.first { $0.id == id }
+        selectedClientID.flatMap { id in clients.first { $0.id == id } }
     }
-    private var isVatExempt: Bool {
-        usesSwiftData ? sdProfiles.first?.isVatExempt ?? false : appState.companyProfile?.isVatExempt ?? false
+    private var isVatExempt: Bool { profile?.isVatExempt ?? false }
+    private var hasContent: Bool {
+        invoice.lineItems.contains { !$0.description.isEmpty || $0.unitPrice != 0 }
     }
-    private var defaultCurrency: Currency {
-        usesSwiftData ? sdProfiles.first?.defaultCurrency ?? .eur : appState.companyProfile?.defaultCurrency ?? .eur
-    }
-    private var defaultVatRate: Double {
-        if isVatExempt { return 0 }
-        return usesSwiftData ? sdProfiles.first?.defaultVatRate ?? 19 : appState.companyProfile?.defaultVatRate ?? 19
-    }
-    private var defaultPaymentTerms: Int {
-        usesSwiftData ? sdProfiles.first?.defaultPaymentTermsDays ?? 14 : appState.companyProfile?.defaultPaymentTermsDays ?? 14
-    }
+    /// Invoice numbers already taken by other invoices (used to reject duplicates).
     private var existingNumbers: [String] {
-        usesSwiftData ? sdInvoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
+        usesSwiftData
+            ? sdInvoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
             : appState.invoices.filter { $0.id != invoice.id }.map(\.invoiceNumber)
     }
+    /// Everything that blocks saving. Blank placeholder rows are ignored, the
+    /// same way `save()` drops them.
     private var validationIssues: [String] {
-        InvoiceValidation.issues(for: invoice, hasClient: selectedClient != nil, existingNumbers: existingNumbers)
+        var candidate = invoice
+        candidate.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
+        if let reserved = reservedGeneratedNumber() {
+            candidate.invoiceNumber = reserved.number
+        }
+        return InvoiceValidation.issues(for: candidate, hasClient: selectedClientID != nil, existingNumbers: existingNumbers)
     }
+
+    /// For a new invoice that still carries the auto-generated number, the
+    /// number it will actually be saved with: derived from the profile's
+    /// current counter and skipping numbers that are already taken (another
+    /// window may have saved in the meantime). `nextCounter` is the counter
+    /// value the profile should hold after this invoice is stored.
+    private func reservedGeneratedNumber() -> (number: String, nextCounter: Int)? {
+        guard !isEditing, let generatedNumber, invoice.invoiceNumber == generatedNumber, let profile else { return nil }
+        let taken = Set(existingNumbers.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        var candidate = profile
+        while taken.contains(candidate.generateInvoiceNumber().lowercased()) {
+            candidate.nextInvoiceNumber += 1
+        }
+        return (candidate.generateInvoiceNumber(), candidate.nextInvoiceNumber + 1)
+    }
+    private var canSave: Bool { validationIssues.isEmpty }
+
+    private var displayTotal: Double { isVatExempt ? invoice.subtotal : invoice.total }
+
+    // MARK: Body
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if !isEditing && !allTemplates.isEmpty {
-                        Menu {
-                            Button("No template") { resetTemplate() }
-                            ForEach(allTemplates) { template in
-                                Button(template.name) { applyTemplate(template) }
-                            }
-                        } label: { Label(selectedTemplateName, systemImage: "doc.on.doc") }
-                    }
-                    FormSection(title: "Client", colors: colors) {
-                        Button { showingClientPicker = true } label: {
-                            HStack {
-                                Text(selectedClient?.name ?? "Select a client…")
-                                Spacer()
-                                Image(systemName: "chevron.down")
-                            }
-                            .padding(12)
-                            .foregroundStyle(colors.text)
-                            .background(colors.surface1, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Client: \(selectedClient?.name ?? "None selected")")
-                    }
-                    FormSection(title: "Details", colors: colors) {
-                        VStack(spacing: 16) {
-                            FormField(label: "Invoice Number", text: $invoice.invoiceNumber, required: true, colors: colors)
-                            HStack(spacing: 20) {
-                                Picker("Currency", selection: $invoice.currency) {
-                                    ForEach(Currency.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                                }
-                                Spacer()
-                                DatePicker("Issued", selection: $invoice.issueDate, displayedComponents: .date)
-                                DatePicker("Due", selection: $invoice.dueDate, displayedComponents: .date)
-                            }
-                            .foregroundStyle(colors.text)
-                        }
-                    }
-                    FormSection(title: "Line Items", colors: colors) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            if invoice.lineItems.isEmpty {
-                                Text("Add the services or products you’re invoicing.")
-                                    .foregroundStyle(colors.subtext)
-                            } else {
-                                HStack {
-                                    Text("Description").frame(maxWidth: .infinity, alignment: .leading)
-                                    Text("Qty").frame(width: 70)
-                                    Text("Unit Price").frame(width: 110)
-                                    Text("Total").frame(width: 90, alignment: .trailing)
-                                    Spacer().frame(width: 24)
-                                }
-                                .font(.caption).foregroundStyle(colors.subtext)
-                                ForEach($invoice.lineItems) { $item in
-                                    LineItemEditor(item: $item, currency: invoice.currency) {
-                                        invoice.lineItems.removeAll { $0.id == item.id }
-                                    }
-                                }
-                            }
-                            Button("Add item", systemImage: "plus", action: addLineItem)
-                                .help("Add a line item")
-                        }
-                    }
-                    totalsSection
-                    FormSection(title: "Notes", colors: colors) {
-                        TextEditor(text: $invoice.notes)
-                            .font(.body).foregroundStyle(colors.text)
-                            .scrollContentBackground(.hidden)
-                            .padding(10).frame(height: 100)
-                            .background(colors.surface1, in: RoundedRectangle(cornerRadius: 8))
-                            .accessibilityLabel("Invoice notes")
-                    }
-                    if !validationIssues.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("To save this invoice:").font(.subheadline.weight(.medium))
-                            ForEach(validationIssues, id: \.self) { Text("• " + $0) }
-                        }
-                        .font(.caption).foregroundStyle(colors.subtext)
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-                .padding(24)
+            HStack(spacing: 0) {
+                form
+                    .frame(minWidth: 520, idealWidth: 560)
+                Divider()
+                preview
+                    .frame(minWidth: 360)
             }
-            .background(colors.base)
-            .navigationTitle(isEditing ? "Edit Invoice" : "New Invoice")
+            .navigationTitle(isEditing ? "Edit \(invoice.invoiceNumber)" : "New invoice")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu { Button("Save as Template") { showingSaveTemplate = true } }
-                    label: { Label("More actions", systemImage: "ellipsis.circle") }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .automatic) {
+                    Menu {
+                        Button("Save as template…", systemImage: "doc.on.doc") { showingSaveTemplate = true }
+                            .disabled(!hasContent)
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: saveInvoice).miraPrimaryAction()
-                        .disabled(!validationIssues.isEmpty)
+                    Button(isEditing ? "Save" : "Create invoice") { save() }
+                        .disabled(!canSave)
+                        .keyboardShortcut(.defaultAction)
                 }
             }
-            .alert("Save as Template", isPresented: $showingSaveTemplate) {
+            .alert("Save as template", isPresented: $showingSaveTemplate) {
                 TextField("Template name", text: $templateName)
                 Button("Cancel", role: .cancel) { templateName = "" }
-                Button("Save", action: saveAsTemplate)
-                    .disabled(templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Save") { saveAsTemplate() }
+            } message: {
+                Text("Line items and notes are saved. The client is remembered as a default.")
             }
-            .alert("Could not save", isPresented: $showingSaveError) {
-                Button("Keep Editing", role: .cancel) { }
-            } message: { Text(saveError ?? "Please try again.") }
-            .sheet(isPresented: $showingClientPicker) {
-                ClientPickerView(selectedClientId: $selectedClientId)
-                    .environmentObject(appState).environment(\.themeColors, colors)
+            .alert("Couldn't save invoice", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveError ?? "")
             }
-            .onAppear { initializeInvoice() }
-            .onChange(of: selectedClientId) { _, _ in
-                guard !isEditing, let client = selectedClient else { return }
-                invoice.currency = client.defaultCurrency ?? defaultCurrency
-                invoice.dueDate = Calendar.current.date(byAdding: .day, value: client.defaultPaymentTermsDays ?? defaultPaymentTerms, to: invoice.issueDate) ?? invoice.issueDate
+            .sheet(isPresented: $showingNewClient) {
+                ClientEditorView(client: nil) { saved in
+                    selectedClientID = saved.id
+                    applyClientDefaults(saved)
+                }
+                .environmentObject(appState)
+                .themed()
             }
         }
-        .frame(width: 740, height: 720)
+        .frame(minWidth: 960, idealWidth: 1040, minHeight: 620, idealHeight: 700)
+        .onAppear(perform: prepare)
     }
 
-    private var totalsSection: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-            Text("Subtotal  " + MiraFormat.currency(invoice.subtotal, invoice.currency))
-            if isVatExempt {
-                Text("VAT exempt (§19 UStG)").font(.caption)
-            } else {
-                ForEach(invoice.taxBreakdown, id: \.rate) { tax in
-                    Text("VAT \(tax.rate.formatted())%  " + MiraFormat.currency(tax.amount, invoice.currency))
+    // MARK: Form
+
+    private var form: some View {
+        Form {
+            if !isEditing && !templates.isEmpty {
+                Section {
+                    Menu {
+                        ForEach(templates) { template in
+                            Button(template.name) { apply(template) }
+                        }
+                    } label: {
+                        Label("Start from a template", systemImage: "doc.on.doc")
+                    }
                 }
             }
-            Divider().frame(width: 220)
-            Text("Total  " + MiraFormat.currency(isVatExempt ? invoice.taxableAmount : invoice.total, invoice.currency))
-                .font(.title3.weight(.semibold))
+
+            Section("Client") {
+                HStack {
+                    Picker("Client", selection: $selectedClientID) {
+                        Text("Choose a client").tag(UUID?.none)
+                        ForEach(clients) { client in
+                            Text(client.name).tag(UUID?.some(client.id))
+                        }
+                    }
+                    .labelsHidden()
+                    .onChange(of: selectedClientID) { _, id in
+                        if let id, let client = clients.first(where: { $0.id == id }) {
+                            applyClientDefaults(client)
+                        }
+                    }
+                    Button("New client…") { showingNewClient = true }
+                }
+                if let client = selectedClient, !client.formattedAddress.isEmpty {
+                    Text(client.formattedAddress)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Details") {
+                TextField("Invoice number", text: $invoice.invoiceNumber)
+                    .monospacedDigit()
+                Picker("Currency", selection: $invoice.currency) {
+                    ForEach(Currency.allCases, id: \.self) { currency in
+                        Text("\(currency.symbol) \(currency.rawValue)").tag(currency)
+                    }
+                }
+                .pickerStyle(.segmented)
+                DatePicker("Issue date", selection: $invoice.issueDate, displayedComponents: .date)
+                HStack {
+                    DatePicker("Due date", selection: $invoice.dueDate, in: invoice.issueDate..., displayedComponents: .date)
+                    Menu {
+                        ForEach([7, 14, 30, 60], id: \.self) { days in
+                            Button("In \(days) days") {
+                                invoice.dueDate = Calendar.current.date(byAdding: .day, value: days, to: invoice.issueDate) ?? invoice.dueDate
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "calendar.badge.clock")
+                    }
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Set due date from payment terms")
+                }
+            }
+
+            Section {
+                lineItemsEditor
+            } header: {
+                Text("Items")
+            } footer: {
+                if invoice.lineItems.isEmpty {
+                    Text("Add what you did: a description, how much of it, and the price per unit.")
+                }
+            }
+
+            Section("Totals") {
+                LabeledContent("Subtotal") { MoneyText(invoice.subtotal, invoice.currency) }
+                if isVatExempt {
+                    LabeledContent("VAT") {
+                        Text("Exempt (§19 UStG)").foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(invoice.taxBreakdown, id: \.rate) { b in
+                        LabeledContent("VAT \(Int(b.rate)) %") { MoneyText(b.amount, invoice.currency) }
+                    }
+                }
+                LabeledContent {
+                    MoneyText(displayTotal, invoice.currency, font: .title3, weight: .semibold)
+                } label: {
+                    Text("Total").fontWeight(.semibold)
+                }
+            }
+
+            Section("Notes") {
+                TextField("Shown on the invoice, below the items", text: $invoice.notes, axis: .vertical)
+                    .lineLimit(2...6)
+            }
         }
-        .foregroundStyle(colors.text)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .themedGroupedForm()
     }
 
-    private func initializeInvoice() {
-        guard !initialized else { return }
-        initialized = true
+    private var lineItemsEditor: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            if !invoice.lineItems.isEmpty {
+                HStack(spacing: Spacing.s) {
+                    Text("Description").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Qty").frame(width: 56, alignment: .trailing)
+                    Text("Unit price").frame(width: 96, alignment: .trailing)
+                    if !isVatExempt { Text("VAT").frame(width: 72, alignment: .leading) }
+                    Text("Amount").frame(width: 96, alignment: .trailing)
+                    Color.clear.frame(width: 20, height: 1)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                ForEach($invoice.lineItems) { $item in
+                    HStack(spacing: Spacing.s) {
+                        TextField("Description", text: $item.description, prompt: Text("What did you do?"))
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                        TextField("Quantity", value: $item.quantity, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                        TextField("Unit price", value: $item.unitPrice, format: .number.precision(.fractionLength(2)))
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 96)
+                        if !isVatExempt {
+                            Picker("VAT", selection: $item.vatRate) {
+                                Text("0 %").tag(0.0)
+                                Text("7 %").tag(7.0)
+                                Text("19 %").tag(19.0)
+                            }
+                            .labelsHidden()
+                            .frame(width: 72)
+                        }
+                        MoneyText(item.total, invoice.currency, font: .callout, weight: .medium)
+                            .frame(width: 96, alignment: .trailing)
+                        Button {
+                            withAnimation(.snappy) { invoice.lineItems.removeAll { $0.id == item.id } }
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Remove item")
+                        .accessibilityLabel("Remove item")
+                    }
+                }
+            }
+            Button("Add item", systemImage: "plus") {
+                withAnimation(.snappy) { addLineItem() }
+            }
+            .buttonStyle(.borderless)
+
+            if !validationIssues.isEmpty {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("To save this invoice:")
+                            .font(.subheadline.weight(.medium))
+                        ForEach(validationIssues, id: \.self) { Text("• " + $0) }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    // MARK: Preview
+
+    private var preview: some View {
+        VStack(spacing: Spacing.l) {
+            GeometryReader { geo in
+                let width = min(geo.size.width - Spacing.xxl * 2, (geo.size.height - Spacing.xxl * 2) / 1.4142)
+                InvoicePaper(invoice: invoice, client: selectedClient, profile: profile ?? CompanyProfile(), language: previewLanguage, width: max(200, width))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Picker("Preview language", selection: $previewLanguage) {
+                Text("Deutsch").tag(PDFLanguage.german)
+                Text("English").tag(PDFLanguage.english)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 180)
+            .padding(.bottom, Spacing.l)
+        }
+        .padding(.top, Spacing.l)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.quaternary.opacity(0.35))
+    }
+
+    // MARK: Logic
+
+    private func prepare() {
+        guard !didPrepare else { return }
+        didPrepare = true
         guard !isEditing else { return }
-        invoice.currency = defaultCurrency
-        invoice.dueDate = Calendar.current.date(byAdding: .day, value: defaultPaymentTerms, to: invoice.issueDate) ?? invoice.issueDate
-        let prefix = usesSwiftData ? sdProfiles.first?.invoiceNumberPrefix ?? "INV-" : appState.companyProfile?.invoiceNumberPrefix ?? "INV-"
-        var sequence = usesSwiftData ? sdProfiles.first?.nextInvoiceNumber ?? 1 : appState.companyProfile?.nextInvoiceNumber ?? 1
-        let year = Calendar.current.component(.year, from: invoice.issueDate)
-        func number(_ value: Int) -> String { "\(prefix)\(year)-\(String(format: "%04d", value))" }
-        while existingNumbers.contains(where: { $0.caseInsensitiveCompare(number(sequence)) == .orderedSame }) { sequence += 1 }
-        generatedSequence = sequence
-        generatedNumber = number(sequence)
-        invoice.invoiceNumber = generatedNumber
+        if let profile {
+            invoice.currency = profile.defaultCurrency
+            invoice.dueDate = Calendar.current.date(byAdding: .day, value: profile.defaultPaymentTermsDays, to: invoice.issueDate) ?? invoice.dueDate
+            invoice.invoiceNumber = profile.generateInvoiceNumber()
+            generatedNumber = invoice.invoiceNumber
+        }
+        if let client = selectedClient { applyClientDefaults(client) }
+        if invoice.lineItems.isEmpty { addLineItem() }
+    }
+
+    private func applyClientDefaults(_ client: Client) {
+        if let currency = client.defaultCurrency { invoice.currency = currency }
+        if let days = client.defaultPaymentTermsDays {
+            invoice.dueDate = Calendar.current.date(byAdding: .day, value: days, to: invoice.issueDate) ?? invoice.dueDate
+        }
     }
 
     private func addLineItem() {
-        invoice.lineItems.append(LineItem(vatRate: isVatExempt ? 0 : selectedClient?.defaultVatRate ?? defaultVatRate))
+        let rate = isVatExempt ? 0.0 : (selectedClient?.defaultVatRate ?? profile?.defaultVatRate ?? 19.0)
+        invoice.lineItems.append(LineItem(vatRate: rate))
     }
-    private func applyTemplate(_ template: InvoiceTemplate) {
-        invoice.lineItems = template.lineItems.map { item in var copy = item; copy.id = UUID(); if isVatExempt { copy.vatRate = 0 }; return copy }
+
+    private func apply(_ template: InvoiceTemplate) {
+        invoice.lineItems = template.lineItems
         invoice.notes = template.notes
         invoice.paymentNotes = template.paymentNotes
-        selectedClientId = template.defaultClientId
-        selectedTemplateName = template.name
+        if let clientID = template.defaultClientId { selectedClientID = clientID }
     }
-    private func resetTemplate() {
-        invoice.lineItems = []
-        invoice.notes = ""
-        invoice.paymentNotes = ""
-        selectedTemplateName = "No template"
-    }
-    private func report(_ error: Error) {
-        saveError = error.localizedDescription
-        showingSaveError = true
-    }
+
     private func saveAsTemplate() {
+        let name = templateName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
         var template = InvoiceTemplate()
-        template.name = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !template.name.isEmpty else { return }
+        template.name = name
         template.lineItems = invoice.lineItems
         template.notes = invoice.notes
         template.paymentNotes = invoice.paymentNotes
-        template.defaultClientId = selectedClientId
-        do {
-            if usesSwiftData {
-                let stored = SDInvoiceTemplate(from: template, defaultClient: sdClients.first { $0.id == selectedClientId })
-                stored.defaultClientId = selectedClientId
-                modelContext.insert(stored)
-                do { try modelContext.save() } catch { modelContext.rollback(); throw error }
-            } else {
-                let templates = appState.templates + [template]
-                try appState.persistTemplates(templates)
-                appState.templates = templates
+        template.defaultClientId = selectedClientID
+
+        if usesSwiftData {
+            let sd = SDInvoiceTemplate(from: template, defaultClient: nil)
+            sd.defaultClientId = selectedClientID
+            modelContext.insert(sd)
+            do { try modelContext.save() } catch {
+                Log.data.error("Template save failed: \(error.localizedDescription, privacy: .public)")
             }
-            templateName = ""
-        } catch { report(error) }
+        } else {
+            appState.templates.append(template)
+            appState.saveTemplates()
+        }
+        templateName = ""
     }
-    private func saveInvoice() {
-        guard validationIssues.isEmpty, let clientId = selectedClientId else { return }
-        invoice.clientId = clientId
+
+    private func save() {
+        guard canSave, let clientID = selectedClientID else { return }
+        invoice.clientId = clientID
         invoice.invoiceNumber = invoice.invoiceNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         invoice.updatedAt = Date()
-        do {
-            if usesSwiftData {
-                // Recheck against the store at save time, including edits from another window.
-                let records = try modelContext.fetch(FetchDescriptor<SDInvoice>())
-                let issues = InvoiceValidation.issues(for: invoice, hasClient: true,
-                    existingNumbers: records.filter { $0.id != invoice.id }.map(\.invoiceNumber))
-                guard issues.isEmpty else { saveError = issues.joined(separator: "\n"); showingSaveError = true; return }
-                guard let client = sdClients.first(where: { $0.id == clientId }) else { throw MiraPersistenceError.missingClient }
-                if isEditing {
-                    guard let existing = records.first(where: { $0.id == invoice.id }), existing.status == .draft else { throw MiraPersistenceError.missingRecord }
-                    existing.invoiceNumber = invoice.invoiceNumber
-                    existing.issueDate = invoice.issueDate
-                    existing.dueDate = invoice.dueDate
-                    existing.lineItems = invoice.lineItems.map { SDLineItem(from: $0) }
-                    existing.currency = invoice.currency
-                    existing.notes = invoice.notes
-                    existing.paymentNotes = invoice.paymentNotes
-                    existing.client = client
-                    existing.updatedAt = Date()
-                } else {
-                    modelContext.insert(SDInvoice(from: invoice, client: client))
-                    if invoice.invoiceNumber == generatedNumber, let sequence = generatedSequence, let profile = sdProfiles.first {
-                        profile.nextInvoiceNumber = max(profile.nextInvoiceNumber, sequence + 1)
-                        profile.updatedAt = Date()
-                    }
-                }
-                do { try modelContext.save() } catch { modelContext.rollback(); throw error }
-            } else {
-                var invoices = appState.invoices
-                if let index = invoices.firstIndex(where: { $0.id == invoice.id }) {
-                    // A retry after a legacy profile write failure must not insert the invoice twice.
-                    invoices[index] = invoice
-                } else {
-                    guard !isEditing else { throw MiraPersistenceError.missingRecord }
-                    invoices.append(invoice)
-                }
-                try appState.persistInvoices(invoices)
-                appState.invoices = invoices
-                if !isEditing, invoice.invoiceNumber == generatedNumber, let sequence = generatedSequence, var profile = appState.companyProfile {
-                    profile.nextInvoiceNumber = max(profile.nextInvoiceNumber, sequence + 1)
-                    try appState.persistCompanyProfile(profile)
-                    appState.companyProfile = profile
-                }
-            }
-            dismiss()
-        } catch { report(error) }
-    }
-}
+        // Decide the final number now, against the invoices that exist at this moment.
+        let reserved = reservedGeneratedNumber()
+        if let reserved { invoice.invoiceNumber = reserved.number }
+        invoice.lineItems.removeAll { $0.description.isEmpty && $0.unitPrice == 0 }
 
-struct LineItemEditor: View {
-    @Environment(\.themeColors) private var colors
-    @Binding var item: LineItem
-    let currency: Currency
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            TextField("Description", text: $item.description)
-                .miraInput(colors: colors).accessibilityLabel("Item description")
-            TextField("Qty", value: $item.quantity, format: .number)
-                .miraInput(colors: colors).frame(width: 70).accessibilityLabel("Item quantity")
-            TextField("Price", value: $item.unitPrice, format: .number.precision(.fractionLength(0...2)))
-                .miraInput(colors: colors).frame(width: 110).accessibilityLabel("Unit price in \(currency.rawValue)")
-            Text(MiraFormat.currency(item.total, currency))
-                .monospacedDigit().frame(width: 90, alignment: .trailing)
-            Button(action: onDelete) { Image(systemName: "trash") }
-                .buttonStyle(.plain).frame(width: 24)
-                .accessibilityLabel("Remove line item").help("Remove line item")
-        }
-        .font(.body).foregroundStyle(colors.text)
-    }
-}
-
-struct ClientPickerView: View {
-    @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.themeColors) var colors
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \SDClient.name) private var sdClients: [SDClient]
-    @Binding var selectedClientId: UUID?
-    @State private var showingNewClient = false
-    @State private var newClient = Client()
-    @State private var searchText = ""
-    
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
-    }
-    
-    private var allClients: [Client] {
         if usesSwiftData {
-            return sdClients.map { $0.toLegacy() }
-        }
-        return appState.clients
-    }
-    
-    var body: some View {
-        let clients = allClients
-        let filtered = clients.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) || $0.email.localizedCaseInsensitiveContains(searchText) }
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 8) {
-                    if clients.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "person.2.slash")
-                                .font(.system(size: 32))
-                                .foregroundColor(colors.subtext)
-                            Text("No clients yet")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(colors.text)
-                            Text("Create a new client using the button above")
-                                .font(.system(size: 13))
-                                .foregroundColor(colors.subtext)
-                        }
-                        .padding(.top, 60)
-                    } else if filtered.isEmpty {
-                        Text("No matching clients").foregroundStyle(colors.subtext)
-                        Button("Clear search") { searchText = "" }
-                    } else {
-                        ForEach(filtered) { client in
-                            Button(action: {
-                                selectedClientId = client.id
-                                dismiss()
-                            }) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(client.name)
-                                            .font(.system(size: 15, weight: .medium))
-                                            .foregroundColor(colors.text)
-                                        if !client.email.isEmpty {
-                                            Text(client.email)
-                                                .font(.system(size: 13))
-                                                .foregroundColor(colors.subtext)
-                                        }
-                                    }
-                                    Spacer()
-                                    if selectedClientId == client.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(colors.accent)
-                                    }
-                                }
-                                .padding(14)
-                                .background(selectedClientId == client.id ? colors.accent.opacity(0.1) : colors.surface0)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
-                        }
+            let sdClient = sdClients.first { $0.id == clientID }
+            if isEditing, let existing = sdInvoices.first(where: { $0.id == invoice.id }) {
+                existing.invoiceNumber = invoice.invoiceNumber
+                existing.status = invoice.status
+                existing.issueDate = invoice.issueDate
+                existing.dueDate = invoice.dueDate
+                existing.serviceDate = invoice.serviceDate
+                existing.serviceDateEnd = invoice.serviceDateEnd
+                existing.lineItems = invoice.lineItems.map { SDLineItem(from: $0) }
+                existing.currency = invoice.currency
+                existing.discountPercent = invoice.discountPercent
+                existing.discountFixed = invoice.discountFixed
+                existing.paymentReference = invoice.paymentReference
+                existing.paymentNotes = invoice.paymentNotes
+                existing.notes = invoice.notes
+                existing.internalNotes = invoice.internalNotes
+                existing.poNumber = invoice.poNumber
+                existing.projectCode = invoice.projectCode
+                existing.updatedAt = Date()
+                existing.client = sdClient
+            } else {
+                modelContext.insert(SDInvoice(from: invoice, client: sdClient))
+                // Only consume the next number once the invoice really exists.
+                if let sdProfile = sdProfiles.first {
+                    if let reserved {
+                        sdProfile.nextInvoiceNumber = max(sdProfile.nextInvoiceNumber, reserved.nextCounter)
+                    } else if invoice.invoiceNumber == sdProfile.toLegacy().generateInvoiceNumber() {
+                        sdProfile.nextInvoiceNumber += 1
                     }
                 }
-                .padding(16)
             }
-            .navigationTitle("Select Client")
-            .searchable(text: $searchText, prompt: "Search clients")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("New Client", systemImage: "plus") {
-                        newClient = Client()
-                        showingNewClient = true
+            do {
+                try modelContext.save()
+            } catch {
+                Log.data.error("Invoice save failed: \(error.localizedDescription, privacy: .public)")
+                saveError = error.localizedDescription
+                return
+            }
+        } else {
+            if isEditing, let index = appState.invoices.firstIndex(where: { $0.id == invoice.id }) {
+                appState.invoices[index] = invoice
+            } else {
+                appState.invoices.append(invoice)
+                if var profile = appState.companyProfile {
+                    let before = profile.nextInvoiceNumber
+                    if let reserved {
+                        profile.nextInvoiceNumber = max(before, reserved.nextCounter)
+                    } else if invoice.invoiceNumber == profile.generateInvoiceNumber() {
+                        profile.nextInvoiceNumber += 1
                     }
-                    .miraPrimaryAction()
+                    if profile.nextInvoiceNumber != before {
+                        appState.companyProfile = profile
+                        appState.saveCompanyProfile()
+                    }
                 }
             }
+            appState.saveInvoices()
         }
-        .frame(width: 400, height: 350)
-        .sheet(isPresented: $showingNewClient) {
-            QuickClientEditorView(client: $newClient) { savedClient in
-                if usesSwiftData {
-                    let stored = SDClient(from: savedClient)
-                    modelContext.insert(stored)
-                    do { try modelContext.save() }
-                    catch { modelContext.rollback(); throw error }
-                } else {
-                    let clients = appState.clients + [savedClient]
-                    try appState.persistClients(clients)
-                    appState.clients = clients
-                }
-                selectedClientId = savedClient.id
-                showingNewClient = false
-                dismiss()
-            }
-            .environmentObject(appState)
-            .environment(\.themeColors, colors)
-        }
+        dismiss()
     }
 }
 
-// Quick client editor for creating new clients from invoice flow
-struct QuickClientEditorView: View {
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.themeColors) var colors
-    @Binding var client: Client
-    var onSave: (Client) throws -> Void
-    @State private var saveError: String?
-    @State private var showingSaveError = false
-    
-    var canSave: Bool { !client.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Basic Info
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Basic Information")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.subtext)
-                        
-                        VStack(spacing: 12) {
-                            QuickField(label: "Company / Name *", text: $client.name, colors: colors)
-                            QuickField(label: "Contact Person", text: $client.contactPerson, colors: colors)
-                            QuickField(label: "Email", text: $client.email, colors: colors)
-                            QuickField(label: "Phone", text: $client.phone, colors: colors)
-                        }
-                    }
-                    
-                    // Address
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Address")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.subtext)
-                        
-                        VStack(spacing: 12) {
-                            QuickField(label: "Street", text: $client.street, colors: colors)
-                            HStack(spacing: 12) {
-                                QuickField(label: "Postal Code", text: $client.postalCode, colors: colors)
-                                    .frame(width: 100)
-                                QuickField(label: "City", text: $client.city, colors: colors)
-                            }
-                            QuickField(label: "Country", text: $client.country, colors: colors)
-                        }
-                    }
-                }
-                .padding(20)
-            }
-            .navigationTitle("New Client")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        client.updatedAt = Date()
-                        do {
-                            client.name = client.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                            try onSave(client)
-                        } catch {
-                            saveError = error.localizedDescription
-                            showingSaveError = true
-                        }
-                    }
-                    .miraPrimaryAction()
-                    .disabled(!canSave)
-                }
-            }
-        }
-        .frame(width: 440, height: 540)
-        .alert("Client could not be saved", isPresented: $showingSaveError) {
-            Button("Keep Editing", role: .cancel) { }
-        } message: { Text(saveError ?? "Please try again.") }
-    }
-}
-
-struct QuickField: View {
-    let label: String
-    @Binding var text: String
-    let colors: ThemeColors
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(colors.subtext)
-            TextField(label, text: $text)
-                .accessibilityLabel(label)
-                .miraInput(colors: colors)
-        }
-    }
-}
-
-struct SectionHeader: View {
-    let title: String
-    let icon: String
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
-struct InvoiceEditorView_Previews: PreviewProvider {
-    static var previews: some View {
-        InvoiceEditorView(invoice: nil).environmentObject(AppState())
-    }
+#Preview {
+    InvoiceEditorView(invoice: nil).environmentObject(AppState())
 }

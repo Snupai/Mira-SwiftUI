@@ -1,154 +1,598 @@
 import SwiftUI
 import SwiftData
 import CloudKit
+import os
 
+/// The macOS Settings window (⌘,). Each tab is a grouped Form; edits save as
+/// you type, to SwiftData when migrated and to the legacy store otherwise.
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var appearance = AppAppearance.shared
-    @Environment(\.themeColors) var colors
     @Environment(\.modelContext) private var modelContext
-    
     @Query private var sdProfiles: [SDCompanyProfile]
-    
-    @State private var showingColorPicker = false
-    @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
-    @State private var isCheckingCloudKit = true
-    @State private var profile: CompanyProfile?
-    @State private var selectedCategory: SettingsCategory = .company
-    @State private var saveError: String?
-    @State private var showSaveError = false
-    @State private var showAdvanced = false
+
+    @State private var hasLoadedFromSwiftData = false
+    @State private var alertContext: AlertContext?
+
+    private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Settings category", selection: $selectedCategory) {
-                ForEach(SettingsCategory.allCases) { category in
-                    Text(category.rawValue).tag(category)
+        TabView {
+            Tab("General", systemImage: "gearshape") {
+                GeneralSettingsTab(profile: profileBinding, chooseFolder: chooseExportFolder)
+            }
+            Tab("Company", systemImage: "building.2") {
+                CompanySettingsTab(profile: profileBinding)
+            }
+            Tab("Tax & bank", systemImage: "building.columns") {
+                TaxBankSettingsTab(profile: profileBinding)
+            }
+            Tab("Branding", systemImage: "paintpalette") {
+                BrandingSettingsTab(profile: profileBinding)
+            }
+            Tab("Templates", systemImage: "text.document") {
+                TemplatesSettingsTab(profile: profileBinding)
+            }
+            Tab("Appearance", systemImage: "circle.lefthalf.filled") {
+                AppearanceSettingsTab()
+            }
+            Tab("Sync & security", systemImage: "lock.icloud") {
+                SyncSettingsTab(storageSummary: storageSummary)
+            }
+        }
+        .frame(width: 640)
+        .frame(minHeight: 440)
+        .alert(item: $alertContext) { $0.alert }
+        .onAppear { loadProfileFromSwiftData() }
+        .onChange(of: sdProfiles.count) { _, _ in loadProfileFromSwiftData() }
+        .onChange(of: sdProfiles.first?.updatedAt) { _, _ in
+            if usesSwiftData, let sdProfile = sdProfiles.first {
+                appState.companyProfile = sdProfile.toLegacy()
+            }
+        }
+    }
+
+    // MARK: - Profile plumbing
+
+    /// Whole-profile binding. Every tab edits through this so saving stays in one place.
+    private var profileBinding: Binding<CompanyProfile> {
+        Binding(
+            get: { appState.companyProfile ?? CompanyProfile() },
+            set: { newValue in
+                appState.companyProfile = newValue
+                saveCompanyProfile()
+            }
+        )
+    }
+
+    private func loadProfileFromSwiftData() {
+        guard usesSwiftData else { return }
+        guard !hasLoadedFromSwiftData || appState.companyProfile == nil else { return }
+        if let sdProfile = sdProfiles.first {
+            appState.companyProfile = sdProfile.toLegacy()
+            hasLoadedFromSwiftData = true
+        }
+    }
+
+    private func saveCompanyProfile() {
+        if usesSwiftData, let profile = appState.companyProfile, let sdProfile = sdProfiles.first {
+            updateSDProfile(sdProfile, from: profile)
+            do {
+                try modelContext.save()
+            } catch {
+                Log.data.error("Failed to save company profile: \(error.localizedDescription, privacy: .public)")
+                alertContext = AlertContext(
+                    title: "Couldn't save settings",
+                    message: "Mira couldn't save your changes: \(error.localizedDescription)\n\nYour edits are still in memory but may be lost when the app quits. Try again or check available disk space."
+                )
+            }
+        }
+        appState.saveCompanyProfile()
+    }
+
+    private var storageSummary: String {
+        if usesSwiftData {
+            return sdProfiles.isEmpty
+                ? "Data is stored with SwiftData. No company profile has been saved yet."
+                : "Data is stored with SwiftData on this Mac."
+        }
+        return "Data is still in the legacy JSON files. It migrates the next time you open Mira."
+    }
+
+    private func chooseExportFolder() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose where exported PDFs are saved"
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            appState.companyProfile?.defaultExportPath = url.path
+            saveCompanyProfile()
+        }
+        #endif
+    }
+
+    private func updateSDProfile(_ sdProfile: SDCompanyProfile, from profile: CompanyProfile) {
+        sdProfile.companyName = profile.companyName
+        sdProfile.ownerName = profile.ownerName
+        sdProfile.email = profile.email
+        sdProfile.phone = profile.phone
+        sdProfile.website = profile.website
+        sdProfile.street = profile.street
+        sdProfile.city = profile.city
+        sdProfile.postalCode = profile.postalCode
+        sdProfile.country = profile.country
+        sdProfile.vatId = profile.vatId
+        sdProfile.taxNumber = profile.taxNumber
+        sdProfile.companyRegistry = profile.companyRegistry
+        sdProfile.isVatExempt = profile.isVatExempt
+        sdProfile.bankName = profile.bankName
+        sdProfile.iban = profile.iban
+        sdProfile.bic = profile.bic
+        sdProfile.accountHolder = profile.accountHolder
+        sdProfile.logoData = profile.logoData
+        sdProfile.brandColorHex = profile.brandColorHex
+        sdProfile.defaultCurrencyRaw = profile.defaultCurrency.rawValue
+        sdProfile.defaultPaymentTermsDays = profile.defaultPaymentTermsDays
+        sdProfile.defaultVatRate = profile.defaultVatRate
+        sdProfile.invoiceNumberPrefix = profile.invoiceNumberPrefix
+        sdProfile.nextInvoiceNumber = profile.nextInvoiceNumber
+        sdProfile.emailTemplateGerman = profile.emailTemplateGerman
+        sdProfile.emailTemplateEnglish = profile.emailTemplateEnglish
+        sdProfile.pdfFooterTemplateGerman = profile.pdfFooterTemplateGerman
+        sdProfile.pdfClosingTemplateGerman = profile.pdfClosingTemplateGerman
+        sdProfile.pdfNotesTemplateGerman = profile.pdfNotesTemplateGerman
+        sdProfile.pdfFooterTemplateEnglish = profile.pdfFooterTemplateEnglish
+        sdProfile.pdfClosingTemplateEnglish = profile.pdfClosingTemplateEnglish
+        sdProfile.pdfNotesTemplateEnglish = profile.pdfNotesTemplateEnglish
+        sdProfile.defaultExportPath = profile.defaultExportPath
+        sdProfile.updatedAt = Date()
+    }
+}
+
+// MARK: - General
+
+private struct GeneralSettingsTab: View {
+    @Binding var profile: CompanyProfile
+    let chooseFolder: () -> Void
+
+    private var exportFolderName: String {
+        profile.defaultExportPath.isEmpty ? "Ask each time" : (profile.defaultExportPath as NSString).lastPathComponent
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Prefix", text: $profile.invoiceNumberPrefix)
+                LabeledContent("Next number") {
+                    HStack(spacing: Spacing.s) {
+                        Text("\(profile.nextInvoiceNumber)")
+                            .monospacedDigit()
+                        Stepper("Next number", value: $profile.nextInvoiceNumber, in: 1...999_999)
+                            .labelsHidden()
+                    }
+                }
+            } header: {
+                Text("Invoice numbering")
+            } footer: {
+                Text("Next invoice: \(profile.generateInvoiceNumber())")
+                    .monospacedDigit()
+            }
+
+            Section("Defaults") {
+                Picker("Payment terms", selection: $profile.defaultPaymentTermsDays) {
+                    ForEach([7, 14, 30, 60], id: \.self) { days in
+                        Text("\(days) days").tag(days)
+                    }
+                }
+                Picker("Base currency", selection: $profile.defaultCurrency) {
+                    ForEach(Currency.allCases, id: \.self) { currency in
+                        Text("\(currency.symbol) \(currency.rawValue)").tag(currency)
+                    }
+                }
+                if !profile.isVatExempt {
+                    Picker("Default VAT rate", selection: $profile.defaultVatRate) {
+                        Text("0 %").tag(0.0)
+                        Text("7 %").tag(7.0)
+                        Text("19 %").tag(19.0)
+                    }
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(20)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    switch selectedCategory {
-                    case .company:
-                        companySection
-                        addressSection
-                        taxSection
-                        bankSection
-                    case .invoices: invoiceDefaultsSection
-                    case .pdf:
-                        pdfTemplatesSection
-                        exportSection
-                    case .appearance: appearanceSection
-                    case .sync:
-                        syncStatusSection
-                        DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
-                            VStack(alignment: .leading, spacing: 20) {
-                                Toggle("Delete legacy JSON after migration", isOn: Binding(
-                                    get: { UserDefaults.standard.bool(forKey: "mira.deleteLegacyAfterMigration") },
-                                    set: { UserDefaults.standard.set($0, forKey: "mira.deleteLegacyAfterMigration") }
-                                ))
-                                Text("Removes old JSON files after successful migration. Migration backups are retained.")
-                                    .font(.caption).foregroundStyle(colors.subtext)
-                                otherSection
-                            }
-                            .padding(.top, 12)
+
+            Section {
+                LabeledContent("PDF folder") {
+                    HStack(spacing: Spacing.s) {
+                        Text(exportFolderName)
+                            .foregroundStyle(profile.defaultExportPath.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Button("Choose…", action: chooseFolder)
+                        if !profile.defaultExportPath.isEmpty {
+                            Button("Clear") { profile.defaultExportPath = "" }
                         }
                     }
                 }
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
+            } header: {
+                Text("Export")
+            } footer: {
+                Text(profile.defaultExportPath.isEmpty
+                     ? "Mira asks where to save each PDF. Choose a folder to skip the dialog."
+                     : "PDFs are saved straight into this folder and revealed in Finder.")
             }
         }
-        .background(colors.base)
-        .navigationTitle("Settings")
-        .frame(minWidth: 540, minHeight: 500)
-        .task { await checkCloudKitStatus() }
-        .onAppear { loadProfile() }
-        .onChange(of: sdProfiles.first?.updatedAt) { _, _ in
-            if saveError == nil { loadProfile() }
-        }
-        .onChange(of: sdProfiles.count) { _, _ in
-            if profile == nil { loadProfile() }
-        }
-        .alert("Settings could not be saved", isPresented: $showSaveError) {
-            Button("Retry") { saveCompanyProfile() }
-            Button("Keep Editing", role: .cancel) { }
-        } message: { Text(saveError ?? "Please try again.") }
+        .themedGroupedForm()
     }
+}
 
-    private func loadProfile() {
-        profile = CompanyProfileStore.resolve(sdProfiles, legacy: appState.companyProfile)
-    }
+// MARK: - Company
 
-    // MARK: - Sync Status Section
-    private var syncStatusSection: some View {
-        SettingsSection(title: "Sync & Security", colors: colors) {
-            VStack(alignment: .leading, spacing: 16) {
-                // CloudKit Status
+private struct CompanySettingsTab: View {
+    @Binding var profile: CompanyProfile
+
+    var body: some View {
+        Form {
+            Section("Company") {
+                TextField("Company name", text: $profile.companyName)
+                TextField("Your name", text: $profile.ownerName)
+                TextField("Email", text: $profile.email)
+                    .textContentType(.emailAddress)
+                TextField("Phone", text: $profile.phone)
+                    .textContentType(.telephoneNumber)
+                TextField("Website", text: $profile.website)
+                    .textContentType(.URL)
+            }
+            Section {
+                TextField("Street", text: $profile.street)
                 HStack {
-                    Image(systemName: cloudKitIcon)
-                        .foregroundColor(cloudKitColor)
-                        .frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("iCloud Sync")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.text)
-                        Text(cloudKitStatusText)
-                            .font(.system(size: 11))
-                            .foregroundColor(colors.subtext)
+                    TextField("Postal code", text: $profile.postalCode)
+                        .frame(width: 120)
+                    TextField("City", text: $profile.city)
+                }
+                TextField("Country", text: $profile.country)
+            } header: {
+                Text("Address")
+            } footer: {
+                Text("Appears in the sender line and footer of every invoice.")
+            }
+        }
+        .themedGroupedForm()
+    }
+}
+
+// MARK: - Tax & bank
+
+private struct TaxBankSettingsTab: View {
+    @Binding var profile: CompanyProfile
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Small business exemption", isOn: $profile.isVatExempt)
+                if !profile.isVatExempt {
+                    TextField("VAT ID", text: $profile.vatId)
+                }
+                TextField("Tax number", text: $profile.taxNumber)
+                TextField("Company registry", text: $profile.companyRegistry)
+            } header: {
+                Text("Tax")
+            } footer: {
+                Text(profile.isVatExempt
+                     ? "Kleinunternehmerregelung §19 UStG. No VAT is added and invoices carry the exemption notice."
+                     : "At least one of VAT ID or tax number must appear on your invoices.")
+            }
+
+            Section {
+                TextField("Account holder", text: $profile.accountHolder)
+                TextField("IBAN", text: $profile.iban)
+                    .monospacedDigit()
+                TextField("BIC", text: $profile.bic)
+                TextField("Bank name", text: $profile.bankName)
+            } header: {
+                Text("Bank account")
+            } footer: {
+                Text("Printed on every invoice so clients know where to pay.")
+            }
+        }
+        .themedGroupedForm()
+    }
+}
+
+// MARK: - Branding
+
+private struct BrandingSettingsTab: View {
+    @Binding var profile: CompanyProfile
+    @Environment(\.themeColors) private var colors
+
+    private var presets: [(name: String, hex: String)] { Array(BrandColors.presets.prefix(8)) }
+
+    private var isPresetSelected: Bool {
+        presets.contains { $0.hex.uppercased() == profile.brandColorHex.uppercased() }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Form {
+                Section("Logo") {
+                    LogoPicker(logoData: $profile.logoData)
+                }
+                Section {
+                    HStack(spacing: Spacing.s) {
+                        ForEach(presets, id: \.hex) { preset in
+                            let color = Color(hex: preset.hex) ?? .blue
+                            let selected = preset.hex.uppercased() == profile.brandColorHex.uppercased()
+                            Button {
+                                profile.brandColorHex = preset.hex
+                            } label: {
+                                Circle()
+                                    .fill(color)
+                                    .frame(width: 26, height: 26)
+                                    .overlay {
+                                        if selected {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .help(preset.name)
+                            .accessibilityLabel(preset.name)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
+                        }
+                        ColorPicker("Custom color", selection: Binding(
+                            get: { Color(hex: profile.brandColorHex) ?? .blue },
+                            set: { profile.brandColorHex = $0.toHex() }
+                        ))
+                        .labelsHidden()
+                        .frame(width: 26, height: 26)
+                        .overlay {
+                            if !isPresetSelected {
+                                Circle().strokeBorder(colors.accent, lineWidth: 2).frame(width: 32, height: 32)
+                            }
+                        }
+                        .help("Custom color")
                     }
-                    Spacer()
+                    .padding(.vertical, Spacing.xs)
+                } header: {
+                    Text("Brand color")
+                } footer: {
+                    Text("Used for headings and rules on the PDF.")
+                }
+            }
+            .themedGroupedForm()
+            .frame(width: 380)
+
+            Divider()
+
+            VStack {
+                InvoicePaper(invoice: Self.sampleInvoice, client: Self.sampleClient, profile: profile, width: 220)
+                Text("Live preview")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, Spacing.s)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(Spacing.l)
+            .background(.quaternary.opacity(0.35))
+        }
+    }
+
+    static let sampleClient: Client = {
+        var c = Client()
+        c.name = "Acme GmbH"
+        c.street = "Musterstraße 1"
+        c.postalCode = "10115"
+        c.city = "Berlin"
+        return c
+    }()
+
+    static let sampleInvoice: Invoice = {
+        var inv = Invoice(clientId: sampleClient.id)
+        inv.invoiceNumber = "INV-2026-0042"
+        inv.lineItems = [
+            LineItem(description: "Design workshop", quantity: 1, unitPrice: 1800, vatRate: 19),
+            LineItem(description: "Revisions", quantity: 6, unitPrice: 95, vatRate: 19),
+        ]
+        return inv
+    }()
+}
+
+// MARK: - Templates
+
+private struct TemplatesSettingsTab: View {
+    @Binding var profile: CompanyProfile
+    @State private var language: PDFTemplateLanguage = .german
+
+    private var footer: Binding<String> {
+        language == .german ? $profile.pdfFooterTemplateGerman : $profile.pdfFooterTemplateEnglish
+    }
+    private var closing: Binding<String> {
+        language == .german ? $profile.pdfClosingTemplateGerman : $profile.pdfClosingTemplateEnglish
+    }
+    private var notes: Binding<String> {
+        language == .german ? $profile.pdfNotesTemplateGerman : $profile.pdfNotesTemplateEnglish
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Language", selection: $language) {
+                    Text("Deutsch").tag(PDFTemplateLanguage.german)
+                    Text("English").tag(PDFTemplateLanguage.english)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            } footer: {
+                Text("Templates fill in automatically from the invoice. Click a placeholder to insert it.")
+            }
+
+            TemplateFieldSection(title: "Footer", description: "Shown at the bottom of every page.", text: footer)
+            TemplateFieldSection(title: "Closing message", description: "Shown after the totals.", text: closing)
+            TemplateFieldSection(title: "Notes", description: "Optional terms shown above the bank details. Leave empty to hide.", text: notes)
+
+            Section {
+                Button("Reset \(language == .german ? "German" : "English") templates to defaults") {
+                    if language == .german {
+                        profile.pdfFooterTemplateGerman = PDFTemplateLanguage.german.defaultFooter
+                        profile.pdfClosingTemplateGerman = PDFTemplateLanguage.german.defaultClosing
+                        profile.pdfNotesTemplateGerman = ""
+                    } else {
+                        profile.pdfFooterTemplateEnglish = PDFTemplateLanguage.english.defaultFooter
+                        profile.pdfClosingTemplateEnglish = PDFTemplateLanguage.english.defaultClosing
+                        profile.pdfNotesTemplateEnglish = ""
+                    }
+                }
+            }
+        }
+        .themedGroupedForm()
+    }
+}
+
+private struct TemplateFieldSection: View {
+    let title: String
+    let description: String
+    @Binding var text: String
+
+    private let placeholders: [(label: String, value: String)] = [
+        ("Invoice no.", "{invoiceNumber}"),
+        ("Amount", "{totalAmount}"),
+        ("Due date", "{dueDate}"),
+        ("Company", "{companyName}"),
+        ("Owner", "{ownerName}"),
+        ("Client", "{clientName}"),
+        ("Account holder", "{accountHolder}"),
+        ("IBAN", "{iban}"),
+        ("BIC", "{bic}"),
+        ("Date", "{date}"),
+        ("Payment terms", "{paymentTerms}"),
+        ("VAT ID", "{vatId}"),
+        ("Tax number", "{taxNumber}"),
+    ]
+
+    var body: some View {
+        Section {
+            TextField(title, text: $text, axis: .vertical)
+                .lineLimit(2...6)
+                .labelsHidden()
+                .onChange(of: text) { _, newValue in
+                    let cleaned = TemplatePlaceholderCleaner.clean(newValue)
+                    if cleaned != newValue {
+                        DispatchQueue.main.async { text = cleaned }
+                    }
+                }
+            SimpleFlowLayout(spacing: 6) {
+                ForEach(placeholders, id: \.value) { placeholder in
+                    Button(placeholder.label) { text += placeholder.value }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Insert \(placeholder.value)")
+                }
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            Text(description)
+        }
+    }
+}
+
+// MARK: - Appearance
+
+private struct AppearanceSettingsTab: View {
+    var body: some View {
+        Form {
+            Section {
+                ThemePicker(compact: false)
+            } footer: {
+                Text("Themes are JSON files. Edit or add your own in the themes folder.")
+            }
+        }
+        .themedGroupedForm()
+    }
+}
+
+// MARK: - Sync & security
+
+private struct SyncSettingsTab: View {
+    @EnvironmentObject var appState: AppState
+    @ObservedObject private var updaterManager = UpdaterManager.shared
+    let storageSummary: String
+
+    @State private var cloudKitStatus: CKAccountStatus = .couldNotDetermine
+    @State private var isCheckingCloudKit = true
+    @State private var confirmRestart = false
+    @AppStorage("mira.deleteLegacyAfterMigration") private var deleteLegacyAfterMigration = false
+
+    var body: some View {
+        Form {
+            Section("iCloud") {
+                LabeledContent {
                     if isCheckingCloudKit {
-                        ProgressView()
-                            .scaleEffect(0.7)
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(cloudKitStatusText)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                } label: {
+                    Label {
+                        Text("Sync")
+                    } icon: {
+                        Image(systemName: cloudKitIcon)
+                            .foregroundStyle(cloudKitColor)
                     }
                 }
-                
-                Divider().background(colors.surface1)
-                
-                // Encryption Status
-                HStack {
+            }
+
+            Section("Encryption") {
+                Label {
+                    Text(EncryptionService.shared.hasKey
+                         ? "Sensitive fields are encrypted with AES-256. The key is stored in your iCloud Keychain."
+                         : "An encryption key is created the first time you save.")
+                } icon: {
                     Image(systemName: "lock.shield.fill")
-                        .foregroundColor(.green)
-                        .frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Data Encryption")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.text)
-                        Text(encryptionStatusText)
-                            .font(.system(size: 11))
-                            .foregroundColor(colors.subtext)
-                    }
-                    Spacer()
+                        .foregroundStyle(.green)
                 }
-                
-                Divider().background(colors.surface1)
-                
-                // Storage Info
-                HStack {
-                    Image(systemName: "cylinder.split.1x2.fill")
-                        .foregroundColor(colors.accent)
-                        .frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Data Storage")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.text)
-                        Text(storageStatusText)
-                            .font(.system(size: 11))
-                            .foregroundColor(colors.subtext)
-                    }
-                    Spacer()
+            }
+
+            Section {
+                Text(storageSummary)
+                Toggle("Delete legacy files after migration", isOn: $deleteLegacyAfterMigration)
+            } header: {
+                Text("Storage")
+            } footer: {
+                Text("Removes the old JSON files once their contents are safely migrated.")
+            }
+
+            Section {
+                Button("Restart onboarding…") { confirmRestart = true }
+                Button("Check for updates…") { updaterManager.checkForUpdates() }
+                    .disabled(!updaterManager.canCheckForUpdates)
+            } header: {
+                Text("Setup")
+            } footer: {
+                if let lastCheck = updaterManager.lastUpdateCheckDate {
+                    Text("Version \(updaterManager.currentVersion). Last checked \(lastCheck, style: .relative) ago.")
+                } else {
+                    Text("Version \(updaterManager.currentVersion).")
                 }
-                
             }
         }
+        .themedGroupedForm()
+        .confirmationDialog("Restart onboarding?", isPresented: $confirmRestart, titleVisibility: .visible) {
+            Button("Restart onboarding") { appState.hasCompletedOnboarding = false }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Walks through setup again with your current details filled in. Nothing is deleted.")
+        }
+        .task {
+            cloudKitStatus = await DataContainer.checkCloudKitStatus()
+            isCheckingCloudKit = false
+        }
     }
-    
+
     private var cloudKitIcon: String {
         switch cloudKitStatus {
         case .available: return "checkmark.icloud.fill"
@@ -157,745 +601,30 @@ struct SettingsView: View {
         default: return "icloud"
         }
     }
-    
+
     private var cloudKitColor: Color {
         switch cloudKitStatus {
         case .available: return .green
         case .noAccount, .restricted: return .orange
-        default: return colors.subtext
+        default: return .secondary
         }
     }
-    
+
     private var cloudKitStatusText: String {
         switch cloudKitStatus {
-        case .available: return "Connected - Your data syncs across devices"
-        case .noAccount: return "Not signed in to iCloud"
-        case .restricted: return "iCloud access is restricted"
-        case .temporarilyUnavailable: return "iCloud temporarily unavailable"
-        case .couldNotDetermine: return "Could not check iCloud status"
-        @unknown default: return "Status unavailable"
-        }
-    }
-    
-    private var encryptionStatusText: String {
-        if EncryptionService.shared.hasKey {
-            return "AES-256 encryption active • Key synced via iCloud Keychain"
-        }
-        return "Encryption key will be created on first use"
-    }
-    
-    private var storageStatusText: String {
-        // Show SwiftData status if migration completed OR no legacy data exists
-        if MigrationService.shared.useSwiftData {
-            let profileCount = sdProfiles.count
-            let syncStatus = cloudKitStatus == .available ? "CloudKit enabled" : "Local storage"
-            return "SwiftData • \(profileCount > 0 ? "Profile loaded" : "No profile") • \(syncStatus)"
-        }
-        return "Legacy JSON storage • Migration available"
-    }
-    
-    private func checkCloudKitStatus() async {
-        cloudKitStatus = await DataContainer.checkCloudKitStatus()
-        isCheckingCloudKit = false
-    }
-
-    // MARK: - Appearance Section
-    private var appearanceSection: some View {
-        SettingsSection(title: "Appearance", colors: colors) {
-            ThemePicker(compact: true)
-        }
-    }
-
-    // MARK: - Company Section
-    private var companySection: some View {
-        SettingsSection(title: "Company", colors: colors) {
-            VStack(spacing: 16) {
-                SettingsTextField(label: "Company Name", text: binding(\.companyName), colors: colors)
-                SettingsTextField(label: "Owner Name", text: binding(\.ownerName), colors: colors)
-                SettingsTextField(label: "Email", text: binding(\.email), colors: colors)
-                SettingsTextField(label: "Phone", text: binding(\.phone), colors: colors)
-                SettingsTextField(label: "Website", text: binding(\.website), colors: colors)
-                
-                Divider().background(colors.surface1)
-                
-                // Brand Logo
-                LogoPicker(logoData: Binding(
-                    get: { profile?.logoData },
-                    set: { newValue in
-                        profile?.logoData = newValue
-                        saveCompanyProfile()
-                    }
-                ))
-                
-                // Brand Color
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Brand Color")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(colors.subtext)
-                    
-                    HStack(spacing: 10) {
-                        ForEach(BrandColors.presets.prefix(6), id: \.hex) { preset in
-                            Button {
-                                profile?.brandColorHex = preset.hex
-                                saveCompanyProfile()
-                            } label: {
-                                Circle()
-                                    .fill(Color(hex: preset.hex) ?? .blue)
-                                    .frame(width: 28, height: 28)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(colors.text, lineWidth: profile?.brandColorHex == preset.hex ? 2 : 0)
-                                            .padding(-3)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Brand color: \(preset.name)")
-                            .help(preset.name)
-                        }
-                        
-                        ColorPicker("Custom brand color", selection: Binding(
-                            get: { Color(hex: profile?.brandColorHex ?? "#0066CC") ?? .blue },
-                            set: {
-                                profile?.brandColorHex = $0.toHex()
-                                saveCompanyProfile()
-                            }
-                        ))
-                        .labelsHidden()
-                        .frame(width: 28, height: 28)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Address Section
-    private var addressSection: some View {
-        SettingsSection(title: "Address", colors: colors) {
-            VStack(spacing: 16) {
-                SettingsTextField(label: "Street", text: binding(\.street), colors: colors)
-                HStack(spacing: 16) {
-                    SettingsTextField(label: "Postal Code", text: binding(\.postalCode), colors: colors)
-                        .frame(width: 120)
-                    SettingsTextField(label: "City", text: binding(\.city), colors: colors)
-                }
-                SettingsTextField(label: "Country", text: binding(\.country), colors: colors)
-            }
-        }
-    }
-
-    // MARK: - Tax Section
-    private var taxSection: some View {
-        SettingsSection(title: "Tax Information", colors: colors) {
-            VStack(spacing: 16) {
-                vatExemptionToggle
-                if !(profile?.isVatExempt ?? false) {
-                    SettingsTextField(label: "VAT ID (USt-IdNr.)", text: binding(\.vatId), colors: colors)
-                }
-                SettingsTextField(label: "Tax Number", text: binding(\.taxNumber), colors: colors)
-            }
-        }
-    }
-
-    private var vatExemptionToggle: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Small Business Exemption")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(colors.text)
-                Text("Kleinunternehmerregelung §19 UStG - No VAT on invoices")
-                    .font(.system(size: 11))
-                    .foregroundColor(colors.subtext)
-            }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { profile?.isVatExempt ?? false },
-                set: {
-                    profile?.isVatExempt = $0
-                    saveCompanyProfile()
-                }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .accessibilityLabel("Small business VAT exemption")
-        }
-    }
-
-    // MARK: - Bank Section
-    private var bankSection: some View {
-        SettingsSection(title: "Bank Details", colors: colors) {
-            VStack(spacing: 16) {
-                SettingsTextField(label: "Account Holder", text: binding(\.accountHolder), colors: colors)
-                SettingsTextField(label: "IBAN", text: binding(\.iban), colors: colors)
-                SettingsTextField(label: "BIC", text: binding(\.bic), colors: colors)
-                SettingsTextField(label: "Bank Name", text: binding(\.bankName), colors: colors)
-            }
-        }
-    }
-
-    // MARK: - PDF Templates Section
-    private var pdfTemplatesSection: some View {
-        SettingsSection(title: "PDF Templates", colors: colors) {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Customize PDF templates for each language. Templates are used when generating invoice PDFs.")
-                    .font(.system(size: 12))
-                    .foregroundColor(colors.subtext)
-
-                germanPdfTemplates
-                Divider().background(colors.surface1)
-                englishPdfTemplates
-            }
-        }
-    }
-
-    private var germanPdfTemplates: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("🇩🇪")
-                    .font(.system(size: 16))
-                Text("German Templates")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button("Reset All to Default") {
-                    profile?.pdfFooterTemplateGerman = PDFTemplateLanguage.german.defaultFooter
-                    profile?.pdfClosingTemplateGerman = PDFTemplateLanguage.german.defaultClosing
-                    profile?.pdfNotesTemplateGerman = ""
-                    saveCompanyProfile()
-                }
-                .font(.system(size: 11))
-                .foregroundColor(colors.accent)
-                .buttonStyle(.plain)
-            }
-
-            PDFTemplateEditorExpanded(
-                title: "Footer",
-                description: "Shown at the bottom of every page",
-                template: Binding(
-                    get: { profile?.pdfFooterTemplateGerman ?? PDFTemplateLanguage.german.defaultFooter },
-                    set: { profile?.pdfFooterTemplateGerman = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-
-            PDFTemplateEditorExpanded(
-                title: "Closing Message",
-                description: "Shown after the totals section",
-                template: Binding(
-                    get: { profile?.pdfClosingTemplateGerman ?? PDFTemplateLanguage.german.defaultClosing },
-                    set: { profile?.pdfClosingTemplateGerman = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-
-            PDFTemplateEditorExpanded(
-                title: "Notes / Terms",
-                description: "Optional notes shown above bank details (leave empty to hide)",
-                template: Binding(
-                    get: { profile?.pdfNotesTemplateGerman ?? "" },
-                    set: { profile?.pdfNotesTemplateGerman = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-        }
-    }
-
-    private var englishPdfTemplates: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("🇬🇧")
-                    .font(.system(size: 16))
-                Text("English Templates")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Spacer()
-                Button("Reset All to Default") {
-                    profile?.pdfFooterTemplateEnglish = PDFTemplateLanguage.english.defaultFooter
-                    profile?.pdfClosingTemplateEnglish = PDFTemplateLanguage.english.defaultClosing
-                    profile?.pdfNotesTemplateEnglish = ""
-                    saveCompanyProfile()
-                }
-                .font(.system(size: 11))
-                .foregroundColor(colors.accent)
-                .buttonStyle(.plain)
-            }
-
-            PDFTemplateEditorExpanded(
-                title: "Footer",
-                description: "Shown at the bottom of every page",
-                template: Binding(
-                    get: { profile?.pdfFooterTemplateEnglish ?? PDFTemplateLanguage.english.defaultFooter },
-                    set: { profile?.pdfFooterTemplateEnglish = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-
-            PDFTemplateEditorExpanded(
-                title: "Closing Message",
-                description: "Shown after the totals section",
-                template: Binding(
-                    get: { profile?.pdfClosingTemplateEnglish ?? PDFTemplateLanguage.english.defaultClosing },
-                    set: { profile?.pdfClosingTemplateEnglish = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-
-            PDFTemplateEditorExpanded(
-                title: "Notes / Terms",
-                description: "Optional notes shown above bank details (leave empty to hide)",
-                template: Binding(
-                    get: { profile?.pdfNotesTemplateEnglish ?? "" },
-                    set: { profile?.pdfNotesTemplateEnglish = $0; saveCompanyProfile() }
-                ),
-                colors: colors
-            )
-        }
-    }
-
-    // MARK: - Invoice Defaults Section
-    private var invoiceDefaultsSection: some View {
-        SettingsSection(title: "Invoice Defaults", colors: colors) {
-            VStack(spacing: 16) {
-                SettingsTextField(label: "Invoice Prefix", text: binding(\.invoiceNumberPrefix), colors: colors)
-
-                Picker("Default Currency", selection: binding(\.defaultCurrency)) {
-                    ForEach(Currency.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                HStack {
-                    Text("Default VAT (%)")
-                    TextField("VAT rate", value: binding(\.defaultVatRate), format: .number)
-                        .textFieldStyle(.roundedBorder).frame(width: 90)
-                        .accessibilityLabel("Default VAT percentage")
-                }
-                invoiceNumberStepper
-                paymentTermsSelector
-            }
-        }
-    }
-
-    private var invoiceNumberStepper: some View {
-        HStack {
-            Text("Next Invoice Number")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(colors.subtext)
-            Spacer()
-            HStack(spacing: 8) {
-                Button(action: {
-                    if let num = profile?.nextInvoiceNumber, num > 1 {
-                        profile?.nextInvoiceNumber = num - 1
-                        saveCompanyProfile()
-                    }
-                }) {
-                    Image(systemName: "minus")
-                        .frame(width: 28, height: 28)
-                        .background(colors.surface1)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Decrease next invoice number")
-
-                Text("\(profile?.nextInvoiceNumber ?? 1)")
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(colors.text)
-                    .frame(width: 50)
-
-                Button(action: {
-                    profile?.nextInvoiceNumber += 1
-                    saveCompanyProfile()
-                }) {
-                    Image(systemName: "plus")
-                        .frame(width: 28, height: 28)
-                        .background(colors.surface1)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Increase next invoice number")
-            }
-        }
-    }
-
-    private var paymentTermsSelector: some View {
-        HStack {
-            Text("Payment Terms")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(colors.subtext)
-            Spacer()
-            HStack(spacing: 6) {
-                ForEach([7, 14, 30, 60], id: \.self) { days in
-                    Button("\(days) days") {
-                        profile?.defaultPaymentTermsDays = days
-                        saveCompanyProfile()
-                    }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 13, weight: .medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(profile?.defaultPaymentTermsDays == days ? colors.accent : colors.surface1)
-                        .foregroundColor(profile?.defaultPaymentTermsDays == days ? .white : colors.text)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                }
-            }
-        }
-    }
-
-    // MARK: - Export Section
-    private var exportSection: some View {
-        SettingsSection(title: "Export", colors: colors) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Default Export Location")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(colors.subtext)
-                
-                HStack(spacing: 12) {
-                    Text(exportPathDisplay)
-                        .font(.system(size: 14))
-                        .foregroundColor(colors.text)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(colors.surface0)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    
-                    Button(action: chooseExportFolder) {
-                        Text("Choose...")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    if !(profile?.defaultExportPath.isEmpty ?? true) {
-                        Button(action: {
-                            profile?.defaultExportPath = ""
-                            saveCompanyProfile()
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(colors.subtext)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Clear default location (will ask each time)")
-                    }
-                }
-                
-                Text("Leave empty to choose location each time you export")
-                    .font(.system(size: 11))
-                    .foregroundColor(colors.subtext)
-            }
-        }
-    }
-    
-    private var exportPathDisplay: String {
-        guard let path = profile?.defaultExportPath, !path.isEmpty else {
-            return "Ask each time..."
-        }
-        return (path as NSString).lastPathComponent
-    }
-    
-    private func chooseExportFolder() {
-        #if os(macOS)
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.message = "Choose default folder for PDF exports"
-        panel.prompt = "Select Folder"
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            profile?.defaultExportPath = url.path
-            saveCompanyProfile()
-        }
-        #endif
-    }
-    
-    // MARK: - Other Section
-    private var otherSection: some View {
-        SettingsSection(title: "Other", colors: colors) {
-            Button(action: { appState.hasCompletedOnboarding = false }) {
-                HStack {
-                    Image(systemName: "arrow.counterclockwise")
-                    Text("Restart Onboarding")
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(colors.accent)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Helper
-    
-    private var usesSwiftData: Bool {
-        MigrationService.shared.useSwiftData
-    }
-    
-    func binding<T>(_ keyPath: WritableKeyPath<CompanyProfile, T>) -> Binding<T> where T: Equatable {
-        Binding(
-            get: { profile?[keyPath: keyPath] ?? CompanyProfile()[keyPath: keyPath] },
-            set: { newValue in
-                profile?[keyPath: keyPath] = newValue
-                saveCompanyProfile()
-            }
-        )
-    }
-    
-    private func saveCompanyProfile() {
-        guard let profile else { return }
-        do {
-            try CompanyProfileStore.save(profile, profiles: sdProfiles, context: modelContext, appState: appState)
-            saveError = nil
-        } catch {
-            saveError = error.localizedDescription
-            showSaveError = true
-        }
-    }
-
-}
-
-struct SettingsSection<Content: View>: View {
-    let title: String
-    let colors: ThemeColors
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(colors.text)
-            content()
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(colors.surface0)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+        case .available: return "Connected. Your data syncs across your devices."
+        case .noAccount: return "Not signed in to iCloud."
+        case .restricted: return "iCloud access is restricted."
+        case .temporarilyUnavailable: return "iCloud is temporarily unavailable."
+        case .couldNotDetermine: return "Couldn't check iCloud status."
+        @unknown default: return "Status unavailable."
         }
     }
 }
 
-struct SettingsTextField: View {
-    let label: String
-    @Binding var text: String
-    let colors: ThemeColors
+// MARK: - Placeholder cleanup
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(colors.subtext)
-            TextField(label, text: $text)
-                .accessibilityLabel(label)
-                .miraInput(colors: colors)
-        }
-    }
-}
-
-struct PDFTemplateEditor: View {
-    let title: String
-    let description: String
-    @Binding var template: String
-    let colors: ThemeColors
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Text(description)
-                    .font(.system(size: 11))
-                    .foregroundColor(colors.subtext)
-            }
-
-            TextField("", text: $template)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundColor(colors.text)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(colors.surface1)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-    }
-}
-
-struct PDFTemplateEditorExpanded: View {
-    let title: String
-    let description: String
-    @Binding var template: String
-    let colors: ThemeColors
-    @State private var editorHeight: CGFloat = 100
-
-    let placeholders: [(label: String, value: String)] = [
-        ("Invoice #", "{invoiceNumber}"),
-        ("Amount", "{totalAmount}"),
-        ("Due Date", "{dueDate}"),
-        ("Company", "{companyName}"),
-        ("Owner", "{ownerName}"),
-        ("Client", "{clientName}"),
-        ("Account Holder", "{accountHolder}"),
-        ("IBAN", "{iban}"),
-        ("BIC", "{bic}"),
-        ("Date", "{date}"),
-        ("Payment Terms", "{paymentTerms}")
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.text)
-                Text(description)
-                    .font(.system(size: 11))
-                    .foregroundColor(colors.subtext)
-            }
-
-            ZStack(alignment: .bottomTrailing) {
-                TextEditor(text: $template)
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.text)
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .frame(height: editorHeight)
-                    .background(colors.surface1)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .onChange(of: template) { _, newValue in
-                        let cleaned = TemplatePlaceholderCleaner.clean(newValue)
-                        if cleaned != newValue {
-                            DispatchQueue.main.async { template = cleaned }
-                        }
-                    }
-
-                // Resize handle
-                ResizeHandle(height: $editorHeight, minHeight: 60, maxHeight: 300, colors: colors)
-            }
-
-            // Clickable placeholder buttons
-            SimpleFlowLayout(spacing: 6) {
-                ForEach(placeholders, id: \.value) { placeholder in
-                    Button(action: {
-                        template += placeholder.value
-                    }) {
-                        Text(placeholder.label)
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(colors.accent.opacity(0.15))
-                            .foregroundColor(colors.accent)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-}
-
-struct SimpleEmailTemplateEditor: View {
-    @Binding var template: String
-    let colors: ThemeColors
-    @State private var editorHeight: CGFloat = 180
-
-    let placeholders: [(label: String, value: String)] = [
-        ("Invoice #", "{invoiceNumber}"),
-        ("Amount", "{totalAmount}"),
-        ("Due Date", "{dueDate}"),
-        ("Company", "{companyName}"),
-        ("Owner", "{ownerName}"),
-        ("Client", "{clientName}"),
-        ("Account Holder", "{accountHolder}"),
-        ("IBAN", "{iban}"),
-        ("BIC", "{bic}")
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Multi-line text editor with placeholder cleanup
-            ZStack(alignment: .bottomTrailing) {
-                TextEditor(text: $template)
-                    .font(.system(size: 13))
-                    .foregroundColor(colors.text)
-                    .scrollContentBackground(.hidden)
-                    .padding(12)
-                    .frame(height: editorHeight)
-                    .background(colors.surface1)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .onChange(of: template) { _, newValue in
-                        let cleaned = TemplatePlaceholderCleaner.clean(newValue)
-                        if cleaned != newValue {
-                            DispatchQueue.main.async { template = cleaned }
-                        }
-                    }
-
-                // Resize handle
-                ResizeHandle(height: $editorHeight, minHeight: 80, maxHeight: 400, colors: colors)
-            }
-
-            // Clickable placeholder buttons
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Click to insert placeholder:")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(colors.subtext)
-
-                SimpleFlowLayout(spacing: 6) {
-                    ForEach(placeholders, id: \.value) { placeholder in
-                        Button(action: {
-                            template += placeholder.value
-                        }) {
-                            Text(placeholder.label)
-                                .font(.system(size: 11, weight: .medium))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(colors.accent.opacity(0.15))
-                                .foregroundColor(colors.accent)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Resize handle for text editors
-struct ResizeHandle: View {
-    @Binding var height: CGFloat
-    let minHeight: CGFloat
-    let maxHeight: CGFloat
-    let colors: ThemeColors
-    @State private var isDragging = false
-
-    var body: some View {
-        // Diagonal lines resize indicator
-        Image(systemName: "line.3.horizontal")
-            .font(.system(size: 10))
-            .rotationEffect(.degrees(-45))
-            .foregroundColor(isDragging ? colors.accent : colors.subtext.opacity(0.5))
-            .frame(width: 20, height: 20)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isDragging = true
-                        let newHeight = height + value.translation.height
-                        height = min(max(newHeight, minHeight), maxHeight)
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                    }
-            )
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeUpDown.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            .padding(4)
-    }
-}
-
-// Helper to clean up broken/partial placeholders
+/// Removes broken or partial `{placeholder}` fragments left behind while editing.
 enum TemplatePlaceholderCleaner {
     static let validPlaceholders = [
         "{invoiceNumber}", "{totalAmount}", "{dueDate}", "{companyName}",
@@ -906,21 +635,14 @@ enum TemplatePlaceholderCleaner {
     static func clean(_ text: String) -> String {
         var result = text
 
-        // For each valid placeholder, if it's been partially deleted, remove the rest
         for placeholder in validPlaceholders {
-            // If the full placeholder exists, leave it alone
             if result.contains(placeholder) { continue }
-
-            // Check for any partial versions and remove them
-            // Partials that start with { (e.g., "{taxNum", "{clientNa")
             for len in 2..<placeholder.count {
                 let prefix = String(placeholder.prefix(len))
                 if prefix.contains("{") && result.contains(prefix) {
                     result = result.replacingOccurrences(of: prefix, with: "")
                 }
             }
-
-            // Partials that end with } (e.g., "Number}", "me}")
             for len in 2..<placeholder.count {
                 let suffix = String(placeholder.suffix(len))
                 if suffix.contains("}") && result.contains(suffix) {
@@ -929,17 +651,12 @@ enum TemplatePlaceholderCleaner {
             }
         }
 
-        // Also clean up any orphaned braces
-        // Remove {...} patterns that aren't valid placeholders
         if let regex = try? NSRegularExpression(pattern: "\\{[^}]*\\}") {
             let range = NSRange(result.startIndex..., in: result)
-            let matches = regex.matches(in: result, range: range).reversed()
-            for match in matches {
-                if let matchRange = Range(match.range, in: result) {
-                    let found = String(result[matchRange])
-                    if !validPlaceholders.contains(found) {
-                        result.removeSubrange(matchRange)
-                    }
+            for match in regex.matches(in: result, range: range).reversed() {
+                if let matchRange = Range(match.range, in: result),
+                   !validPlaceholders.contains(String(result[matchRange])) {
+                    result.removeSubrange(matchRange)
                 }
             }
         }
@@ -948,12 +665,12 @@ enum TemplatePlaceholderCleaner {
     }
 }
 
+/// Wrapping row layout for placeholder chips.
 struct SimpleFlowLayout: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        return result.size
+        arrange(proposal: proposal, subviews: subviews).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -963,12 +680,19 @@ struct SimpleFlowLayout: Layout {
         }
     }
 
-    func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
         var positions: [CGPoint] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
-        let maxWidth = proposal.width ?? .infinity
+        var usedWidth: CGFloat = 0
+        // SwiftUI probes with nil/zero/infinite widths; treat anything that is
+        // not a finite positive width as "one row" and report the real extent,
+        // never infinity, or the layout blows up.
+        let maxWidth: CGFloat = {
+            if let w = proposal.width, w.isFinite, w > 0 { return w }
+            return .infinity
+        }()
 
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
@@ -980,24 +704,13 @@ struct SimpleFlowLayout: Layout {
             positions.append(CGPoint(x: x, y: y))
             rowHeight = max(rowHeight, size.height)
             x += size.width + spacing
+            usedWidth = max(usedWidth, x - spacing)
         }
-
-        return (positions, CGSize(width: maxWidth, height: y + rowHeight))
+        let width = maxWidth.isFinite ? maxWidth : usedWidth
+        return (positions, CGSize(width: width, height: y + rowHeight))
     }
 }
 
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView().environmentObject(AppState())
-    }
-}
-
-
-private enum SettingsCategory: String, CaseIterable, Identifiable {
-    case company = "Company"
-    case invoices = "Invoices"
-    case pdf = "PDF & Export"
-    case appearance = "Appearance"
-    case sync = "Sync"
-    var id: String { rawValue }
+#Preview {
+    SettingsView().environmentObject(AppState())
 }

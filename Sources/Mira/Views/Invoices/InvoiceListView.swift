@@ -1,176 +1,315 @@
 import SwiftUI
 import SwiftData
 
-/// Owned by the window shell so browsing survives navigation.
-struct InvoiceBrowsingState {
-    var searchText = ""
-    var selectedStatus: InvoiceStatus?
-    var onlyOutstanding = false
-    var paidPeriod: PaidInvoicePeriod?
-    var sortOrder = [KeyPathComparator(\InvoiceSummary.issueDate, order: .reverse)]
-}
-
-struct InvoiceListView: View {
+/// Invoices as a sortable, searchable table with the selected invoice in a
+/// trailing inspector. Double-click a draft to edit it.
+struct InvoicesView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.themeColors) var colors
+    @Environment(NavigationModel.self) private var nav
+    @Environment(\.themeColors) private var colors
+    @Environment(\.modelContext) private var modelContext
+
     @Query(sort: \SDInvoice.issueDate, order: .reverse) private var sdInvoices: [SDInvoice]
+    @Query private var sdClients: [SDClient]
     @Query private var sdProfiles: [SDCompanyProfile]
-    @Binding var browsingState: InvoiceBrowsingState
-    @State private var showingNewInvoice = false
-    @State private var selectedInvoice: Invoice?
-    @State private var editingInvoice: Invoice?
+
+    @State private var searchText = ""
+    @State private var sortOrder = [KeyPathComparator(\Row.issueDate, order: .reverse)]
+    @State private var showInspector = true
+    @State private var pendingDelete: Invoice?
 
     private var usesSwiftData: Bool { MigrationService.shared.useSwiftData }
-    private var summaries: [InvoiceSummary] {
-        let exempt = usesSwiftData ? sdProfiles.first?.isVatExempt ?? false : appState.companyProfile?.isVatExempt ?? false
-        if usesSwiftData { return sdInvoices.map { InvoiceSummary($0, isVatExempt: exempt) } }
-        let clients = Dictionary(appState.clients.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return appState.invoices.map { InvoiceSummary($0, client: clients[$0.clientId], isVatExempt: exempt) }
+
+    private var profile: CompanyProfile? {
+        usesSwiftData ? sdProfiles.first?.toLegacy() : appState.companyProfile
+    }
+    private var isVatExempt: Bool { profile?.isVatExempt ?? false }
+    private var baseCurrency: Currency { profile?.defaultCurrency ?? .eur }
+
+    private var allInvoices: [Invoice] {
+        usesSwiftData ? sdInvoices.map { $0.toLegacy() } : appState.invoices
+    }
+    private var allClients: [Client] {
+        usesSwiftData ? sdClients.map { $0.toLegacy() } : appState.clients
+    }
+    private var clientsByID: [UUID: Client] {
+        Dictionary(uniqueKeysWithValues: allClients.map { ($0.id, $0) })
     }
 
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { timeline in
-            let all = summaries
-            let search = browsingState.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let filtered = all.filter { invoice in
-                let status = invoice.effectiveStatus(at: timeline.date)
-                let statusMatches = browsingState.onlyOutstanding ? (status == .sent || status == .overdue) : (browsingState.selectedStatus == nil || status == browsingState.selectedStatus)
-                let searchMatches = search.isEmpty || [invoice.invoiceNumber, invoice.clientName, invoice.clientEmail, invoice.notes]
-                    .contains { $0.localizedCaseInsensitiveContains(search) }
-                let periodMatches = browsingState.paidPeriod.map { period in
-                    guard let paid = invoice.paidAt else { return false }
-                    return Calendar.current.isDate(paid, equalTo: timeline.date, toGranularity: period == .month ? .month : .year)
-                } ?? true
-                return statusMatches && searchMatches && periodMatches
-            }.sorted(using: browsingState.sortOrder)
-            VStack(spacing: 0) {
-                HStack {
-                    Picker("Invoice status", selection: Binding(get: { browsingState.selectedStatus }, set: { browsingState.selectedStatus = $0; browsingState.onlyOutstanding = false; browsingState.paidPeriod = nil })) {
-                        Text("All").tag(InvoiceStatus?.none)
-                        ForEach(InvoiceStatus.allCases, id: \.self) { status in
-                            Text(status.rawValue).tag(InvoiceStatus?.some(status))
-                        }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 480)
-                    Spacer()
-                    Text("\(filtered.count) of \(all.count)")
-                        .font(.caption).foregroundStyle(colors.subtext)
-                        .accessibilityLabel("\(filtered.count) of \(all.count) invoices")
-                }
-                .padding(16)
-                if browsingState.onlyOutstanding || browsingState.paidPeriod != nil {
-                    HStack {
-                        Text(browsingState.onlyOutstanding ? "Outstanding invoices · Sent and Overdue" : "Collected this \(browsingState.paidPeriod == .month ? "month" : "year") · by payment date").font(.caption)
-                        Button("Show All") { browsingState.onlyOutstanding = false; browsingState.paidPeriod = nil; browsingState.selectedStatus = nil }
-                        Spacer()
-                    }.padding(.horizontal, 16).padding(.bottom, 10)
-                }
-                Divider()
-                if filtered.isEmpty {
-                    ContentUnavailableView {
-                        Label(all.isEmpty ? "No invoices yet" : "No matching invoices", systemImage: all.isEmpty ? "doc.text" : "magnifyingglass")
-                    } description: {
-                        Text(all.isEmpty ? "Create an invoice to start tracking your work." : "Try another search or clear your filters.")
-                    } actions: {
-                        if all.isEmpty { Button("Create your first invoice") { showingNewInvoice = true } }
-                        else { Button("Clear filters") { browsingState.searchText = ""; browsingState.selectedStatus = nil; browsingState.onlyOutstanding = false; browsingState.paidPeriod = nil } }
-                    }
-                    .frame(maxHeight: .infinity)
-                } else {
-                    InvoiceTableView(invoices: filtered, now: timeline.date, sortOrder: $browsingState.sortOrder,
-                        onOpen: openInvoice, onEdit: { editingInvoice = resolve($0) })
-                }
-            }
-            .background(colors.base)
+    // MARK: Rows
+
+    struct Row: Identifiable {
+        let id: UUID
+        let number: String
+        let clientName: String
+        let issueDate: Date
+        let dueDate: Date
+        let amount: Double
+        let currency: Currency
+        let status: InvoiceStatus
+        let statusRank: Int
+        let invoice: Invoice
+    }
+
+    private var rows: [Row] {
+        let clients = clientsByID
+        var invoices = allInvoices
+
+        if let filter = nav.invoiceFilter {
+            invoices = invoices.filter { $0.effectiveStatus == filter }
         }
-        .navigationTitle("Invoices")
-        .searchable(text: $browsingState.searchText, prompt: "Search invoices, clients…")
+        if !searchText.isEmpty {
+            let needle = searchText.lowercased()
+            invoices = invoices.filter { inv in
+                let client = clients[inv.clientId]
+                return inv.invoiceNumber.lowercased().contains(needle)
+                    || client?.name.lowercased().contains(needle) == true
+                    || client?.email.lowercased().contains(needle) == true
+                    || inv.notes.lowercased().contains(needle)
+            }
+        }
+        let ranks: [InvoiceStatus: Int] = [.overdue: 0, .sent: 1, .draft: 2, .paid: 3, .cancelled: 4]
+        return invoices.map { inv in
+            let status = inv.effectiveStatus
+            return Row(
+                id: inv.id,
+                number: inv.invoiceNumber,
+                clientName: clients[inv.clientId]?.name ?? "—",
+                issueDate: inv.issueDate,
+                dueDate: inv.dueDate,
+                amount: isVatExempt ? inv.subtotal : inv.total,
+                currency: inv.currency,
+                status: status,
+                statusRank: ranks[status, default: 9],
+                invoice: inv
+            )
+        }
+        .sorted(using: sortOrder)
+    }
+
+    private var outstanding: (count: Int, total: Double) {
+        let open = allInvoices.filter { $0.status == .sent || $0.status == .overdue }
+        let total = open.reduce(0.0) { sum, inv in
+            inv.currency == baseCurrency ? sum + (isVatExempt ? inv.subtotal : inv.total) : sum
+        }
+        return (open.count, total)
+    }
+
+    private var subtitle: String {
+        if nav.invoiceFilter != nil {
+            let n = rows.count
+            return "\(n) \(n == 1 ? "invoice" : "invoices")"
+        }
+        let o = outstanding
+        if o.count < 1 { return "Nothing outstanding" }
+        return "\(o.count) outstanding, \(Money.compact(o.total, baseCurrency))"
+    }
+
+    // MARK: Body
+
+    var body: some View {
+        @Bindable var nav = nav
+        Group {
+            if rows.isEmpty {
+                emptyState
+            } else {
+                table
+            }
+        }
+        .navigationTitle(nav.invoiceFilter?.rawValue ?? "Invoices")
+        .navigationSubtitle(subtitle)
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search invoices")
         .toolbar {
-            ToolbarItem {
-                Button("New Invoice", systemImage: "plus") { showingNewInvoice = true }
-                    .miraPrimaryAction().help("New Invoice (⌘N)")
+            ToolbarItemGroup(placement: .automatic) {
+                Picker("Status", selection: $nav.invoiceFilter) {
+                    Text("All").tag(InvoiceStatus?.none)
+                    Divider()
+                    ForEach(InvoiceStatus.allCases, id: \.self) { status in
+                        Label(status.rawValue, systemImage: status.symbol).tag(InvoiceStatus?.some(status))
+                    }
+                }
+                .pickerStyle(.menu)
+                .help("Filter by status")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("New invoice", systemImage: "plus") {
+                    nav.sheet = .newInvoice(clientID: nil)
+                }
+                .help("New invoice (⌘N)")
+            }
+            ToolbarItem(placement: .automatic) {
+                Button("Inspector", systemImage: "sidebar.trailing") {
+                    withAnimation { showInspector.toggle() }
+                }
+                .help("Show or hide the inspector")
             }
         }
-        .sheet(isPresented: $showingNewInvoice) {
-            InvoiceEditorView(invoice: nil).environmentObject(appState).environment(\.themeColors, colors)
+        .inspector(isPresented: $showInspector) {
+            Group {
+                if let id = nav.selectedInvoiceID, allInvoices.contains(where: { $0.id == id }) {
+                    InvoiceInspector(invoiceID: id)
+                } else {
+                    ContentUnavailableView {
+                        Label("No invoice selected", systemImage: "doc.text")
+                    } description: {
+                        Text("Select an invoice to see its preview, status and actions.")
+                    }
+                }
+            }
+            .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
         }
-        .sheet(item: $selectedInvoice) { invoice in
-            InvoiceDetailView(invoice: invoice).environmentObject(appState).environment(\.themeColors, colors)
+        .confirmationDialog(
+            "Delete \(pendingDelete?.invoiceNumber ?? "invoice")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete invoice", role: .destructive) {
+                if let invoice = pendingDelete {
+                    actions.delete(invoice)
+                    if nav.selectedInvoiceID == invoice.id { nav.selectedInvoiceID = nil }
+                }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("This permanently removes the invoice. Exported PDFs are not affected.")
         }
-        .sheet(item: $editingInvoice) { invoice in
-            InvoiceEditorView(invoice: invoice).environmentObject(appState).environment(\.themeColors, colors)
+        .onChange(of: nav.selectedInvoiceID) { _, id in
+            if id != nil && !showInspector { withAnimation { showInspector = true } }
+        }
+        .onAppear {
+            // Demo/snapshot runs want something selected so the inspector has content.
+            if DemoData.isEnabled, nav.selectedInvoiceID == nil {
+                nav.selectedInvoiceID = rows.first(where: { $0.status == .sent })?.id ?? rows.first?.id
+            }
         }
     }
 
-    private func resolve(_ id: UUID) -> Invoice? {
-        usesSwiftData ? sdInvoices.first { $0.id == id }?.toLegacy() : appState.invoices.first { $0.id == id }
+    private var actions: InvoiceActions {
+        InvoiceActions(modelContext: modelContext, appState: appState, sdInvoices: sdInvoices)
     }
-    private func openInvoice(_ id: UUID) { selectedInvoice = resolve(id) }
-}
 
-enum PaidInvoicePeriod { case month, year }
+    private var table: some View {
+        @Bindable var nav = nav
+        return Table(rows, selection: $nav.selectedInvoiceID, sortOrder: $sortOrder) {
+            TableColumn("Number", value: \.number) { row in
+                Text(row.number)
+                    .fontWeight(.medium)
+                    .monospacedDigit()
+            }
+            .width(min: 112, ideal: 124)
 
+            TableColumn("Client", value: \.clientName) { row in
+                Text(row.clientName).lineLimit(1)
+            }
+            .width(min: 120, ideal: 180)
 
-/// Selection stays local so arrow-key navigation does not rebuild the invoice projection.
-private struct InvoiceTableView: View {
-    @Environment(\.themeColors) private var colors
-    let invoices: [InvoiceSummary]
-    let now: Date
-    @Binding var sortOrder: [KeyPathComparator<InvoiceSummary>]
-    let onOpen: (UUID) -> Void
-    let onEdit: (UUID) -> Void
-    @State private var selection: UUID?
-    @FocusState private var listFocused: Bool
+            TableColumn("Issued", value: \.issueDate) { row in
+                Text(Dates.medium.string(from: row.issueDate))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .width(min: 84, ideal: 100)
 
-    var body: some View {
-        Table(invoices, selection: $selection, sortOrder: $sortOrder) {
-            TableColumn("Invoice", value: \.invoiceNumber) { invoice in
-                Text(invoice.invoiceNumber).fontWeight(.medium)
-            }.width(min: 130, ideal: 170)
-            TableColumn("Client", value: \.clientName).width(min: 100, ideal: 160)
-            TableColumn("Issued", value: \.issueDate) { invoice in
-                Text(MiraFormat.date(invoice.issueDate)).foregroundStyle(colors.subtext)
-            }.width(min: 85, ideal: 110)
-            TableColumn("Due", value: \.dueDate) { invoice in
-                Text(MiraFormat.date(invoice.dueDate))
-                    .foregroundStyle(invoice.effectiveStatus(at: now) == .overdue ? Color.red : colors.subtext)
-            }.width(min: 85, ideal: 110)
-            TableColumn("Amount", value: \.amount) { invoice in
-                Text(MiraFormat.currency(invoice.amount, invoice.currency)).monospacedDigit()
+            TableColumn("Due", value: \.dueDate) { row in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(Dates.medium.string(from: row.dueDate))
+                        .monospacedDigit()
+                        .foregroundStyle(row.status == .overdue ? Color.red : .secondary)
+                    if let relative = Dates.relativeDue(row.dueDate, status: row.status) {
+                        Text(relative)
+                            .font(.caption2)
+                            .foregroundStyle(row.status == .overdue ? AnyShapeStyle(.red) : AnyShapeStyle(.tertiary))
+                    }
+                }
+            }
+            .width(min: 112, ideal: 124)
+
+            TableColumn("Amount", value: \.amount) { row in
+                MoneyText(row.amount, row.currency, weight: .medium)
                     .frame(maxWidth: .infinity, alignment: .trailing)
-            }.width(min: 100, ideal: 130)
-            TableColumn("Status", value: \.statusTitle) { invoice in
-                StatusBadge(status: invoice.effectiveStatus(at: now))
-            }.width(90)
+            }
+            .width(min: 92, ideal: 110)
+            .alignment(.trailing)
+
+            TableColumn("Status", value: \.statusRank) { row in
+                StatusBadge(status: row.status)
+            }
+            .width(min: 76, ideal: 88)
         }
         .contextMenu(forSelectionType: UUID.self) { ids in
-            if let id = ids.first {
-                Button("Open Invoice") { onOpen(id) }
-                if invoices.first(where: { $0.id == id })?.status == .draft {
-                    Button("Edit Draft") { onEdit(id) }
-                }
+            if let id = ids.first, let invoice = allInvoices.first(where: { $0.id == id }) {
+                contextMenu(for: invoice)
             }
         } primaryAction: { ids in
-            if let id = ids.first { onOpen(id) }
+            guard let id = ids.first, let invoice = allInvoices.first(where: { $0.id == id }) else { return }
+            if invoice.status == .draft {
+                nav.sheet = .editInvoice(invoice)
+            } else {
+                nav.selectedInvoiceID = id
+                showInspector = true
+            }
         }
-        .focusable()
-        .focused($listFocused)
-        .onChange(of: selection) { _, value in if value != nil { listFocused = true } }
-        .onKeyPress(.return) {
-            guard let selection else { return .ignored }
-            onOpen(selection)
-            return .handled
+        .tableStyle(.inset)
+        .themedScrollBackground()
+        .alternatingRowBackgrounds(.disabled)
+    }
+
+    @ViewBuilder
+    private func contextMenu(for invoice: Invoice) -> some View {
+        let client = clientsByID[invoice.clientId]
+        if invoice.status == .draft {
+            Button("Edit", systemImage: "pencil") { nav.sheet = .editInvoice(invoice) }
+            Button("Mark as sent", systemImage: "paperplane") { actions.markSent(invoice) }
         }
-        .onChange(of: invoices.map(\.id)) { _, ids in
-            if let selection, !ids.contains(selection) { self.selection = nil }
+        if invoice.status == .sent || invoice.status == .overdue {
+            if invoice.currency == baseCurrency {
+                Button("Mark as paid", systemImage: "checkmark.circle") { actions.markPaid(invoice) }
+            }
+            Button("Back to draft", systemImage: "arrow.uturn.backward") { actions.revertToDraft(invoice) }
         }
-            .toolbar {
-                ToolbarItem {
-                    Button("Open", systemImage: "doc.text.magnifyingglass") {
-                        if let selection { onOpen(selection) }
-                    }
-                    .disabled(selection == nil).help("Open selected invoice (Return)")
+        Menu("Export PDF") {
+            Button("Deutsch") { actions.exportPDF(invoice, client: client, profile: profile, language: .german) }
+            Button("English") { actions.exportPDF(invoice, client: client, profile: profile, language: .english) }
+        }
+        if let client {
+            Button("Show client", systemImage: "person") { nav.reveal(clientID: client.id) }
+        }
+        Divider()
+        if invoice.status != .paid && invoice.status != .cancelled {
+            Button("Cancel invoice", systemImage: "xmark.circle") { actions.cancel(invoice) }
+        }
+        Button("Delete…", systemImage: "trash", role: .destructive) { pendingDelete = invoice }
+    }
+
+    private var emptyState: some View {
+        Group {
+            if allInvoices.isEmpty {
+                ContentUnavailableView {
+                    Label("No invoices yet", systemImage: "doc.text")
+                } description: {
+                    Text("Create your first invoice. Pick a client, add what you did, and Mira handles numbering, VAT and the PDF.")
+                } actions: {
+                    Button("New invoice") { nav.sheet = .newInvoice(clientID: nil) }
+                        .buttonStyle(.borderedProminent)
+                }
+            } else if !searchText.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                ContentUnavailableView {
+                    Label("No \(nav.invoiceFilter?.rawValue.lowercased() ?? "") invoices", systemImage: nav.invoiceFilter?.symbol ?? "doc.text")
+                } description: {
+                    Text("Nothing has this status right now.")
+                } actions: {
+                    Button("Show all invoices") { nav.invoiceFilter = nil }
                 }
             }
+        }
     }
+}
+
+#Preview {
+    InvoicesView()
+        .environmentObject(AppState())
+        .environment(NavigationModel())
 }

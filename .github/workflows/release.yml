@@ -32,7 +32,7 @@ jobs:
   build:
     needs: check-release
     if: needs.check-release.outputs.should_release == 'true'
-    runs-on: macos-14
+    runs-on: macos-26
     permissions:
       contents: write
     steps:

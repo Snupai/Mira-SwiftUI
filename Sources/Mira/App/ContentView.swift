@@ -1,20 +1,23 @@
 import SwiftUI
 import SwiftData
 
+/// Root of the main window. Decides between onboarding and the main split
+/// view. The theme is installed one level up by `RootView` so the migration
+/// screen is themed too.
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    
-    // SwiftData query for company profile
+
     @Query private var profiles: [SDCompanyProfile]
-    
-    /// Check if setup is complete (works with both old and new data)
+
+    /// Setup is complete once onboarding has been finished and a company
+    /// profile exists. Deliberately not gated on the profile's encrypted fields
+    /// (IBAN etc.): if those can't be decrypted — for example in a build signed
+    /// with a different identity — the user must still be able to reach the app.
     private var isSetupComplete: Bool {
-        if MigrationService.shared.useSwiftData {
-            return profiles.first != nil && appState.hasCompletedOnboarding
-        }
-        return appState.companyProfile != nil && appState.hasCompletedOnboarding
+        guard appState.hasCompletedOnboarding else { return false }
+        return profiles.first != nil || appState.companyProfile != nil
     }
-    
+
     var body: some View {
         Group {
             if isSetupComplete {
@@ -23,215 +26,241 @@ struct ContentView: View {
                 OnboardingContainerView()
             }
         }
-        .modifier(MiraThemeStyle())
-        #if os(macOS)
-        .frame(minWidth: 760, minHeight: 600)
-        #endif
+        .frame(minWidth: 980, minHeight: 640)
     }
 }
 
-/// Theme document/content surfaces while leaving native window chrome adaptive.
-struct MiraThemeStyle: ViewModifier {
-    @ObservedObject private var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) private var colorScheme
-
-    func body(content: Content) -> some View {
-        let colors = themeManager.colors(for: colorScheme)
-        content
-            .environment(\.themeColors, colors)
-            .tint(colors.accent)
-    }
-}
+// MARK: - Main window
 
 struct MainView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-    @State private var selectedTab: Tab? = .invoices
-    @State private var invoiceBrowsingState = InvoiceBrowsingState()
-    @State private var clientSearchText = ""
-    
-    var colors: ThemeColors {
-        themeManager.colors(for: colorScheme)
-    }
-    @State private var showingNewInvoice = false
-    @State private var showingNewClient = false
-    @State private var showingShortcuts = false
-    
-    enum Tab: String, CaseIterable {
-        case dashboard = "Dashboard"
-        case invoices = "Invoices"
-        case clients = "Clients"
-        case settings = "Settings"
-        
-        var icon: String {
-            switch self {
-            case .dashboard: return "square.grid.2x2"
-            case .invoices: return "doc.text"
-            case .clients: return "person.2"
-            case .settings: return "gearshape"
-            }
+    @Environment(\.themeColors) private var colors
+    @Environment(\.openSettings) private var openSettings
+    @State private var nav = NavigationModel()
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    @Query private var sdInvoices: [SDInvoice]
+
+    private var invoiceStatusCounts: [InvoiceStatus: Int] {
+        let invoices: [Invoice] = MigrationService.shared.useSwiftData
+            ? sdInvoices.map { $0.toLegacy() }
+            : appState.invoices
+        var counts: [InvoiceStatus: Int] = [:]
+        for invoice in invoices {
+            // Treat sent-but-past-due as overdue in the sidebar so the count is honest.
+            let status = invoice.effectiveStatus
+            counts[status, default: 0] += 1
         }
-        
-        var shortcut: KeyEquivalent? {
-            switch self {
-            case .dashboard: return "1"
-            case .invoices: return "2"
-            case .clients: return "3"
-            case .settings: return ","
-            }
-        }
+        return counts
     }
-    
+
     var body: some View {
-        #if os(macOS)
-        NavigationSplitView {
-            List(Tab.allCases, id: \.self, selection: $selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.icon)
-                    .tag(tab)
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Mira")
-            .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 280)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            Sidebar(statusCounts: invoiceStatusCounts)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 300)
         } detail: {
-            content(for: selectedTab ?? .invoices)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle((selectedTab ?? .invoices).rawValue)
+            detail
+                .background(contentBackground)
         }
-        // Keyboard shortcut handlers
+        .environment(nav)
+        .sheet(item: $nav.sheet) { sheet in
+            sheetContent(sheet)
+                .environmentObject(appState)
+                .environment(nav)
+                .themed()
+        }
+        .onAppear {
+            if NavigationModel.wantsFirstInvoice {
+                NavigationModel.wantsFirstInvoice = false
+                nav.section = .invoices
+                nav.sheet = .newInvoice(clientID: nil)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newInvoice)) { _ in
-            showingNewInvoice = true
+            nav.sheet = .newInvoice(clientID: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: .newClient)) { _ in
-            showingNewClient = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateTo)) { notification in
-            if let target = notification.object as? String {
-                switch target {
-                case "dashboard": selectedTab = .dashboard
-                case "invoices": selectedTab = .invoices
-                case "clients": selectedTab = .clients
-                case "settings": selectedTab = .settings
-                default: break
-                }
-            }
-        }
-        .sheet(isPresented: $showingNewInvoice) {
-            InvoiceEditorView(invoice: nil).environmentObject(appState)
-        }
-        .sheet(isPresented: $showingNewClient) {
-            ClientEditorView(client: nil).environmentObject(appState)
-        }
-        .sheet(isPresented: $showingShortcuts) {
-            ShortcutsHelpView(colors: colors)
+            nav.sheet = .newClient
         }
         .onReceive(NotificationCenter.default.publisher(for: .showShortcuts)) { _ in
-            showingShortcuts = true
+            nav.sheet = .shortcuts
         }
-        #else
-        TabView(selection: $selectedTab) {
-            ForEach(Tab.allCases, id: \.self) { tab in
-                content(for: tab)
-                    .tabItem { Label(tab.rawValue, systemImage: tab.icon) }
-                    .tag(tab)
+        .onReceive(NotificationCenter.default.publisher(for: .navigateTo)) { notification in
+            guard let target = notification.object as? String else { return }
+            switch target {
+            case "dashboard": nav.section = .overview
+            case "invoices": nav.showInvoices()
+            case "clients": nav.section = .clients
+            case "settings": openSettings()
+            default: break
             }
         }
-        #endif
     }
-    
+
     @ViewBuilder
-    func content(for tab: Tab) -> some View {
-        switch tab {
-        case .dashboard:
-            DashboardView { filter in
-                invoiceBrowsingState.searchText = ""
-                switch filter {
-                case .all, .outstanding: invoiceBrowsingState.selectedStatus = nil
-                case .collectedMonth, .collectedYear: invoiceBrowsingState.selectedStatus = .paid
-                case .overdue: invoiceBrowsingState.selectedStatus = .overdue
-                }
-                invoiceBrowsingState.onlyOutstanding = filter == .outstanding
-                invoiceBrowsingState.paidPeriod = filter == .collectedMonth ? .month : filter == .collectedYear ? .year : nil
-                selectedTab = .invoices
-            }
-        case .invoices: InvoiceListView(browsingState: $invoiceBrowsingState)
-        case .clients: ClientListView(searchText: $clientSearchText)
-        case .settings: SettingsView()
+    private var detail: some View {
+        switch nav.section {
+        case .overview: DashboardView()
+        case .invoices: InvoicesView()
+        case .clients: ClientListView()
+        }
+    }
+
+    /// System themes leave the window background alone so glass chrome shows
+    /// the desktop through it; custom palettes paint their base color.
+    @ViewBuilder
+    private var contentBackground: some View {
+        if colors.isSystem {
+            Color.clear
+        } else {
+            colors.base.ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: MainSheet) -> some View {
+        switch sheet {
+        case .newInvoice(let clientID):
+            InvoiceEditorView(invoice: nil, preselectedClientID: clientID)
+        case .editInvoice(let invoice):
+            InvoiceEditorView(invoice: invoice)
+        case .newClient:
+            ClientEditorView(client: nil)
+        case .editClient(let client):
+            ClientEditorView(client: client)
+        case .shortcuts:
+            ShortcutsHelpView()
         }
     }
 }
 
-// Notification names are now in MiraApp.swift
+// MARK: - Sidebar
 
-// MARK: - Shortcuts Help View
+private struct Sidebar: View {
+    @Environment(NavigationModel.self) private var nav
+    @Environment(\.themeColors) private var colors
+    let statusCounts: [InvoiceStatus: Int]
+
+    enum Item: Hashable {
+        case section(MainSection)
+        case status(InvoiceStatus)
+    }
+
+    @State private var selection: Item? = .section(.overview)
+
+    private let shownStatuses: [InvoiceStatus] = [.draft, .sent, .overdue, .paid]
+
+    var body: some View {
+        List(selection: $selection) {
+            ForEach(MainSection.allCases) { section in
+                Label(section.title, systemImage: section.symbol)
+                    .tag(Item.section(section))
+            }
+
+            Section("By status") {
+                ForEach(shownStatuses, id: \.self) { status in
+                    Label {
+                        Text(status.rawValue)
+                    } icon: {
+                        Image(systemName: status.symbol)
+                            .foregroundStyle(status.tint(accent: colors.accent))
+                    }
+                    .badge(statusCounts[status, default: 0])
+                    .tag(Item.status(status))
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.m)
+            .keyboardShortcut(",", modifiers: .command)
+        }
+        .onChange(of: selection) { _, newValue in
+            switch newValue {
+            case .section(let section):
+                nav.section = section
+                if section == .invoices { nav.invoiceFilter = nil }
+            case .status(let status):
+                nav.showInvoices(filter: status)
+            case nil:
+                break
+            }
+        }
+        .onChange(of: nav.section) { _, section in
+            syncSelection(section: section, filter: nav.invoiceFilter)
+        }
+        .onChange(of: nav.invoiceFilter) { _, filter in
+            syncSelection(section: nav.section, filter: filter)
+        }
+    }
+
+    private func syncSelection(section: MainSection, filter: InvoiceStatus?) {
+        let target: Item
+        if section == .invoices, let filter, shownStatuses.contains(filter) {
+            target = .status(filter)
+        } else {
+            target = .section(section)
+        }
+        if selection != target { selection = target }
+    }
+}
+
+// MARK: - Keyboard shortcuts sheet
 
 struct ShortcutsHelpView: View {
-    @Environment(\.dismiss) var dismiss
-    let colors: ThemeColors
-    
-    let shortcuts: [(category: String, items: [(keys: String, action: String)])] = [
-        ("Navigation", [
-            ("⌘ 1", "Dashboard"),
+    @Environment(\.dismiss) private var dismiss
+
+    private let groups: [(title: String, items: [(keys: String, action: String)])] = [
+        ("Navigate", [
+            ("⌘ 1", "Overview"),
             ("⌘ 2", "Invoices"),
             ("⌘ 3", "Clients"),
-            ("⌘ ,", "Settings")
+            ("⌘ ,", "Settings"),
         ]),
-        ("Actions", [
-            ("⌘ N", "New Invoice"),
-            ("⌘ ⇧ N", "New Client"),
-            ("⌘ K", "Show Shortcuts")
-        ])
+        ("Create", [
+            ("⌘ N", "New invoice"),
+            ("⌘ ⇧ N", "New client"),
+        ]),
+        ("Help", [
+            ("⌘ K", "Keyboard shortcuts"),
+        ]),
     ]
-    
+
     var body: some View {
         NavigationStack {
-            // Shortcuts list
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    ForEach(shortcuts, id: \.category) { section in
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(section.category)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(colors.subtext)
-                            
-                            VStack(spacing: 8) {
-                                ForEach(section.items, id: \.action) { item in
-                                    HStack {
-                                        Text(item.action)
-                                            .font(.system(size: 14))
-                                            .foregroundColor(colors.text)
-                                        Spacer()
-                                        Text(item.keys)
-                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 5)
-                                            .background(colors.surface1)
-                                            .foregroundColor(colors.text)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    }
-                                }
+            Form {
+                ForEach(groups, id: \.title) { group in
+                    Section(group.title) {
+                        ForEach(group.items, id: \.action) { item in
+                            LabeledContent(item.action) {
+                                Text(item.keys)
+                                    .font(.callout.monospaced())
+                                    .foregroundStyle(.secondary)
                             }
-                            .padding(16)
-                            .background(colors.surface0)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                 }
-                .padding(20)
             }
-            .navigationTitle("Keyboard Shortcuts")
+            .themedGroupedForm()
+            .navigationTitle("Keyboard shortcuts")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
         }
-        .frame(width: 360, height: 380)
+        .frame(width: 380, height: 420)
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView().environmentObject(AppState())
-    }
+#Preview {
+    ContentView().environmentObject(AppState()).themed()
 }

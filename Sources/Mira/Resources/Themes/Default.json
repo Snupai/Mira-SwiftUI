@@ -1,17 +1,18 @@
 {
   "name": "Default",
   "author": "Mira",
-  "version": "1.0",
+  "version": "2.0",
+  "isSystemTheme": true,
   "dark": {
-    "base": "#1c1c1e",
-    "mantle": "#2c2c2e",
-    "crust": "#3a3a3c",
-    "surface0": "#3a3a3c",
-    "surface1": "#48484a",
-    "surface2": "#636366",
-    "overlay0": "#8e8e93",
-    "text": "#ffffff",
-    "subtext": "#ebebf5",
+    "base": "system:windowBackground",
+    "mantle": "system:underPageBackground",
+    "crust": "system:separator",
+    "surface0": "system:quaternaryFill",
+    "surface1": "system:tertiaryFill",
+    "surface2": "system:secondaryFill",
+    "overlay0": "system:tertiaryLabel",
+    "text": "system:label",
+    "subtext": "system:secondaryLabel",
     "accents": {
       "Blue": "#0a84ff",
       "Purple": "#bf5af2",
@@ -20,20 +21,21 @@
       "Yellow": "#ffd60a",
       "Green": "#30d158",
       "Teal": "#64d2ff",
-      "Indigo": "#5e5ce6"
+      "Indigo": "#5e5ce6",
+      "Graphite": "#8e8e93"
     },
     "defaultAccent": "Blue"
   },
   "light": {
-    "base": "#ffffff",
-    "mantle": "#f2f2f7",
-    "crust": "#e5e5ea",
-    "surface0": "#e5e5ea",
-    "surface1": "#d1d1d6",
-    "surface2": "#c7c7cc",
-    "overlay0": "#8e8e93",
-    "text": "#000000",
-    "subtext": "#3c3c43",
+    "base": "system:windowBackground",
+    "mantle": "system:underPageBackground",
+    "crust": "system:separator",
+    "surface0": "system:quaternaryFill",
+    "surface1": "system:tertiaryFill",
+    "surface2": "system:secondaryFill",
+    "overlay0": "system:tertiaryLabel",
+    "text": "system:label",
+    "subtext": "system:secondaryLabel",
     "accents": {
       "Blue": "#007aff",
       "Purple": "#af52de",
@@ -42,7 +44,8 @@
       "Yellow": "#ffcc00",
       "Green": "#34c759",
       "Teal": "#5ac8fa",
-      "Indigo": "#5856d6"
+      "Indigo": "#5856d6",
+      "Graphite": "#8e8e93"
     },
     "defaultAccent": "Blue"
   }

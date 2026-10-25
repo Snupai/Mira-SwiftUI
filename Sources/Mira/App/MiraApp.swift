@@ -2,44 +2,43 @@ import SwiftUI
 import SwiftData
 import Sparkle
 import Combine
+import os
+#if os(macOS)
+import AppKit
+#endif
 
 @main
 struct MiraApp: App {
     @StateObject private var appState = AppState()
-    
-    /// SwiftData container with CloudKit sync
+
+    /// SwiftData container. Falls back through CloudKit → local → in-memory so the
+    /// app can always launch and surface an error to the user; the underlying
+    /// failure is captured in `containerError` and shown by `RootView`.
     let modelContainer: ModelContainer
-    
+    let containerError: DataContainerError?
+
+    @MainActor
     init() {
-        if ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1" {
-            do { modelContainer = try DataContainer.createReviewContainer() }
-            catch { fatalError("Could not create review store: \(error)") }
+        if DemoData.isEnabled, let demo = try? DemoData.makeContainer() {
+            modelContainer = demo
+            containerError = nil
+            SnapshotRunner.runIfRequested()
             return
         }
-        // Initialize SwiftData container with CloudKit sync (falls back to local if unavailable)
-        do {
-            modelContainer = try DataContainer.createCloudKitContainer()
-            print("✅ SwiftData container initialized with CloudKit")
-        } catch {
-            print("⚠️ CloudKit failed, falling back to local: \(error)")
-            do {
-                modelContainer = try DataContainer.createLocalContainer()
-                print("✅ SwiftData container initialized (local-only)")
-            } catch {
-                fatalError("❌ Failed to create ModelContainer: \(error)")
-            }
-        }
+        let result = DataContainer.createWithFallback()
+        modelContainer = result.container
+        containerError = result.error
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(containerError: containerError)
                 .environmentObject(appState)
+                .themed()
         }
         .modelContainer(modelContainer)
         #if os(macOS)
-        .windowStyle(.titleBar)
-        .defaultSize(width: 1200, height: 800)
+        .defaultSize(width: 1360, height: 840)
         .commands {
             // Custom About window
             CommandGroup(replacing: .appInfo) {
@@ -63,7 +62,7 @@ struct MiraApp: App {
             }
 
             CommandGroup(after: .sidebar) {
-                Button("Dashboard") {
+                Button("Overview") {
                     NotificationCenter.default.post(name: .navigateTo, object: "dashboard")
                 }
                 .keyboardShortcut("1", modifiers: .command)
@@ -99,7 +98,7 @@ struct MiraApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appState)
-                .modifier(MiraThemeStyle())
+                .themed()
         }
         .modelContainer(modelContainer)
         #endif
@@ -109,13 +108,22 @@ struct MiraApp: App {
 // MARK: - Root View (handles migration + main content)
 
 struct RootView: View {
+    /// Set when persistent-storage initialization failed and Mira is running on an
+    /// in-memory emergency container. Surfaced via alert.
+    let containerError: DataContainerError?
+
     @EnvironmentObject var appState: AppState
     @Environment(\.modelContext) private var modelContext
-    
+
     @State private var isMigrating = false
     @State private var migrationError: Error?
     @State private var showMigrationError = false
-    
+    @State private var showContainerError = false
+
+    init(containerError: DataContainerError? = nil) {
+        self.containerError = containerError
+    }
+
     var body: some View {
         Group {
             if isMigrating {
@@ -134,17 +142,42 @@ struct RootView: View {
         } message: {
             Text(migrationError?.localizedDescription ?? "Unknown error during migration")
         }
+        .alert("Storage Unavailable", isPresented: $showContainerError) {
+            Button("Quit", role: .destructive) {
+                #if os(macOS)
+                NSApplication.shared.terminate(nil)
+                #endif
+            }
+            Button("Open Console") {
+                openSystemConsole()
+            }
+            Button("Continue Anyway", role: .cancel) {}
+        } message: {
+            if let error = containerError {
+                Text([error.errorDescription, error.recoverySuggestion]
+                    .compactMap { $0 }
+                    .joined(separator: "\n\n"))
+            } else {
+                Text("Mira couldn't open its persistent storage.")
+            }
+        }
         .task {
+            if containerError != nil {
+                showContainerError = true
+            }
             await runMigration()
         }
     }
-    
+
     @MainActor
     private func runMigration() async {
-        guard ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1", MigrationService.shared.needsMigration else { return }
-        
+        // Never migrate into the emergency in-memory container: the migration
+        // would mark itself complete and move the legacy files, and everything
+        // migrated would be gone on quit.
+        guard containerError == nil, !DemoData.isEnabled, MigrationService.shared.needsMigration else { return }
+
         isMigrating = true
-        
+
         do {
             try await MigrationService.shared.migrate(context: modelContext)
             isMigrating = false
@@ -153,6 +186,12 @@ struct RootView: View {
             showMigrationError = true
             isMigrating = false
         }
+    }
+
+    private func openSystemConsole() {
+        #if os(macOS)
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Console.app"))
+        #endif
     }
 }
 
@@ -198,9 +237,9 @@ extension Notification.Name {
 class AppState: ObservableObject {
     @Published var hasCompletedOnboarding: Bool {
         didSet {
-            if ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] != "1" {
-                UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
-            }
+            // Demo runs must leave the real preferences untouched.
+            guard !DemoData.isEnabled else { return }
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
     
@@ -215,7 +254,11 @@ class AppState: ObservableObject {
     private var dataDirectory: URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appDir = appSupport.appendingPathComponent("Mira", isDirectory: true)
-        try? fileManager.createDirectory(at: appDir, withIntermediateDirectories: true)
+        do {
+            try fileManager.createDirectory(at: appDir, withIntermediateDirectories: true)
+        } catch {
+            Log.app.error("Failed to create app data directory: \(error.localizedDescription, privacy: .public)")
+        }
         return appDir
     }
     
@@ -225,39 +268,58 @@ class AppState: ObservableObject {
     private var templatesURL: URL { dataDirectory.appendingPathComponent("templates.json") }
     
     init() {
-        let isReview = ProcessInfo.processInfo.environment["MIRA_UI_REVIEW"] == "1"
-        self.hasCompletedOnboarding = isReview || UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if DemoData.isEnabled {
+            self.hasCompletedOnboarding = ProcessInfo.processInfo.environment["MIRA_ONBOARDING"] != "1"
+        } else {
+            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        }
         
         // Only load legacy data if migration hasn't completed
         // This keeps the app working during the transition period
-        if !isReview && MigrationService.shared.migrationStatus != .completed {
+        if !DemoData.isEnabled && MigrationService.shared.migrationStatus != .completed {
             loadLegacyData()
         }
     }
     
     private func loadLegacyData() {
         // Load company profile
-        if let data = try? Data(contentsOf: profileURL),
-           let profile = try? JSONDecoder().decode(CompanyProfile.self, from: data) {
-            self.companyProfile = profile
+        if fileManager.fileExists(atPath: profileURL.path) {
+            do {
+                let data = try Data(contentsOf: profileURL)
+                self.companyProfile = try JSONDecoder().decode(CompanyProfile.self, from: data)
+            } catch {
+                Log.app.error("Failed to load legacy profile.json: \(error.localizedDescription, privacy: .public)")
+            }
         }
-        
+
         // Load clients
-        if let data = try? Data(contentsOf: clientsURL),
-           let clients = try? JSONDecoder().decode([Client].self, from: data) {
-            self.clients = clients
+        if fileManager.fileExists(atPath: clientsURL.path) {
+            do {
+                let data = try Data(contentsOf: clientsURL)
+                self.clients = try JSONDecoder().decode([Client].self, from: data)
+            } catch {
+                Log.app.error("Failed to load legacy clients.json: \(error.localizedDescription, privacy: .public)")
+            }
         }
-        
+
         // Load invoices
-        if let data = try? Data(contentsOf: invoicesURL),
-           let invoices = try? JSONDecoder().decode([Invoice].self, from: data) {
-            self.invoices = invoices
+        if fileManager.fileExists(atPath: invoicesURL.path) {
+            do {
+                let data = try Data(contentsOf: invoicesURL)
+                self.invoices = try JSONDecoder().decode([Invoice].self, from: data)
+            } catch {
+                Log.app.error("Failed to load legacy invoices.json: \(error.localizedDescription, privacy: .public)")
+            }
         }
-        
+
         // Load templates
-        if let data = try? Data(contentsOf: templatesURL),
-           let templates = try? JSONDecoder().decode([InvoiceTemplate].self, from: data) {
-            self.templates = templates
+        if fileManager.fileExists(atPath: templatesURL.path) {
+            do {
+                let data = try Data(contentsOf: templatesURL)
+                self.templates = try JSONDecoder().decode([InvoiceTemplate].self, from: data)
+            } catch {
+                Log.app.error("Failed to load legacy templates.json: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
     
@@ -280,27 +342,43 @@ class AppState: ObservableObject {
     // Legacy save methods - deprecated, will be removed after full migration
     func saveCompanyProfile() {
         guard MigrationService.shared.needsMigration else { return }
-        guard let profile = companyProfile,
-              let data = try? JSONEncoder().encode(profile) else { return }
-        try? data.write(to: profileURL)
+        guard let profile = companyProfile else { return }
+        do {
+            let data = try JSONEncoder().encode(profile)
+            try data.write(to: profileURL)
+        } catch {
+            Log.app.error("Failed to save legacy profile.json: \(error.localizedDescription, privacy: .public)")
+        }
     }
-    
+
     func saveClients() {
         guard MigrationService.shared.needsMigration else { return }
-        guard let data = try? JSONEncoder().encode(clients) else { return }
-        try? data.write(to: clientsURL)
+        do {
+            let data = try JSONEncoder().encode(clients)
+            try data.write(to: clientsURL)
+        } catch {
+            Log.app.error("Failed to save legacy clients.json: \(error.localizedDescription, privacy: .public)")
+        }
     }
-    
+
     func saveInvoices() {
         guard MigrationService.shared.needsMigration else { return }
-        guard let data = try? JSONEncoder().encode(invoices) else { return }
-        try? data.write(to: invoicesURL)
+        do {
+            let data = try JSONEncoder().encode(invoices)
+            try data.write(to: invoicesURL)
+        } catch {
+            Log.app.error("Failed to save legacy invoices.json: \(error.localizedDescription, privacy: .public)")
+        }
     }
-    
+
     func saveTemplates() {
         guard MigrationService.shared.needsMigration else { return }
-        guard let data = try? JSONEncoder().encode(templates) else { return }
-        try? data.write(to: templatesURL)
+        do {
+            let data = try JSONEncoder().encode(templates)
+            try data.write(to: templatesURL)
+        } catch {
+            Log.app.error("Failed to save legacy templates.json: \(error.localizedDescription, privacy: .public)")
+        }
     }
     
     func resetOnboarding() {

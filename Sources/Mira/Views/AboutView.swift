@@ -3,146 +3,80 @@ import Sparkle
 
 struct AboutView: View {
     @ObservedObject private var updaterManager = UpdaterManager.shared
-    @Environment(\.colorScheme) private var colorScheme
-    @ObservedObject private var appearance = AppAppearance.shared
-    
-    private var themeColors: ThemeColors {
-        appearance.colors(for: colorScheme)
-    }
-    
+
     var body: some View {
-        VStack(spacing: 20) {
-            // App Icon
+        VStack(spacing: Spacing.l) {
             if let appIcon = NSImage(named: NSImage.applicationIconName) {
                 Image(nsImage: appIcon)
                     .resizable()
-                    .frame(width: 128, height: 128)
-                    .cornerRadius(24)
-                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                    .frame(width: 112, height: 112)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+                    .padding(.top, Spacing.s)
             }
-            
-            // App Name & Version
-            VStack(spacing: 4) {
+
+            VStack(spacing: Spacing.xs) {
                 Text("Mira")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(themeColors.text)
-                
+                    .font(.title.weight(.semibold))
                 Text("Version \(updaterManager.currentVersion)")
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(themeColors.subtext)
+                    .font(.callout)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            
-            // Tagline
-            Text("Simple invoicing for freelancers & small businesses")
-                .font(.subheadline)
-                .foregroundColor(themeColors.subtext)
+
+            Text("Invoices for freelancers, done properly.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            
-            Divider()
-                .padding(.horizontal, 40)
-            
-            // Update Section
-            VStack(spacing: 8) {
-                Button(action: {
+
+            VStack(spacing: Spacing.s) {
+                Button("Check for updates") {
                     updaterManager.checkForUpdates()
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                        Text("Check for Updates")
-                    }
-                    .frame(minWidth: 180)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(themeColors.accent)
+                .buttonStyle(.glassProminent)
                 .disabled(!updaterManager.canCheckForUpdates)
-                
+
                 if let lastCheck = updaterManager.lastUpdateCheckDate {
-                    Text("Last checked: \(lastCheck, style: .relative) ago")
+                    Text("Last checked \(lastCheck, style: .relative) ago")
                         .font(.caption)
-                        .foregroundColor(themeColors.subtext)
+                        .foregroundStyle(.secondary)
                 }
             }
-            
-            Divider()
-                .padding(.horizontal, 40)
-            
-            // Links
-            HStack(spacing: 20) {
-                Link(destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI")!) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        Text("Source")
-                    }
-                    .font(.caption)
-                }
-                
-                Link(destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI/issues")!) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "ladybug")
-                        Text("Report Bug")
-                    }
-                    .font(.caption)
-                }
-                
-                Link(destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI/releases")!) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.text")
-                        Text("Changelog")
-                    }
-                    .font(.caption)
-                }
+            .padding(.top, Spacing.xs)
+
+            HStack(spacing: Spacing.l) {
+                Link("Source", destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI")!)
+                Link("Report a bug", destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI/issues")!)
+                Link("Release notes", destination: URL(string: "https://github.com/Snupai/Mira-SwiftUI/releases")!)
             }
-            .foregroundColor(themeColors.accent)
-            
+            .font(.callout)
+
             Spacer()
-            
-            // Copyright
-            VStack(spacing: 2) {
-                Text("Made with 💜 by Snupai")
-                    .font(.caption)
-                    .foregroundColor(themeColors.subtext)
-                
-                Text("© 2026 All rights reserved")
-                    .font(.caption2)
-                    .foregroundColor(themeColors.overlay0)
-            }
+
+            Text("© 2026 Snupai. All rights reserved.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        .padding(30)
-        .frame(width: 360, height: 480)
-        .background(themeColors.base)
+        .padding(Spacing.xl)
+        .frame(width: 360, height: 440)
     }
 }
 
-// Command to show About window
-struct AboutCommand: Commands {
-    var body: some Commands {
-        CommandGroup(replacing: .appInfo) {
-            Button("About Mira") {
-                NSApplication.shared.orderFrontStandardAboutPanel(options: [:])
-                // Show our custom window instead
-                AboutWindowController.shared.showWindow()
-            }
-        }
-    }
-}
-
-// Window controller for About
+/// Window controller for the custom About window.
 class AboutWindowController {
     static let shared = AboutWindowController()
     private var window: NSWindow?
-    
+
     func showWindow() {
         if window == nil {
-            let aboutView = AboutView()
-            let hostingController = NSHostingController(rootView: aboutView)
-            
-            window = NSWindow(contentViewController: hostingController)
-            window?.title = "About Mira"
-            window?.styleMask = [.titled, .closable]
-            window?.isReleasedWhenClosed = false
-            window?.center()
+            let hostingController = NSHostingController(rootView: AboutView().themed())
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "About Mira"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            self.window = window
         }
-        
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

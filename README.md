@@ -2,7 +2,7 @@
 
 A beautiful, freelancer-first invoice application for macOS, built with SwiftUI.
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue)
+![macOS 26+](https://img.shields.io/badge/macOS-26%2B-blue)
 ![Swift 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey)](LICENSE)
 

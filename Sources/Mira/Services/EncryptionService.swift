@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Security
+import os
 
 /// Service for encrypting/decrypting sensitive fields using AES-GCM
 /// Key is stored securely in the macOS Keychain
@@ -16,7 +17,12 @@ final class EncryptionService {
     
     private var cachedKey: SymmetricKey?
     
-    private init() {}
+    private init() {
+        // Demo mode never touches the user's Keychain: use a throwaway key.
+        if DemoData.isEnabled {
+            cachedKey = SymmetricKey(size: .bits256)
+        }
+    }
     
     // MARK: - Public API
     
@@ -81,10 +87,14 @@ final class EncryptionService {
     
     /// Check if encryption key exists
     var hasKey: Bool {
+        if cachedKey != nil { return true }
         do {
             _ = try loadKeyFromKeychain()
             return true
         } catch {
+            // Expected on first launch (errSecItemNotFound). Logged at .debug so it's
+            // visible under verbose console filtering but stripped from release builds.
+            Log.encryption.debug("hasKey check failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
@@ -252,7 +262,7 @@ struct Encrypted: Codable {
             do {
                 return try EncryptionService.shared.decrypt(encryptedValue)
             } catch {
-                print("⚠️ Decryption failed: \(error)")
+                Log.encryption.error("Decryption failed: \(error.localizedDescription, privacy: .public)")
                 return ""
             }
         }
@@ -264,7 +274,7 @@ struct Encrypted: Codable {
             do {
                 encryptedValue = try EncryptionService.shared.encrypt(newValue)
             } catch {
-                print("⚠️ Encryption failed: \(error)")
+                Log.encryption.error("Encryption failed: \(error.localizedDescription, privacy: .public)")
                 encryptedValue = ""
             }
         }
